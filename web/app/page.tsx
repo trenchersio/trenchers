@@ -1,9 +1,9 @@
 import { SiteShell } from "@/components/SiteShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ArtCycler } from "@/components/ArtCycler";
-import { Socials } from "@/components/Socials";
 import { TextButton } from "@/components/TextButton";
 import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { Flywheel } from "@/components/Flywheel";
 import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
 import { HOUSE_STRATEGIES } from "@/lib/strategies";
@@ -16,12 +16,6 @@ const STEPS = [
 ];
 
 
-const FLYWHEEL = [
-  { from: "OpenSea sales", to: "50% buys back $TRENCHERS", note: "40% development, 10% prize pool" },
-  { from: "OpenSea royalties", to: "100% buys back $TRENCHERS", note: "5% on every resale" },
-  { from: "$TRENCHERS trading fees", to: "Weekly prizes + floor sweeps", note: "rewards the best agents, supports the floor" },
-  { from: "House agents' profits", to: "Buy back $TRENCHERS", note: "5 team-run agents trade for the treasury" },
-];
 
 const ROADMAP = [
   { phase: "Phase 1", title: "Launch", items: ["2,000 Trenchers on OpenSea", `${LIST_PRICE_ETH} ETH per agent`, "Trading Arena preview"] },
@@ -31,7 +25,7 @@ const ROADMAP = [
 
 const FAQ = [
   { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as an AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
-  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. The team keeps 5 as house agents, whose profits go to $TRENCHERS buybacks.` },
+  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. The team keeps 5 as house agents. Half their profits buy back $TRENCHERS and half buy more Trenchers, which become new house agents.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
   { q: "What does an agent trade?", a: "New tokens launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose." },
@@ -40,7 +34,7 @@ const FAQ = [
 
 function OpenSeaButton() {
   return OPENSEA_URL
-    ? <TextButton href={OPENSEA_URL} external>Buy an agent on OpenSea</TextButton>
+    ? <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>
     : <span className="tbtn tbtn-static">OpenSea</span>;
 }
 
@@ -104,34 +98,36 @@ export default function Home() {
           <div className="section-actions"><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
         </Section>
 
-        <Section n="03" label="Strategies" title="Five house strategies"
-          lede="The team runs each one on a house agent, in public. Copy one for your own agent, or set your own limits.">
-          <div className="cards cards-5">
+        <Section n="03" label="Strategies" title="Five house strategies, or your own"
+          lede="The team runs each house strategy on its own agent, in public. Copy one for your agent, or build a custom rule.">
+          <div className="strats">
             {HOUSE_STRATEGIES.map((s) => (
-              <article key={s.name} className="card">
-                <span className="mono card-house">House agent #{s.houseAgent}</span>
+              <article key={s.name} className="strat">
+                <header><span className="mono strat-id">#{s.houseAgent}</span><span className="mono strat-kind">House agent</span></header>
                 <h3>{s.name}</h3>
                 <p>{s.trigger}.</p>
-                <div className="tags"><span className="mono">{s.exit.toLowerCase()}</span><span className="mono">{s.defaults.perBuy} ETH per buy</span></div>
+                <dl className="mono">
+                  <div><dt>Exit</dt><dd>{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`}</dd></div>
+                  <div><dt>Per buy</dt><dd>{s.defaults.perBuy} ETH</dd></div>
+                </dl>
               </article>
             ))}
+            <article className="strat strat-custom">
+              <header><span className="mono strat-id">+</span><TextButton href={ROUTES.agents}>Build one</TextButton></header>
+              <h3>Custom</h3>
+              <p>Pick a buy signal, an exit and filters, or describe it in plain English.</p>
+              <dl className="mono">
+                <div><dt>Signals</dt><dd>6 to pick</dd></div>
+                <div><dt>Exit</dt><dd>Time, TP/SL</dd></div>
+              </dl>
+            </article>
           </div>
           <p className="note">Every strategy has hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Switch strategies at any time.</p>
         </Section>
 
         <Section id="flywheel" n="04" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
-          lede="Sales, royalties, token fees and the house agents' profits all feed buybacks, prizes or the floor.">
-          <div className="flows">
-            {FLYWHEEL.map((f) => (
-              <div key={f.from} className="flow">
-                <span className="flow-from">{f.from}</span>
-                <span className="flow-arrow" aria-hidden="true" />
-                <span className="flow-to">{f.to}</span>
-                <span className="flow-note">{f.note}</span>
-              </div>
-            ))}
-          </div>
-          <p className="note">All flows run through public contracts. The contracts, the website and the agent engine are open on <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>.</p>
+          lede="Sales, royalties, token fees and the house agents' profits all feed buybacks, prizes or the floor. House profits also buy new house agents, so the loop compounds.">
+          <Flywheel />
         </Section>
 
         <Section id="roadmap" n="05" label="Roadmap" title="Three phases">
@@ -149,8 +145,19 @@ export default function Home() {
         <Section id="get" n="06" label="Get an agent" title={<>2,000 agents. {LIST_PRICE_ETH} ETH each.</>}
           lede="Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers.">
           <div className="get-panel">
-            <div className="cta"><OpenSeaButton /><TextButton href={ROUTES.arena}>Enter the Arena</TextButton><TextButton href={GITHUB_URL} external>GitHub</TextButton></div>
-            <Socials links={SOCIALS} large />
+            <dl className="get-stats">
+              <div><dt className="mono">Price</dt><dd>{LIST_PRICE_ETH} ETH</dd></div>
+              <div><dt className="mono">Supply</dt><dd>2,000</dd></div>
+              <div><dt className="mono">House agents</dt><dd>5</dd></div>
+              <div><dt className="mono">Market</dt><dd><OpenSeaButton /></dd></div>
+            </dl>
+            <nav className="get-links">
+              <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
+              <TextButton href={ROUTES.collection}>Browse the collection</TextButton>
+              <TextButton href={ROUTES.docs}>Read the docs</TextButton>
+              <TextButton href={GITHUB_URL} external>GitHub</TextButton>
+              {SOCIALS.x && <TextButton href={SOCIALS.x} external>X</TextButton>}
+            </nav>
           </div>
         </Section>
 
@@ -169,6 +176,7 @@ export default function Home() {
           <span className="foot-name">Trenchers</span>
           <nav className="foot-links">
             <a className="tbtn" href={ROUTES.arena}>Arena</a>
+            <a className="tbtn" href={ROUTES.collection}>Collection</a>
             <a className="tbtn" href={ROUTES.docs}>Docs</a>
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
           </nav>

@@ -6,7 +6,7 @@ OUT="${1:-../preview-site}"
 rm -rf out && PREVIEW_EXPORT=1 NEXT_PUBLIC_PREVIEW=1 NEXT_TELEMETRY_DISABLED=1 npx next build >/dev/null
 rm -rf "$OUT" && mkdir -p "$OUT"
 cp -r out/_next "$OUT/nx" && cp -r out/brand out/nft out/nft-hd out/icon.png out/opengraph-image.png "$OUT/"
-cp out/index.html "$OUT/site.html" && cp out/arena.html "$OUT/arena.html" && cp out/agents.html "$OUT/agents.html" && cp out/docs.html "$OUT/docs.html" && cp -r out/docs-img "$OUT/"
+cp out/index.html "$OUT/site.html" && cp out/arena.html "$OUT/arena.html" && cp out/agents.html "$OUT/agents.html" && cp out/docs.html "$OUT/docs.html" && cp out/collection.html "$OUT/collection.html" && cp -r out/collection "$OUT/" && cp -r out/docs-img "$OUT/"
 cd "$OUT"
 grep -rl "_next/" --include=*.js --include=*.css --include=*.html . | xargs sed -i 's#_next/#nx/#g'
 sed -i 's#url(nx/static/media/#url(../media/#g' nx/static/css/*.css

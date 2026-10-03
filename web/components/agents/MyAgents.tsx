@@ -1,4 +1,5 @@
 "use client";
+import { AgentLinks } from "@/components/AgentLinks";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
@@ -138,6 +139,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           <h2>Trencher #{a.id}</h2>
           <p className="mono who-line"><span className={`status status-${st.tone}`}>{st.label}</span></p>
           {a.agentWallet && <p className="mono who-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} on {chain.name}</p>}
+          <AgentLinks wallet={a.agentWallet} />
         </div>
       </header>
 

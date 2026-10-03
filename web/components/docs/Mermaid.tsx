@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from "react";
 export function Mermaid({ code }: { code: string }) {
   const id = "m" + useId().replace(/[^a-zA-Z0-9]/g, "");
   const [svg, setSvg] = useState<string | null>(null);
+  const [wide, setWide] = useState(false);
   useEffect(() => {
     let alive = true;
     import("mermaid").then(async ({ default: mermaid }) => {
@@ -18,11 +19,15 @@ export function Mermaid({ code }: { code: string }) {
           noteBkgColor: "#171B19", noteTextColor: "#E8ECE9", noteBorderColor: "#232826",
         },
       });
-      try { const { svg } = await mermaid.render(id, code); if (alive) setSvg(svg); } catch { /* keep source */ }
+      try {
+        const { svg } = await mermaid.render(id, code);
+        const vb = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(svg);
+        if (alive) { setSvg(svg); setWide(!!vb && Number(vb[1]) / Number(vb[2]) > 2.2); }
+      } catch { /* keep source */ }
     });
     return () => { alive = false; };
   }, [code, id]);
   return svg
-    ? <div className="docs-diagram" dangerouslySetInnerHTML={{ __html: svg }} />
+    ? <div className={`docs-diagram${wide ? " docs-diagram-wide" : ""}`} dangerouslySetInnerHTML={{ __html: svg }} />
     : <pre className="docs-diagram docs-diagram-src"><code>{code}</code></pre>;
 }

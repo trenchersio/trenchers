@@ -207,7 +207,7 @@ export function createSim(): Sim {
     const def = house ? STRATEGIES.find((s) => s.houseAgent === id)! : strategyByName(pick(pool));
     const deposited = house ? 2 + rnd() * 2 : +(0.1 + Math.pow(rnd(), 2) * 2.4).toFixed(2);
     return {
-      id, house, owner: house ? "Trenchers team" : `0x${hex(4)}…${hex(4)}`, wallet: `0x${hex(4)}…${hex(4)}`,
+      id, house, owner: house ? "Trenchers team" : `0x${hex(40)}`, wallet: `0x${hex(40)}`,
       strategy: def.name, params: [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
       deposited, cash: deposited, positions: new Map(), trades: [],
       nav: deposited, epochStart: deposited, history: [], wins: 0, closed: 0, rank: 0, prevRank: 0, lastTradeAt: 0, lastSide: null,

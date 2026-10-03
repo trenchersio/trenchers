@@ -1,4 +1,6 @@
 "use client";
+import { AgentLinks } from "@/components/AgentLinks";
+import { short } from "@/lib/wallet";
 import { useEffect, useRef, useState } from "react";
 import { createSim, step, pct, ago, signalLabel, type Agent, type Sim } from "@/lib/arena-sim";
 import { LineChart } from "./LineChart";
@@ -45,6 +47,11 @@ export function Arena() {
     return () => window.removeEventListener("trenchers-agents-changed", load);
   }, [address]);
   const detailRef = useRef<HTMLElement>(null);
+  // Deep link from the Collection: arena#agent-123 opens that agent.
+  useEffect(() => {
+    const m = /^#agent-(\d+)$/.exec(window.location.hash);
+    if (m) setSelected(Number(m[1]));
+  }, []);
 
   const leaderId = sim?.agents.find((a) => a.rank === 0)?.id ?? null;
   const sel = sim?.agents.find((a) => a.id === (selected ?? leaderId)) ?? null;
@@ -146,8 +153,9 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
         <div>
           <p className="eyebrow">Rank {a.rank + 1} of {sim.agents.length}{a.house ? " · House agent" : ""}</p>
           <h2>Trencher #{a.id}</h2>
-          <p className="mono who-line">Holder {a.owner}</p>
-          <p className="mono who-line">Agent wallet {a.wallet}</p>
+          <p className="mono who-line">Holder {a.owner.startsWith("0x") ? short(a.owner) : a.owner}</p>
+          <p className="mono who-line">Agent wallet {short(a.wallet)}</p>
+          <AgentLinks wallet={a.wallet} />
         </div>
       </header>
 

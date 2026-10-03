@@ -225,7 +225,9 @@ flowchart LR
     R[5% royalties] -->|100%| BB
     F[$TRENCHERS trading fees] --> PP
     F --> SW[Floor sweeps]
-    H[House agents' profits] --> BB
+    H[House agents' profits] -->|50%| BB
+    H -->|50%| NH[New house agents<br/>bought off the floor]
+    NH --> H
     PP --> A[Top agents]
     A --> V[More valuable agents]
     V --> R
@@ -236,7 +238,9 @@ flowchart LR
 | OpenSea sales (0.01 ETH each) | 50% buybacks, 40% development (half vested over 6 months), 10% prize pool | `RevenueSplitter` contract, fixed shares |
 | Royalties (5%) | 100% buybacks | Royalty receiver is the splitter |
 | $TRENCHERS trading fees | Weekly prizes and Trenchers floor sweeps | Fee router contract |
-| House agents' profits | Buybacks | Profits above each agent's high-water mark, weekly |
+| House agents' profits | 50% buybacks, 50% buying Trenchers off the OpenSea floor, which become new house agents | Profits above each agent's high-water mark, weekly |
+
+**The house agent loop.** House agents trade, their profits buy more Trenchers, and every Trencher bought becomes another house agent trading for the treasury. More house agents mean more profits, which buy more house agents. Each sweep also takes supply off the floor.
 
 Every flow runs through public contracts. Changing a payout destination requires a 48-hour timelock.
 

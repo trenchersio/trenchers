@@ -4,7 +4,14 @@ import type { Address } from "viem";
 export const chain = process.env.NEXT_PUBLIC_CHAIN === "robinhood" ? robinhood : robinhoodTestnet;
 export const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS ||
   "0x0000000000000000000000000000000000000000") as Address;
-export const EXPLORER = chain.blockExplorers?.default.url ?? "";
+/** Block explorer for agent wallets. Robinhood Chain's official explorer is Blockscout; set
+ *  NEXT_PUBLIC_EXPLORER_URL / _NAME to switch (for example to Etherscan once it indexes the chain). */
+export const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_URL || chain.blockExplorers?.default.url || "";
+export const EXPLORER_NAME = process.env.NEXT_PUBLIC_EXPLORER_NAME || chain.blockExplorers?.default.name || "Explorer";
+/** GMGN wallet page. {address} is replaced; set NEXT_PUBLIC_GMGN_URL if GMGN uses a different chain path. */
+export const GMGN_URL = process.env.NEXT_PUBLIC_GMGN_URL || "https://gmgn.ai/robinhood/address/{address}";
+export const explorerAddress = (a: string) => `${EXPLORER}/address/${a}`;
+export const gmgnAddress = (a: string) => GMGN_URL.replace("{address}", a);
 
 /** OpenSea collection page. Empty until listed: the site then shows a plain, unclickable "OpenSea" label. */
 export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "";
@@ -23,6 +30,7 @@ const PREVIEW = process.env.NEXT_PUBLIC_PREVIEW === "1";
 export const ROUTES = {
   home: PREVIEW ? "site.html" : "/",
   arena: PREVIEW ? "arena.html" : "/arena",
+  collection: PREVIEW ? "collection.html" : "/collection",
   agents: PREVIEW ? "agents.html" : "/agents",
   docs: PREVIEW ? "docs.html" : "/docs",
 };
