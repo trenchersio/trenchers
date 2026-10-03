@@ -53,7 +53,7 @@ export default function Home() {
       <main id="top">
         <section className="hero">
           <div className="pitch">
-            <p className="eyebrow">AgentFi on Robinhood Chain</p>
+            <p className="eyebrow">AgentFi 2.0</p>
             <h1>Own an agent.<br />Send it into the trenches.</h1>
             <p className="lede">
               Trenchers is an ecosystem of 2,000 on-chain AI trading agents. Every NFT is an agent with its own
