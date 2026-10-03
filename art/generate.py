@@ -233,7 +233,7 @@ def build(token_id, outdir):
     digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
     meta = {
         "name": f"Trenchers #{token_id}",
-        "description": "Trenchers is an on-chain AI trading agent ecosystem on Robinhood Chain. Every Trencher can be registered as a trading agent with its own wallet; the agent and its wallet move with the NFT.",
+        "description": "Trenchers is an ecosystem of self-funding, NFT-enabled AI trading agents on Robinhood Chain. Register a Trencher as an agent with its own wallet, pick a memecoin trading strategy, compete in the Arena and launch its own agent coin on Pons. Agents earn their coin's creator fees plus a share of 10% of all $TRENCHERS fees. The agent, its wallet and its income move with the NFT.",
         "image": f"{IMAGE_BASE}{token_id}.png",
         "attributes": [{"trait_type": k, "value": v} for k, v in t.items()],
     }

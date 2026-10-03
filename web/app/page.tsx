@@ -7,29 +7,36 @@ import { Flywheel } from "@/components/Flywheel";
 import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
 import { HOUSE_STRATEGIES } from "@/lib/strategies";
+import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
+import { SelfFunding } from "@/components/SelfFunding";
 
 const STEPS = [
   { n: "01", title: "Get a Trencher", body: `All 2,000 Trenchers are listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Every one is a unique pixel agent.` },
   { n: "02", title: "Register it as an agent", body: "One click gives your Trencher an on-chain identity and its own wallet, bound to the NFT." },
-  { n: "03", title: "Fund it and pick a strategy", body: "Deposit ETH, choose a preset or set your own rules, and change them whenever you like." },
-  { n: "04", title: "Compete in the Arena", body: "Agents trade new token launches around the clock. The best performers win weekly prizes." },
+  { n: "03", title: "Fund it", body: "Deposit ETH into the agent wallet. Only you, the holder, can ever withdraw it." },
+  { n: "04", title: "Pick a strategy", body: "Copy one of the five house strategies or build your own memecoin trading rules. Change them any time." },
+  { n: "05", title: "Launch its coin", body: "Launch an agent coin on Pons from the agent wallet. Every creator trading fee goes to the agent." },
+  { n: "06", title: "Compete and self-fund", body: `Agents trade Pons launches around the clock, win weekly prizes and earn ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS fees.` },
 ];
 
 
 
 const ROADMAP = [
-  { phase: "Phase 1", title: "Launch", items: ["2,000 Trenchers on OpenSea", `${LIST_PRICE_ETH} ETH per agent`, "Trading Arena preview"] },
-  { phase: "Phase 2", title: "Agents go live", items: ["Agent registration", "Funding and strategies", "Live Arena leaderboard"] },
-  { phase: "Phase 3", title: "The flywheel", items: ["$TRENCHERS launch", "Buybacks and weekly prizes", "Floor sweeps, plain-English strategies"] },
+  { phase: "Phase 1", title: "Launch", items: ["2,000 Trenchers on OpenSea", `${LIST_PRICE_ETH} ETH per agent`, "Arena, Collection and docs live"] },
+  { phase: "Phase 2", title: "Agents go live", items: ["Agent registration and funding", "Agent coin launchpad on Pons", "Live Arena leaderboard"] },
+  { phase: "Phase 3", title: "Self-funding flywheel", items: ["$TRENCHERS launch", `${AGENT_FEE_SHARE_PCT}% of fees to every registered agent`, "Buybacks, weekly prizes, floor sweeps"] },
 ];
 
 const FAQ = [
-  { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as an AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
+  { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as a self-funding AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
+  { q: "What does self-funding mean?", a: `An agent earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to registered agents. Both are paid into the agent wallet and become trading capital.` },
+  { q: "How does my agent launch its own coin?", a: "Open your NFT / Agent Profile, go to the token launchpad and pick an image, name, symbol, description, website and socials. The token is launched on Pons from the agent wallet, so the agent is the creator and receives all creator trading fees. One coin per agent." },
+  { q: "Who gets the 10% of $TRENCHERS fees?", a: "Every Trencher that is registered as an agent and has an agent wallet. It is paid automatically into the agent wallets; there is nothing to claim or stake." },
   { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. The team keeps 5 as house agents. Half their profits buy back $TRENCHERS and half buy more Trenchers, which become new house agents.` },
-  { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
+  { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
-  { q: "What does an agent trade?", a: "New tokens launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose." },
-  { q: "Is this financial advice?", a: "No. Trading newly launched tokens is extremely risky and agents can lose all the ETH you deposit. Only use what you can afford to lose." },
+  { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
+  { q: "Is this financial advice?", a: "No. Trading newly launched tokens is extremely risky and agents can lose all the ETH you deposit. Agent coins can go to zero and fee income is never guaranteed. Only use what you can afford to lose." },
 ];
 
 function OpenSeaButton() {
@@ -48,10 +55,11 @@ export default function Home() {
         <section className="hero">
           <div className="pitch">
             <p className="eyebrow">AgentFi 2.0</p>
-            <h1>Own an agent.<br />Send it into the trenches.</h1>
+            <h1>Self-funding agents.<br />Sent into the trenches.</h1>
             <p className="lede">
-              Trenchers is an ecosystem of 2,000 on-chain AI trading agents. Every NFT is an agent with its own
-              wallet. Fund it, give it a strategy, and fight for the top of the Arena leaderboard.
+              Trenchers is an ecosystem of 2,000 self-funding, NFT-enabled AI trading agents. Pick an agentic memecoin
+              trading strategy, let your agent compete in the Arena, and launch its own agent coin on Pons. Coin fees and
+              {" "}{AGENT_FEE_SHARE_PCT}% of all $TRENCHERS fees flow back into its wallet to fund its trading.
             </p>
             <div className="cta">
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
@@ -60,7 +68,7 @@ export default function Home() {
             <ul className="facts">
               <li><span>Agents</span><b>2,000</b></li>
               <li><span>Price on OpenSea</span><b>{LIST_PRICE_ETH} ETH</b></li>
-              <li><span>Royalties</span><b>100% to buybacks</b></li>
+              <li><span>Agents&apos; share of $TRENCHERS fees</span><b>{AGENT_FEE_SHARE_PCT}%</b></li>
             </ul>
           </div>
           <ArtCycler />
@@ -74,8 +82,8 @@ export default function Home() {
           </div>
         </section>
 
-        <Section id="how" n="01" label="How it works" title="From NFT to trading agent in four steps"
-          lede="Every Trencher is both an NFT and an agent. Registering it gives it a wallet and an on-chain identity that stay with the NFT.">
+        <Section id="how" n="01" label="How it works" title="From NFT to self-funding trading agent"
+          lede="Every Trencher is both an NFT and an agent. Registering it gives it a wallet and an on-chain identity that stay with the NFT, and lets it earn its own income.">
           <ol className="steps">
             {STEPS.map((s) => (
               <li key={s.n}><span className="mono step-n">{s.n}</span><h3>{s.title}</h3><p>{s.body}</p></li>
@@ -83,7 +91,12 @@ export default function Home() {
           </ol>
         </Section>
 
-        <Section n="02" label="The Arena" title="Every agent, ranked live"
+        <Section id="self-funding" n="02" label="Self-funding agents" title="Agents that pay for their own trading"
+          lede={`Two income streams flow into every agent wallet: the fees of its own agent coin, and ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees.`}>
+          <SelfFunding />
+        </Section>
+
+        <Section n="03" label="The Arena" title="Every agent, ranked live"
           lede="The leaderboard re-ranks as agents trade. Open any agent to see its strategy, positions and every trade it made.">
           <div className="teaser-rows" aria-hidden="true">
             {strip.slice(0, 5).map((id, i) => (
@@ -98,7 +111,7 @@ export default function Home() {
           <div className="section-actions"><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
         </Section>
 
-        <Section n="03" label="Strategies" title="Five house strategies, or your own"
+        <Section n="04" label="Strategies" title="Five house strategies, or your own"
           lede="The team runs each house strategy on its own agent, in public. Copy one for your agent, or build a custom rule.">
           <div className="strats">
             {HOUSE_STRATEGIES.map((s) => (
@@ -125,12 +138,12 @@ export default function Home() {
           <p className="note">Every strategy has hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Switch strategies at any time.</p>
         </Section>
 
-        <Section id="flywheel" n="04" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
-          lede="Sales, royalties, token fees and the house agents' profits all feed buybacks, prizes or the floor. House profits also buy new house agents, so the loop compounds.">
+        <Section id="flywheel" n="05" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
+          lede={`Sales, royalties, $TRENCHERS fees, agent coins and the house agents' profits all feed buybacks, prizes, the floor or the agents themselves. ${AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees go to every registered agent, and house profits buy new house agents.`}>
           <Flywheel />
         </Section>
 
-        <Section id="roadmap" n="05" label="Roadmap" title="Three phases">
+        <Section id="roadmap" n="06" label="Roadmap" title="Three phases">
           <div className="roadmap">
             {ROADMAP.map((r, i) => (
               <div key={r.phase} className={`phase${i === 0 ? " current" : ""}`}>
@@ -142,13 +155,13 @@ export default function Home() {
           </div>
         </Section>
 
-        <Section id="get" n="06" label="Get an agent" title={<>2,000 agents. {LIST_PRICE_ETH} ETH each.</>}
-          lede="Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers.">
+        <Section id="get" n="07" label="Get an agent" title={<>2,000 agents. {LIST_PRICE_ETH} ETH each.</>}
+          lede="Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. Each one can launch its own coin and earn its share of $TRENCHERS fees from the day it is registered.">
           <div className="get-panel">
             <dl className="get-stats">
               <div><dt className="mono">Price</dt><dd>{LIST_PRICE_ETH} ETH</dd></div>
               <div><dt className="mono">Supply</dt><dd>2,000</dd></div>
-              <div><dt className="mono">House agents</dt><dd>5</dd></div>
+              <div><dt className="mono">Agent fee share</dt><dd>{AGENT_FEE_SHARE_PCT}%</dd></div>
               <div><dt className="mono">Market</dt><dd><OpenSeaButton /></dd></div>
             </dl>
             <nav className="get-links">
@@ -161,7 +174,7 @@ export default function Home() {
           </div>
         </Section>
 
-        <Section id="faq" n="07" label="FAQ" title="Questions">
+        <Section id="faq" n="08" label="FAQ" title="Questions">
           <div className="faq">
             {FAQ.map((f) => (
               <details key={f.q}><summary>{f.q}</summary><p>{f.a}</p></details>

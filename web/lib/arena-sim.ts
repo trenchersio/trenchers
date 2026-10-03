@@ -20,12 +20,17 @@ export type Agent = {
   deposited: number; cash: number; positions: Map<string, Position>; trades: Trade[];
   nav: number; epochStart: number; history: number[]; wins: number; closed: number;
   rank: number; prevRank: number; lastTradeAt: number; lastSide: "BUY" | "SELL" | null;
+  token: string | null;      // the agent's own Pons token, if it launched one
+  tokenRate: number;         // sample: creator fees per tick (ETH)
+  tokenFees: number;         // creator fees received from its own token
+  shareFees: number;         // its share of the 10% of $TRENCHERS fees paid to registered agents
 };
 export type MarketEvent = { t: number; kind: Exclude<StrategyEvent, "custom">; sym: string };
 export type Sim = {
   now: number; tick: number; agents: Agent[]; tokens: Map<string, Token>; launches: string[];
   totalHistory: number[]; tradesToday: number; prizePool: number; feed: (Trade & { agent: number })[];
   events: MarketEvent[];
+  agentFees: number;         // total $TRENCHERS fee share paid to agents
 };
 
 // Small seeded PRNG so the starting board is the same on every visit; live ticks then diverge.
@@ -196,6 +201,14 @@ export function step(sim: Sim, dtMs = 1000) {
   }
   sim.totalHistory.push(total); if (sim.totalHistory.length > 240) sim.totalHistory.shift();
   sim.prizePool += 0.0004 + rnd() * 0.0008;
+  // Self-funding income lands in the agent wallet. It counts like a deposit, not as trading return.
+  const share = (0.00006 + rnd() * 0.00004) / sim.agents.length * 40;
+  for (const a of sim.agents) {
+    const f = share + (a.token ? a.tokenRate * (0.5 + rnd()) : 0);
+    a.cash += f; a.epochStart += f;
+    a.shareFees += share; if (a.token) a.tokenFees += f - share;
+  }
+  sim.agentFees += share * sim.agents.length;
   rerank(sim);
 }
 
@@ -211,9 +224,20 @@ export function createSim(): Sim {
       strategy: def.name, params: [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
       deposited, cash: deposited, positions: new Map(), trades: [],
       nav: deposited, epochStart: deposited, history: [], wins: 0, closed: 0, rank: 0, prevRank: 0, lastTradeAt: 0, lastSide: null,
+      token: null, tokenRate: 0, tokenFees: 0, shareFees: 0,
     };
   });
-  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [], events: [] };
+  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [], events: [], agentFees: 0.92 };
+  // About a third of agents have launched their own token on Pons.
+  const taken = new Set<string>();
+  for (const a of agents) {
+    if (!(a.house || rnd() < 0.34)) continue;
+    let sym = ""; do { sym = pick(A) + pick(["", "AI", "BOT", "AGENT", "X", "MAXI"]); } while (taken.has(sym) || sym.length > 10);
+    taken.add(sym);
+    a.token = sym; a.tokenRate = 0.000004 + rnd() * 0.00002;
+    a.tokenFees = +(rnd() * 0.6).toFixed(4); a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);
+  }
+  for (const a of agents) if (!a.shareFees) a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);
   for (let i = 0; i < 12; i++) launch(sim);
   for (let i = 0; i < 600; i++) step(sim, 1000); // warm up: ten minutes of history
   sim.now = Date.now();

@@ -10,6 +10,9 @@ export const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_URL || chain.blockExplo
 export const EXPLORER_NAME = process.env.NEXT_PUBLIC_EXPLORER_NAME || chain.blockExplorers?.default.name || "Explorer";
 /** GMGN wallet page. {address} is replaced; set NEXT_PUBLIC_GMGN_URL if GMGN uses a different chain path. */
 export const GMGN_URL = process.env.NEXT_PUBLIC_GMGN_URL || "https://gmgn.ai/robinhood/address/{address}";
+/** Pons token page. Empty until confirmed: the site then shows a plain "Pons" label. {address} is replaced. */
+export const PONS_TOKEN_URL = process.env.NEXT_PUBLIC_PONS_TOKEN_URL || "";
+export const gmgnToken = (a: string) => GMGN_URL.replace("/address/{address}", "/token/{address}").replace("{address}", a);
 export const explorerAddress = (a: string) => `${EXPLORER}/address/${a}`;
 export const gmgnAddress = (a: string) => GMGN_URL.replace("{address}", a);
 
@@ -31,7 +34,7 @@ export const ROUTES = {
   home: PREVIEW ? "site.html" : "/",
   arena: PREVIEW ? "arena.html" : "/arena",
   collection: PREVIEW ? "collection.html" : "/collection",
-  agents: PREVIEW ? "agents.html" : "/agents",
+  agents: PREVIEW ? "agents.html" : "/agents", // NFT / Agent Profile
   docs: PREVIEW ? "docs.html" : "/docs",
 };
 /** True until the NFT contract is deployed: ownership and transactions are simulated. */

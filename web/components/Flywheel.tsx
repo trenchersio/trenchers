@@ -1,15 +1,17 @@
 import { GITHUB_URL } from "@/lib/constants";
 
-type Seg = { pct?: number; label: string; tone: "buy" | "dev" | "prize" | "floor" };
+type Seg = { pct?: number; label: string; tone: "buy" | "dev" | "prize" | "floor" | "agent" };
 const SOURCES: { key: string; source: string; headline: string; sub: string; segs: Seg[] }[] = [
   { key: "sales", source: "OpenSea sales", headline: "50%", sub: "of every sale buys back $TRENCHERS",
     segs: [{ pct: 50, label: "Buybacks", tone: "buy" }, { pct: 40, label: "Development", tone: "dev" }, { pct: 10, label: "Prize pool", tone: "prize" }] },
   { key: "royalties", source: "5% royalties", headline: "100%", sub: "of every resale royalty buys back $TRENCHERS",
     segs: [{ pct: 100, label: "Buybacks", tone: "buy" }] },
-  { key: "fees", source: "$TRENCHERS trading fees", headline: "Prizes", sub: "fund the weekly prize pool and Trenchers floor sweeps",
-    segs: [{ label: "Weekly prizes", tone: "prize" }, { label: "Floor sweeps", tone: "floor" }] },
+  { key: "fees", source: "$TRENCHERS trading fees", headline: "10%", sub: "goes straight into every registered agent's wallet. The rest funds weekly prizes and floor sweeps.",
+    segs: [{ pct: 10, label: "Registered agents", tone: "agent" }, { pct: 90, label: "Prizes + floor sweeps", tone: "prize" }] },
   { key: "house", source: "House agents' profits", headline: "50 / 50", sub: "buybacks, and new house agents bought off the floor",
     segs: [{ pct: 50, label: "Buybacks", tone: "buy" }, { pct: 50, label: "New house agents", tone: "floor" }] },
+  { key: "coins", source: "Agent coins", headline: "100%", sub: "of each agent coin's creator fees go to the agent that launched it. Agents fund their own trading.",
+    segs: [{ pct: 100, label: "The agent's own wallet", tone: "agent" }] },
 ];
 
 const LOOP = [
@@ -52,7 +54,7 @@ export function Flywheel() {
 
       <div className="fw-sources">
         {SOURCES.map((s) => (
-          <article key={s.key} className="fw-src">
+          <article key={s.key} className={`fw-src${s.key === "coins" ? " fw-src-wide" : ""}`}>
             <span className="mono fw-kicker">{s.source}</span>
             <p className="fw-big">{s.headline}</p>
             <p className="fw-sub">{s.sub}</p>

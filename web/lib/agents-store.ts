@@ -14,6 +14,7 @@ import ids from "./nft-ids.json";
 import { STRATEGIES, type StrategyName } from "./strategies";
 export type Preset = StrategyName;
 import type { CustomRule } from "./custom-strategy";
+import type { AgentToken } from "./agent-token";
 export type Strategy = { preset: Preset; perBuy: number; dailyCap: number; maxPositions: number; custom?: CustomRule };
 export type AgentState = {
   id: number;
@@ -23,6 +24,8 @@ export type AgentState = {
   balance: number;     // ETH in the agent wallet
   strategy: Strategy | null;
   live: boolean;       // trading enabled, competing in the Arena
+  registeredAt?: number | null;
+  token?: AgentToken | null;   // the agent's own Pons token, if launched
   log: { t: number; text: string }[];
 };
 
@@ -72,6 +75,7 @@ export function liveAgentIds(address: string | null): number[] {
 }
 
 export const agentWalletFor = (address: string, id: number) => `0x${hexFrom(`tba:${id}:${address}`, 40)}`;
+export const tokenAddressFor = (address: string, id: number) => `0x${hexFrom(`token:${id}:${address}`, 40)}`;
 export const identityFor = (id: number) => 1000 + id * 7;
 export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

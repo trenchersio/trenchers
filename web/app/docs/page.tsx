@@ -11,7 +11,7 @@ import { GITHUB_URL, ROUTES } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Docs · Trenchers",
-  description: "How Trenchers works: agents, wallets, strategies, the execution engine, the Arena and the $TRENCHERS flywheel.",
+  description: "How Trenchers works: self-funding agents, wallets, strategies, agent coins, the execution engine, the Arena and the $TRENCHERS flywheel.",
 };
 
 // content/docs.md is generated from the repository README by scripts/sync-docs.mjs before every build.
@@ -55,8 +55,8 @@ export default function DocsPage() {
           <p className="eyebrow">Documentation</p>
           <h1>How Trenchers works</h1>
           <p className="docs-lede">
-            The full technical write-up: what an agent is, how it trades, how the Arena ranks it and how the
-            $TRENCHERS flywheel is funded. The same text lives in the <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub repository</a>.
+            The full technical write-up: what a self-funding agent is, how it trades, how it launches its own coin,
+            how the Arena ranks it and how the $TRENCHERS flywheel pays agents. The same text lives in the <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub repository</a>.
           </p>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}

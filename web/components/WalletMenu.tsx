@@ -20,7 +20,7 @@ export function WalletMenu() {
   if (!w.address) return <TextButton onClick={w.openModal}>Connect wallet</TextButton>;
   return (
     <div className="wallet-menu" ref={ref}>
-      <TextButton href={ROUTES.agents}>Register / View NFT</TextButton>
+      <TextButton href={ROUTES.agents}>NFT / Agent Profile</TextButton>
       <button type="button" className={`tbtn addr-btn${open ? " tbtn-on" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className={`dot ${w.kind === "demo" ? "dot-demo" : ""}`} />{short(w.address)}
       </button>

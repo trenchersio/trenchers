@@ -3,11 +3,13 @@ import { AgentLinks } from "@/components/AgentLinks";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
+import { Launchpad } from "./Launchpad";
+import { AGENT_FEE_SHARE_PCT, tokenFees, trenchersShare, type TokenDraft } from "@/lib/agent-token";
 import { DEFAULT_RULE, describe, validate } from "@/lib/custom-strategy";
 import { OPENSEA_URL, ROUTES, SAMPLE_MODE, chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 import {
-  PRESETS, agentWalletFor, identityFor, loadAgent, ownedIds, saveAgent, statusOf, wait,
+  PRESETS, agentWalletFor, identityFor, tokenAddressFor, loadAgent, ownedIds, saveAgent, statusOf, wait,
   type AgentState, type Preset, type Strategy,
 } from "@/lib/agents-store";
 
@@ -28,9 +30,9 @@ export function MyAgents() {
   if (!w.address) {
     return (
       <div className="connect-gate">
-        <p className="eyebrow">Your agents</p>
+        <p className="eyebrow">NFT / Agent Profile</p>
         <h1>Connect to see your Trenchers</h1>
-        <p className="lede">Connect the wallet that holds your Trenchers to register them as agents, fund them and send them into the Arena.</p>
+        <p className="lede">Connect the wallet that holds your Trenchers to register them as agents, fund them, launch their own tokens and send them into the Arena.</p>
         <TextButton large onClick={w.openModal}>Connect wallet</TextButton>
       </div>
     );
@@ -46,7 +48,7 @@ export function MyAgents() {
     <div className="agents">
       <section className="board agents-board" aria-label="Your Trenchers">
         <div className="board-head">
-          <h1>Your Trenchers</h1>
+          <h1>NFT / Agent Profile</h1>
           <span className="board-meta">{short(w.address)}</span>
           {(SAMPLE_MODE || w.kind === "demo") && <span className="sample">Sample data</span>}
         </div>
@@ -73,7 +75,7 @@ export function MyAgents() {
         </div>
       </section>
 
-      <section className="detail" aria-label="Agent setup">
+      <section className="detail" aria-label="Agent profile">
         {sel && <Setup key={sel.id} a={sel} owner={w.address} onChange={update} />}
       </section>
     </div>
@@ -85,6 +87,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   const [amount, setAmount] = useState("0.1");
   const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Launch Flipper", ...PRESETS["Launch Flipper"].defaults });
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<"setup" | "token" | "activity">("setup");
   const st = statusOf(a);
   const step = !a.registered ? 1 : a.balance <= 0 ? 2 : !a.strategy ? 3 : 4;
 
@@ -98,7 +101,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   }
 
   const register = () => run(["Creating the agent wallet (ERC-6551)…", "Registering the agent identity (ERC-8004)…"], () => {
-    onChange(log({ ...a, registered: true, agentWallet: agentWalletFor(owner, a.id), identityId: identityFor(a.id) }, "Registered as an agent"));
+    onChange(log({ ...a, registered: true, registeredAt: Date.now(), agentWallet: agentWalletFor(owner, a.id), identityId: identityFor(a.id) }, "Registered as an agent"));
   });
 
   const deposit = () => {
@@ -128,6 +131,15 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   };
 
   const enter = () => run(["Enabling trading for this agent…"], () => onChange(log({ ...a, live: true }, "Entered the Arena")));
+  const launchToken = (d: TokenDraft) => new Promise<void>((done) => run([
+    "Uploading the token image and details…",
+    `Launching $${d.symbol} on Pons from the agent wallet…`,
+    "Setting the agent wallet as fee recipient…",
+  ], () => {
+    onChange(log({ ...a, balance: +(a.balance - 0.0012).toFixed(4), token: { ...d, address: tokenAddressFor(owner, a.id), launchedAt: Date.now(), feeRate: 0.02 + (a.id % 7) * 0.006 } }, `Launched $${d.symbol} on Pons`));
+    done();
+  }));
+
   const pause = () => run(["Pausing trading…"], () => onChange(log({ ...a, live: false }, "Trading paused")));
 
   return (
@@ -151,7 +163,17 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       )}
       {notice && <p className="notice">{notice}</p>}
 
-      <ol className="steps-v">
+      {a.registered && <Income a={a} />}
+
+      <div className="ptabs" role="tablist" aria-label="Agent profile sections">
+        {([["setup", "Agent setup"], ["token", a.token ? `Token $${a.token.symbol}` : "Token launchpad"], ["activity", "Activity"]] as const).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tbtn${tab === k ? " tbtn-on" : ""}`} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "token" && <Launchpad a={a} busy={!!busy} onLaunch={launchToken} />}
+
+      {tab === "setup" && <ol className="steps-v">
         <Step n={1} title="Register as an agent" state={a.registered ? "done" : step === 1 ? "now" : "todo"}>
           {a.registered ? (
             <p>Registered. Your Trencher has its own wallet and an on-chain identity. Both stay with the NFT if you sell it.</p>
@@ -214,11 +236,20 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             <TextButton onClick={enter} disabled={step < 4 || !!busy}>Enter the Arena</TextButton>
           </>)}
         </Step>
-      </ol>
 
-      {a.log.length > 0 && (
+        <Step n={5} title="Launch the agent's token (optional)" state={a.token ? "done" : a.registered ? "now" : "todo"}>
+          {a.token ? (
+            <p>${a.token.symbol} is live on Pons. Its creator fees go to the agent wallet.</p>
+          ) : (
+            <p>Make your agent self-funding: launch a token on Pons from its wallet and the agent receives all of the token&apos;s creator trading fees.</p>
+          )}
+          <TextButton onClick={() => setTab("token")}>{a.token ? `View $${a.token.symbol}` : "Open the launchpad"}</TextButton>
+        </Step>
+      </ol>}
+
+      {tab === "activity" && (
         <div className="panel-block">
-          <h3>Activity</h3>
+          {a.log.length === 0 && <p className="hint-line">Nothing yet. Register the agent to get started.</p>}
           <ol className="trades mono">
             {a.log.map((l) => <li key={l.t} className="log-li"><span className="t-ago">{new Date(l.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><span>{l.text}</span></li>)}
           </ol>
@@ -237,5 +268,26 @@ function Step({ n, title, state, children }: { n: number; title: string; state: 
         <div className="step-content">{children}</div>
       </div>
     </li>
+  );
+}
+
+/** How the agent funds itself: its token's creator fees plus its share of $TRENCHERS fees. */
+function Income({ a }: { a: AgentState }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 2000); return () => clearInterval(i); }, []);
+  const tok = a.token ? tokenFees(a.token, now) : 0;
+  const share = trenchersShare(a.registeredAt ?? null, now);
+  return (
+    <section className="income" aria-label="Self-funding income">
+      <div className="income-head">
+        <span className="mono income-kicker">Self-funding</span>
+        <p>Fee income lands in the agent wallet as trading capital.</p>
+      </div>
+      <dl>
+        <div><dt className="mono">Own token fees</dt><dd className="mono">{a.token ? `${tok.toFixed(5)} ETH` : <span className="cd-muted">No token yet</span>}</dd></div>
+        <div><dt className="mono">{AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees</dt><dd className="mono">{share.toFixed(5)} ETH</dd></div>
+        <div><dt className="mono">Total self-funded</dt><dd className="mono up">{(tok + share).toFixed(5)} ETH</dd></div>
+      </dl>
+    </section>
   );
 }

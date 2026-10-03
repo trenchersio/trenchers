@@ -104,7 +104,7 @@ export function Collection() {
         <div>
           <p className="eyebrow">Collection</p>
           <h1>2,000 agents</h1>
-          <p className="coll-lede">Every Trencher, in colour once it is registered as an agent. Greyed-out ones are waiting for a holder to wake them up. Select any of them for its owner, strategy and traits.</p>
+          <p className="coll-lede">Every Trencher, in colour once it is registered as a self-funding agent. Greyed-out ones are waiting for a holder to wake them up. Select any of them for its owner, strategy, agent coin and traits.</p>
         </div>
         <dl className="coll-stats">
           <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{counts.live}</dd></div>
@@ -210,6 +210,8 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
           <div><dt>Agent value</dt><dd className="mono">{agent.nav.toFixed(3)} ETH</dd></div>
           <div><dt>This week</dt><dd className={`mono ${ret! >= 0 ? "up" : "down"}`}>{ret! >= 0 ? "+" : ""}{ret!.toFixed(1)}%</dd></div>
           <div><dt>Arena rank</dt><dd className="mono">#{agent.rank + 1} of {sim!.agents.length}</dd></div>
+          <div><dt>Agent coin</dt><dd className="mono">{agent.token ? <span className="coin-tag">${agent.token}</span> : <span className="cd-muted">Not launched</span>}</dd></div>
+          <div><dt>Self-funded</dt><dd className="mono">{(agent.tokenFees + agent.shareFees).toFixed(4)} ETH</dd></div>
           <div><dt>Win rate</dt><dd className="mono">{agent.closed ? Math.round((agent.wins / agent.closed) * 100) : 0}% · {agent.trades.length} trades</dd></div>
         </>) : b.balance !== null ? (
           <div><dt>Balance</dt><dd className="mono">{b.balance.toFixed(3)} ETH</dd></div>

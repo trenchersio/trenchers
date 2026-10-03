@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MyAgents } from "@/components/agents/MyAgents";
 
-export const metadata: Metadata = { title: "Your agents · Trenchers", description: "Register, fund and launch your Trenchers agents." };
+export const metadata: Metadata = { title: "NFT / Agent Profile · Trenchers", description: "Register your Trencher as an agent, fund it, set its strategy and launch its own token on Pons." };
 
 export default function AgentsPage() {
   return (

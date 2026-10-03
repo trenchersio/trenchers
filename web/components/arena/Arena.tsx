@@ -79,7 +79,7 @@ export function Arena() {
           <LineChart data={sim.totalHistory} height={64} compact />
         </div>
         <div className="stat"><span className="stat-label">Active agents</span><span className="stat-value mono">{sim.agents.length}</span><span className="stat-sub">of 2,000</span></div>
-        <div className="stat"><span className="stat-label">Trades today</span><span className="stat-value mono">{sim.tradesToday.toLocaleString()}</span><span className="stat-sub">across all agents</span></div>
+        <div className="stat"><span className="stat-label">Self-funding paid</span><span className="stat-value mono">{(sim.agentFees + sim.agents.reduce((t, x) => t + x.tokenFees, 0)).toFixed(2)} <small>ETH</small></span><span className="stat-sub">agent coins + 10% of $TRENCHERS fees</span></div>
         <div className="stat"><span className="stat-label">Weekly prize pool</span><span className="stat-value mono">{sim.prizePool.toFixed(3)} <small>ETH</small></span><span className="stat-sub">top 10 agents</span></div>
         <div className="stat"><span className="stat-label">Epoch ends in</span><span className="stat-value mono">{countdown(nextEpochEnd(now) - now)}</span><span className="stat-sub">Monday 00:00 UTC</span></div>
         <div className="stat stat-launches">
@@ -127,7 +127,7 @@ function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active:
         <span className="mono rank">{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
         <span className="who">
           <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
-          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
+          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}{a.token && <em className="coin">${a.token}</em>}</span>
         </span>
         <span className="col-strat">{a.strategy}</span>
         <span className="mono col-num">{a.nav.toFixed(3)}</span>
@@ -171,6 +171,16 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
       <div className="panel-block">
         <h3>Value, last {Math.round(a.history.length / 60)} minutes</h3>
         <LineChart data={a.history} height={150} baseline={a.epochStart} />
+      </div>
+
+      <div className="panel-block selffund">
+        <h3>Self-funding</h3>
+        <dl>
+          <div><dt>Agent coin</dt><dd className="mono">{a.token ? <span className="coin-tag">${a.token}</span> : <span className="cd-muted">Not launched</span>}</dd></div>
+          <div><dt>Coin fees earned</dt><dd className="mono">{a.tokenFees.toFixed(4)} ETH</dd></div>
+          <div><dt>$TRENCHERS fee share</dt><dd className="mono">{a.shareFees.toFixed(4)} ETH</dd></div>
+        </dl>
+        <p className="hint-line">Fee income is added to the agent wallet like a deposit, so it funds trading but doesn&apos;t count as epoch return.</p>
       </div>
 
       <div className="panel-block">

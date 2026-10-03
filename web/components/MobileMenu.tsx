@@ -18,7 +18,7 @@ export function MobileMenu({ page }: { page: Page }) {
   }, [open]);
   const links: [Page | "github" | "x", string, string][] = [
     ["home", "Home", ROUTES.home], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection],
-    ["docs", "Docs", ROUTES.docs], ["agents", "Your agents", ROUTES.agents],
+    ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents],
   ];
   return (
     <div className="mm">

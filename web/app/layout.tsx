@@ -9,9 +9,9 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://trenchers.io"),
-  title: "Trenchers",
-  description: "An on-chain AI trading agent ecosystem: 2,000 agents on Robinhood Chain.",
-  openGraph: { title: "Trenchers", description: "An on-chain AI trading agent ecosystem.", url: "https://trenchers.io", siteName: "Trenchers" },
+  title: "Trenchers · Self-funding AI trading agents",
+  description: "An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents on Robinhood Chain. Pick memecoin trading strategies, let agents compete in the Arena, and launch agent coins on Pons. Agents earn their coin's fees plus 10% of all $TRENCHERS fees.",
+  openGraph: { title: "Trenchers · Self-funding AI trading agents", description: "Self-funding, NFT-enabled AI trading agents: pick a strategy, compete in the Arena, launch agent coins.", url: "https://trenchers.io", siteName: "Trenchers" },
   twitter: { card: "summary_large_image", site: "@trenchersio", creator: "@trenchersio" },
 };
 
