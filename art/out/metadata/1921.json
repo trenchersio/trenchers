@@ -1,0 +1,43 @@
+{
+  "name": "Trenchers #1921",
+  "description": "Trenchers is a 2,000-piece collection on Robinhood Chain. Every Trencher can be registered as an on-chain trading agent with its own wallet; the agent and its wallet move with the NFT.",
+  "image": "ipfs://IMAGES_CID/1921.png",
+  "attributes": [
+    {
+      "trait_type": "Role",
+      "value": "Agent"
+    },
+    {
+      "trait_type": "Palette",
+      "value": "Red Day"
+    },
+    {
+      "trait_type": "Pattern",
+      "value": "Scatter"
+    },
+    {
+      "trait_type": "Shapes",
+      "value": "Mixed"
+    },
+    {
+      "trait_type": "Scale",
+      "value": "Fine"
+    },
+    {
+      "trait_type": "Density",
+      "value": "Dense"
+    },
+    {
+      "trait_type": "Eye",
+      "value": "Circle"
+    },
+    {
+      "trait_type": "Signal",
+      "value": "High"
+    },
+    {
+      "trait_type": "Special",
+      "value": "None"
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
+
+import "@limitbreak/creator-token-standards/src/erc721c/ERC721C.sol";
+import "@limitbreak/creator-token-standards/src/access/OwnableBasic.sol";
+import "@limitbreak/creator-token-standards/src/programmable-royalties/BasicRoyalties.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+
+/// @title Trenchers
+/// @notice 2,000-piece collection on Robinhood Chain. Each token can later be registered as an
+///         on-chain trading agent through its ERC-6551 token-bound account.
+/// @dev    ERC721-C (Limit Break) so OpenSea can enforce creator earnings; ERC-2981 royalty info.
+///         Mint proceeds can only ever go to the immutable `payout` address (the RevenueSplitter).
+contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, ReentrancyGuard {
+    using Strings for uint256;
+
+    uint256 public constant MAX_SUPPLY = 2000;
+    uint256 public constant TEAM_RESERVE = 5;
+    uint256 public constant PRICE = 0.1 ether;
+    uint96 public constant ROYALTY_BPS = 500; // 5%
+
+    /// @notice Receives all mint proceeds. Immutable so the destination is verifiable on-chain.
+    address payable public immutable payout;
+
+    bool public mintOpen;
+    uint256 public totalSupply;
+
+    string private _baseTokenURI;
+    string private _preRevealURI;
+    string private _contractURI;
+    bool public metadataFrozen;
+
+    event MintOpenChanged(bool open);
+    event BaseURIChanged(string baseURI);
+    event MetadataFrozen();
+    event ProceedsWithdrawn(address indexed to, uint256 amount);
+
+    error MintClosed();
+    error WrongPayment();
+    error SoldOut();
+    error ZeroQuantity();
+    error Frozen();
+    error ZeroAddress();
+    error WithdrawFailed();
+
+    constructor(
+        address payable payout_,
+        address team_,
+        string memory preRevealURI_,
+        string memory contractURI_
+    )
+        ERC721OpenZeppelin("Trenchers", "TRENCH")
+        BasicRoyalties(payout_, ROYALTY_BPS)
+    {
+        if (payout_ == address(0) || team_ == address(0)) revert ZeroAddress();
+        payout = payout_;
+        _preRevealURI = preRevealURI_;
+        _contractURI = contractURI_;
+
+        // If Limit Break's default transfer validator is not deployed on this chain, a call to it
+        // would revert every transfer. Fall back to no validator until one is configured.
+        if (DEFAULT_TRANSFER_VALIDATOR.code.length == 0) {
+            setTransferValidator(address(0));
+        }
+
+        // Token IDs 1-5 go to the team. They are not sold and pay nothing into the splitter.
+        for (uint256 i = 1; i <= TEAM_RESERVE; ++i) {
+            _mint(team_, i);
+        }
+        totalSupply = TEAM_RESERVE;
+    }
+
+    // ------------------------------------------------------------------ minting
+
+    /// @notice Public mint, 0.1 ETH each, no per-wallet limit.
+    function mint(uint256 quantity) external payable nonReentrant {
+        if (!mintOpen) revert MintClosed();
+        if (quantity == 0) revert ZeroQuantity();
+        if (msg.value != PRICE * quantity) revert WrongPayment();
+        uint256 supply = totalSupply;
+        if (supply + quantity > MAX_SUPPLY) revert SoldOut();
+        totalSupply = supply + quantity;
+        for (uint256 i = 1; i <= quantity; ++i) {
+            _mint(msg.sender, supply + i);
+        }
+    }
+
+    /// @notice Sends all mint proceeds to the immutable payout address. Callable by anyone.
+    function withdraw() external nonReentrant {
+        uint256 amount = address(this).balance;
+        (bool ok, ) = payout.call{value: amount}("");
+        if (!ok) revert WithdrawFailed();
+        emit ProceedsWithdrawn(payout, amount);
+    }
+
+    // ------------------------------------------------------------------ admin
+
+    function setMintOpen(bool open) external onlyOwner {
+        mintOpen = open;
+        emit MintOpenChanged(open);
+    }
+
+    function setBaseURI(string calldata baseURI_) external onlyOwner {
+        if (metadataFrozen) revert Frozen();
+        _baseTokenURI = baseURI_;
+        emit BaseURIChanged(baseURI_);
+        emit BatchMetadataUpdate(1, MAX_SUPPLY);
+    }
+
+    function freezeMetadata() external onlyOwner {
+        metadataFrozen = true;
+        emit MetadataFrozen();
+    }
+
+    function setContractURI(string calldata contractURI_) external onlyOwner {
+        _contractURI = contractURI_;
+    }
+
+    /// @notice Royalty receiver can be moved (e.g. a new splitter); the 5% rate is fixed.
+    function setRoyaltyReceiver(address receiver) external onlyOwner {
+        if (receiver == address(0)) revert ZeroAddress();
+        _setDefaultRoyalty(receiver, ROYALTY_BPS);
+    }
+
+    // ------------------------------------------------------------------ metadata
+
+    /// @dev EIP-4906 so marketplaces refresh after reveal.
+    event BatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId);
+
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireMinted(tokenId);
+        if (bytes(_baseTokenURI).length == 0) return _preRevealURI;
+        return string.concat(_baseTokenURI, tokenId.toString(), ".json");
+    }
+
+    function contractURI() external view returns (string memory) {
+        return _contractURI;
+    }
+
+    // ------------------------------------------------------------------ plumbing
+
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721C, ERC2981) returns (bool) {
+        return interfaceId == bytes4(0x49064906) // EIP-4906
+            || ERC721C.supportsInterface(interfaceId)
+            || ERC2981.supportsInterface(interfaceId);
+    }
+}

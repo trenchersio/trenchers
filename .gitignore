@@ -1,0 +1,9 @@
+node_modules/
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+art/out/images/
+art/preview/
+.env
+*.log
+.next/
