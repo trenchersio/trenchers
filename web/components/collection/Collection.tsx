@@ -1,14 +1,15 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { useWallet, short } from "@/lib/wallet";
 import { ownedIds, loadAgent } from "@/lib/agents-store";
 import { createSim, pct, type Sim } from "@/lib/arena-sim";
-import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, sample, sheetOf, sprite, traits, type Sample, type Status } from "@/lib/collection";
-import { LIST_PRICE_ETH, OPENSEA_URL, ROUTES } from "@/lib/constants";
+import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, sample, traits, type Sample, type Status } from "@/lib/collection";
+import { loadArt } from "@/lib/art-vector";
+import { ArtCanvas } from "./ArtCanvas";
+import { LIST_PRICE_ETH, OPENSEA_URL, ROUTES, gmgnToken } from "@/lib/constants";
 import { AgentLinks } from "@/components/AgentLinks";
 
-const PREVIEW = process.env.NEXT_PUBLIC_PREVIEW === "1";
 const ALL = Array.from({ length: SUPPLY }, (_, i) => i + 1);
 type Filter = "all" | Status | "mine";
 type Size = "s" | "m" | "l";
@@ -30,6 +31,7 @@ function useBook(address: string | null) {
         book.set(id, {
           status: a.live ? "live" : a.registered ? "registered" : "idle", owner: address, listed: false,
           wallet: a.agentWallet, identity: a.identityId, strategy: a.strategy?.preset ?? null, balance: a.registered ? a.balance : null, mine: true,
+          coin: a.token?.symbol ?? null, coinAddress: a.token?.address ?? null,
         });
       }
     }
@@ -44,10 +46,10 @@ export function Collection() {
   const [palette, setPalette] = useState("");
   const [q, setQ] = useState("");
   const [size, setSize] = useState<Size>("m");
-  const [sel, setSel] = useState(1);
-  const [sheet, setSheet] = useState(false); // detail as a bottom sheet on small screens
+  const [sel, setSel] = useState<number | null>(null);
   const [sim, setSim] = useState<Sim | null>(null);
   useEffect(() => { const t = setTimeout(() => setSim(createSim()), 50); return () => clearTimeout(t); }, []);
+  useEffect(() => { loadArt().catch(() => {}); }, []);
 
   const counts = useMemo(() => {
     const c = { live: 0, registered: 0, idle: 0, mine: 0 };
@@ -66,37 +68,13 @@ export function Collection() {
     });
   }, [book, filter, palette, q]);
 
-  // Load each sprite sheet only once one of its tiles comes near the screen.
-  const [sheets, setSheets] = useState<Set<number>>(() => new Set([0]));
-  const gridRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const root = gridRef.current; if (!root) return;
-    const io = new IntersectionObserver((entries) => {
-      const add: number[] = [];
-      for (const e of entries) if (e.isIntersecting) add.push(Number((e.target as HTMLElement).dataset.sheet));
-      if (add.length) setSheets((s) => { const n = new Set(s); add.forEach((x) => n.add(x)); return n.size === s.size ? s : n; });
-    }, { rootMargin: "800px 0px" });
-    root.querySelectorAll<HTMLElement>("[data-edge]").forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [ids]);
-
-  const edges = useMemo(() => {
-    const e = new Set<number>();
-    ids.forEach((id, i) => {
-      if (i === 0 || sheetOf(ids[i - 1]) !== sheetOf(id) || i === ids.length - 1 || sheetOf(ids[i + 1]) !== sheetOf(id) || i % 40 === 0) e.add(id);
-    });
-    return e;
-  }, [ids]);
-
-  function choose(id: number) {
-    setSel(id);
-    if (window.matchMedia("(max-width: 1000px)").matches) setSheet(true);
-  }
-
   const FILTERS: [Filter, string, number][] = [
     ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Registered", counts.registered], ["idle", "Not registered", counts.idle],
   ];
   if (address) FILTERS.push(["mine", "Yours", counts.mine]);
+
+  const pos = sel === null ? -1 : ids.indexOf(sel);
+  const go = (d: number) => { if (pos < 0 || !ids.length) return; setSel(ids[(pos + d + ids.length) % ids.length]); };
 
   return (
     <div className="coll">
@@ -104,7 +82,7 @@ export function Collection() {
         <div>
           <p className="eyebrow">Collection</p>
           <h1>2,000 agents</h1>
-          <p className="coll-lede">Every Trencher, in colour once it is registered as a self-funding agent. Greyed-out ones are waiting for a holder to wake them up. Select any of them for its owner, strategy, agent coin and traits.</p>
+          <p className="coll-lede">Every Trencher, in colour once it is registered as a self-funding agent. Greyed-out ones are waiting for a holder to wake them up. Select any of them for its owner, funding, strategy and traits.</p>
         </div>
         <dl className="coll-stats">
           <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{counts.live}</dd></div>
@@ -142,42 +120,88 @@ export function Collection() {
         </div>
       </div>
 
-      <div className="coll-body">
-        <div ref={gridRef} className={`coll-grid coll-${size}`}>
-          {ids.map((id) => {
-            const b = book.get(id)!;
-            const sh = sheetOf(id);
-            return (
-              <button key={id} type="button" data-sheet={sh} data-edge={edges.has(id) ? "" : undefined}
-                className={`tile t-${b.status}${sel === id ? " t-sel" : ""}${b.mine ? " t-mine" : ""}${id <= 5 ? " t-house" : ""}`}
-                style={sheets.has(sh) ? sprite(id) : undefined}
-                onClick={() => choose(id)} aria-label={`Trencher #${id}, ${STATUS_LABEL[b.status]}`} aria-pressed={sel === id}>
-                <span className="tile-id mono">{id}</span>
-              </button>
-            );
-          })}
-          {!ids.length && <p className="coll-empty mono">No Trenchers match these filters.</p>}
-        </div>
+      <Wall ids={ids} book={book} size={size} onPick={setSel} />
 
-        <aside className={`coll-detail${sheet ? " open" : ""}`} aria-label={`Trencher #${sel}`}>
-          <div className="coll-detail-inner">
-            <button type="button" className="tbtn coll-close" onClick={() => setSheet(false)}>Close</button>
-            <Detail id={sel} b={book.get(sel)!} sim={sim} />
-          </div>
-        </aside>
-        {sheet && <button type="button" className="coll-scrim" aria-label="Close details" onClick={() => setSheet(false)} />}
-      </div>
+      {sel !== null && book.get(sel) && (
+        <Popup onClose={() => setSel(null)} onPrev={() => go(-1)} onNext={() => go(1)} label={`Trencher #${sel}`}>
+          <Detail id={sel} b={book.get(sel)!} sim={sim} />
+        </Popup>
+      )}
     </div>
   );
 }
 
-function Art({ id }: { id: number }) {
-  const [failed, setFailed] = useState(PREVIEW);
-  useEffect(() => setFailed(PREVIEW), [id]);
-  const style: CSSProperties = sprite(id);
-  return failed
-    ? <div className="cd-art" style={style} role="img" aria-label={`Trencher #${id}`} />
-    : <img className="cd-art" src={`nft-md/${id}.webp`} alt={`Trencher #${id}`} width={320} height={320} onError={() => setFailed(true)} />;
+const TILE: Record<Size, number> = { s: 40, m: 68, l: 112 };
+const GAP: Record<Size, number> = { s: 3, m: 5, l: 8 };
+
+/** The tile wall: only the rows on screen are drawn, each tile as crisp vector art. */
+function Wall({ ids, book, size, onPick }: { ids: number[]; book: Map<number, Sample & { mine: boolean }>; size: Size; onPick: (id: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
+  const [view, setView] = useState({ top: 0, h: 900 });
+  useEffect(() => {
+    const el = ref.current!;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el); setW(el.clientWidth);
+    let raf = 0;
+    const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => setView({ top: -el.getBoundingClientRect().top, h: window.innerHeight })); };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => { ro.disconnect(); window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); cancelAnimationFrame(raf); };
+  }, []);
+  const small = w > 0 && w < 600;
+  const want = small ? Math.round(TILE[size] * 0.8) : TILE[size];
+  const gap = GAP[size];
+  const cols = Math.max(1, Math.floor((w + gap) / (want + gap)));
+  const tile = w ? (w - gap * (cols - 1)) / cols : want;
+  const rowH = tile + gap;
+  const rows = Math.ceil(ids.length / cols);
+  const buffer = 3;
+  const first = Math.max(0, Math.floor(view.top / rowH) - buffer);
+  const last = Math.min(rows - 1, Math.ceil((view.top + view.h) / rowH) + buffer);
+  const shown: { id: number; x: number; y: number }[] = [];
+  if (w) for (let r = first; r <= last; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c; if (i >= ids.length) break;
+    shown.push({ id: ids[i], x: c * (tile + gap), y: r * rowH });
+  }
+  return (
+    <div ref={ref} className={`wall wall-${size}`} style={{ height: rows ? rows * rowH - gap : 120 }}>
+      {shown.map(({ id, x, y }) => {
+        const b = book.get(id)!;
+        return (
+          <button key={id} type="button" className={`tile t-${b.status}${b.mine ? " t-mine" : ""}${id <= 5 ? " t-house" : ""}`}
+            style={{ transform: `translate(${x}px, ${y}px)`, width: tile, height: tile }}
+            onClick={() => onPick(id)} aria-label={`Trencher #${id}, ${STATUS_LABEL[b.status]}`}>
+            <ArtCanvas id={id} size={Math.round(tile)} />
+            <span className="tile-id mono">#{id}</span>
+          </button>
+        );
+      })}
+      {!ids.length && <p className="coll-empty mono">No Trenchers match these filters.</p>}
+    </div>
+  );
+}
+
+function Popup({ children, onClose, onPrev, onNext, label }: { children: React.ReactNode; onClose: () => void; onPrev: () => void; onNext: () => void; label: string }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "ArrowLeft") onPrev(); if (e.key === "ArrowRight") onNext(); };
+    window.addEventListener("keydown", key);
+    document.documentElement.classList.add("menu-open");
+    return () => { window.removeEventListener("keydown", key); document.documentElement.classList.remove("menu-open"); };
+  }, [onClose, onPrev, onNext]);
+  return (
+    <div className="pop-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="pop" role="dialog" aria-modal="true" aria-label={label}>
+        <div className="pop-nav">
+          <button type="button" className="tbtn" onClick={onPrev} aria-label="Previous Trencher">← Prev</button>
+          <button type="button" className="tbtn" onClick={onNext} aria-label="Next Trencher">Next →</button>
+          <button type="button" className="tbtn pop-close" onClick={onClose}>Close</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim: Sim | null }) {
@@ -186,11 +210,21 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
   const strategy = agent?.strategy ?? b.strategy;
   const owner = agent?.owner ?? b.owner;
   const wallet = agent?.wallet ?? b.wallet;
+  const coin = agent ? agent.token : b.coin;
+  const coinAddress = agent ? agent.tokenAddress : b.coinAddress;
   const ret = agent ? pct(agent) : null;
   return (
-    <>
-      <div className="cd-top">
-        <Art id={id} />
+    <div className="cd">
+      <div className="cd-art-col">
+        <ArtCanvas id={id} size={440} className="cd-art" />
+        <div className="cd-traits">
+          <h3 className="mono">Traits</h3>
+          <dl>
+            {traits(id).map((t) => <div key={t.key}><dt>{t.key}</dt><dd>{t.value}</dd></div>)}
+          </dl>
+        </div>
+      </div>
+      <div className="cd-info">
         <div className="cd-title">
           <h2>Trencher #{id}</h2>
           <div className="cd-badges">
@@ -199,10 +233,14 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
             {b.mine && <span className="cd-yours mono">Yours</span>}
           </div>
         </div>
-      </div>
 
       <dl className="cd-facts">
         <div><dt>Owner</dt><dd className="mono">{b.mine ? `You · ${short(owner)}` : owner.startsWith("0x") ? short(owner) : owner}</dd></div>
+        {b.status !== "idle" && (
+          <div><dt>Funding</dt><dd className="mono">{coin && coinAddress
+            ? <a className="fund-coin" href={gmgnToken(coinAddress)} target="_blank" rel="noreferrer">Coin ${coin} ↗</a>
+            : <span className="fund-self">Self-funded</span>}</dd></div>
+        )}
         <div><dt>Strategy</dt><dd>{strategy ?? <span className="cd-muted">{b.status === "idle" ? "None, not registered" : "Not set yet"}</span>}</dd></div>
         {wallet && <div><dt>Agent wallet</dt><dd className="mono">{short(wallet)}</dd></div>}
         {b.identity && <div><dt>Identity</dt><dd className="mono">ERC-8004 #{b.identity}</dd></div>}
@@ -210,7 +248,6 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
           <div><dt>Agent value</dt><dd className="mono">{agent.nav.toFixed(3)} ETH</dd></div>
           <div><dt>This week</dt><dd className={`mono ${ret! >= 0 ? "up" : "down"}`}>{ret! >= 0 ? "+" : ""}{ret!.toFixed(1)}%</dd></div>
           <div><dt>Arena rank</dt><dd className="mono">#{agent.rank + 1} of {sim!.agents.length}</dd></div>
-          <div><dt>Agent coin</dt><dd className="mono">{agent.token ? <span className="coin-tag">${agent.token}</span> : <span className="cd-muted">Not launched</span>}</dd></div>
           <div><dt>Self-funded</dt><dd className="mono">{(agent.tokenFees + agent.shareFees).toFixed(4)} ETH</dd></div>
           <div><dt>Win rate</dt><dd className="mono">{agent.closed ? Math.round((agent.wins / agent.closed) * 100) : 0}% · {agent.trades.length} trades</dd></div>
         </>) : b.balance !== null ? (
@@ -233,13 +270,8 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
         {OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}
       </div>
 
-      <div className="cd-traits">
-        <h3 className="mono">Traits</h3>
-        <dl>
-          {traits(id).map((t) => <div key={t.key}><dt>{t.key}</dt><dd>{t.value}</dd></div>)}
-        </dl>
-      </div>
       <p className="cd-note">Sample data until the contracts are live.</p>
-    </>
+      </div>
+    </div>
   );
 }

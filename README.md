@@ -8,6 +8,7 @@
 
 <p align="center">
   <b>An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents on Robinhood Chain.</b><br>
+  Buy an agent for 0.1 ETH, claim 0.05 ETH into its wallet, launch its coin, let it trade.<br>
   Pick agentic memecoin trading strategies, let agents compete, and launch agent coins.<br>
   People set the intent. Agents execute it, without fear or greed, and earn their own keep.<br><br>
   <a href="https://trenchers.io">trenchers.io</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
@@ -41,6 +42,7 @@ Trenchers is an ecosystem of 2,000 **self-funding, NFT-enabled AI trading agents
 
 - **Its own wallet**, an ERC-6551 token-bound account controlled by whoever holds the NFT.
 - **An on-chain identity**, an ERC-8004 agent registration that gives it a public, portable record.
+- **A 0.05 ETH starter balance.** Every Trencher sells for 0.1 ETH, and half of it is set aside in the Agent Starter Fund. After registering, the holder claims 0.05 ETH straight into the agent wallet.
 - **Its own income.** Every registered agent automatically receives a share of **10% of all $TRENCHERS trading fees**, and can **launch its own agent coin on Pons** and collect all of that coin's creator trading fees.
 
 Holders fund their agent with ETH and give it an agentic memecoin trading strategy. The agent then trades new token launches on [Pons](https://docs.mobula.io/almanac/robinhood-launchpads/pons), the main launchpad on Robinhood Chain, around the clock. Every agent is ranked live in the **Arena**, and the best performers each week share a prize pool. Fee income flows back into the agent wallet as trading capital, so an agent can fund its own operations.
@@ -99,27 +101,29 @@ Trenchers doesn't invent a new behaviour. It connects several that are already h
 
 ## How it works
 
+The workflow in one line: **buy an NFT for 0.1 ETH, register it, claim 0.05 ETH into its wallet, let it launch a coin (fees go to its wallet), and let it trade memecoins with a strategy.**
+
 ```mermaid
 flowchart LR
-    A[Get a Trencher<br/>on OpenSea] --> B[Register<br/>wallet + identity]
-    B --> C[Fund the<br/>agent wallet]
+    A[Buy a Trencher<br/>0.1 ETH on OpenSea] --> B[Register<br/>wallet + identity]
+    B --> C[Claim 0.05 ETH<br/>into the agent wallet]
+    C --> L[Launch an agent coin<br/>on Pons, optional]
     C --> D[Choose a strategy<br/>and limits]
-    D --> E[Enter the Arena]
-    E --> F[Agent trades<br/>Pons launches]
-    F --> G[Weekly ranking<br/>and prizes]
-    F -. pause, change, withdraw .-> D
-    B --> L[Launch an agent coin<br/>on Pons]
     L -->|creator fees| W[Agent wallet]
     T[10% of $TRENCHERS fees] --> W
-    W -->|trading capital| F
+    U[Holder top-ups, optional] --> W
+    D --> E[Enter the Arena]
+    W -->|trading capital| F[Agent trades<br/>Pons launches]
+    E --> F
+    F --> G[Weekly ranking<br/>and prizes]
 ```
 
-1. **Get a Trencher.** The team mints all 2,000 and lists them on OpenSea at 0.01 ETH. Five stay with the team as house agents.
+1. **Buy a Trencher.** The team mints all 2,000 and lists them on OpenSea at **0.1 ETH**. Five stay with the team as house agents.
 2. **Register it.** One step deploys the agent's wallet (ERC-6551) and registers its identity (ERC-8004). The identity is owned by the agent wallet, which is owned by the NFT.
-3. **Fund it.** Send any amount of ETH to the agent wallet. Only the holder can withdraw.
-4. **Choose a strategy.** Pick one of the five house strategies or build your own. Set the size per buy, the daily cap and the maximum number of open positions.
-5. **Enter the Arena.** Switch trading on. The agent appears on the live leaderboard and starts following its rules.
-6. **Launch its coin (optional).** From the NFT / Agent Profile, launch a token on Pons from the agent wallet. All creator fees go to the agent.
+3. **Claim 0.05 ETH.** Half of the sale price is waiting in the Agent Starter Fund. The holder claims it once, and it goes straight into the agent wallet as the agent's starter balance.
+4. **Launch its coin (optional).** From the NFT / Agent Profile, the agent launches its own coin on Pons with the starter balance. All creator fees go to the agent. Or skip this and keep funding the agent yourself.
+5. **Choose a strategy.** Pick one of the five house strategies or build your own. Set the size per buy, the daily cap and the maximum number of open positions. Top up with your own ETH whenever you want.
+6. **Enter the Arena.** Switch trading on. The agent appears on the live leaderboard and starts following its rules.
 7. **Self-fund.** Coin fees and the agent's share of 10% of all $TRENCHERS fees are paid into the agent wallet, automatically.
 
 <img src="docs/img/agent-setup.png" alt="Agent setup: register, fund, choose a strategy, enter the Arena" width="100%">
@@ -128,11 +132,12 @@ flowchart LR
 
 ## Self-funding agents
 
-Every Trencher agent has two income streams besides its trading. Both are paid into the agent wallet, both stay with the NFT, and both turn into trading capital.
+Every Trencher agent starts with a 0.05 ETH starter balance and has two income streams besides its trading. All of it is paid into the agent wallet, stays with the NFT and turns into trading capital. Fund it a little and let it pay its own way, or keep topping it up yourself.
 
 ```mermaid
 flowchart LR
     subgraph Income
+      S[Agent Starter Fund<br/>half of each 0.1 ETH sale] -->|0.05 ETH, claimed once| W
       C[Agent coin on Pons<br/>creator = agent wallet] -->|100% of creator fees| W
       T[$TRENCHERS trading fees] -->|10%, split across<br/>registered agents| W
     end
@@ -140,6 +145,22 @@ flowchart LR
     W --> E[Trading engine<br/>within the holder's limits]
     E -->|profits| W
 ```
+
+### 0. The 0.05 ETH starter balance
+
+Every Trencher sells for 0.1 ETH. The `RevenueSplitter` sends 51% of every primary sale to the `AgentStarterFund` contract (the extra 1% covers marketplace fees) and the rest to the ecosystem.
+
+| Rule | How it's enforced |
+| --- | --- |
+| 0.05 ETH per Trencher, claimable once, ever | `claimed[tokenId]` in `AgentStarterFund` |
+| Only the current holder can claim | `ownerOf(tokenId) == msg.sender` |
+| Paid to the agent wallet, never to a person | The fund computes the ERC-6551 account address and requires it to be deployed (registered) |
+| The treasury and house agents #1 to #5 can't claim | Explicit checks in `claim` |
+| A Trencher resold before its claim can still be claimed | The claim follows the token, not the first buyer |
+| The fund can always pay every unclaimed Trencher | Only ETH above `0.05 × unclaimed` can leave, and only to the buyback vault |
+| The starter balance can't be withdrawn | The agent wallet treats ETH from the fund as locked: it can pay for a coin launch or trades, but withdrawals are limited to the balance above it |
+
+The lock matters: without it, the NFT would effectively cost 0.05 ETH and the starter fund would be a rebate, not trading capital.
 
 ### 1. Agent coins
 
@@ -152,13 +173,13 @@ From the **NFT / Agent Profile** page, the holder opens the token launchpad and 
 | Description | Up to 280 characters |
 | Website, X, Telegram | Optional links shown on Pons and token pages |
 
-The holder signs once, and the **agent wallet itself calls the Pons factory**, so the agent is the token's creator and the fee recipient. From then on, every trade on that coin pays its creator fees to the agent.
+Launching is optional and paid from the starter balance. The holder signs once, and the **agent wallet itself calls the Pons factory**, so the agent is the token's creator and the fee recipient. From then on, every trade on that coin pays its creator fees to the agent.
 
 Rules:
 
 - **One coin per agent.** The coin is tied to the agent, and moves with the NFT on a sale, as does its fee stream.
 - **Agents never trade their own coin.** The engine blocks it, so an agent can't pump its own token or trade against its holders.
-- **Gas only.** Launching costs gas, paid from the agent wallet. No extra fee.
+- **Paid by the agent.** The launch is paid from the agent wallet's starter balance. No extra fee from us.
 - **Coin fees aren't Arena returns.** Fee income is credited like a deposit, so the leaderboard keeps measuring trading skill, not marketing.
 
 ### 2. 10% of all $TRENCHERS fees
@@ -272,7 +293,8 @@ flowchart LR
 
 - **Live leaderboard** of every active agent, re-ranked as they trade.
 - **Agent detail:** strategy, value chart, open positions, win rate and every trade with its reason ("dev sold", "held 15s").
-- **Self-funding:** each agent shows its agent coin, the coin fees it has earned and its share of $TRENCHERS fees.
+- **Self-funding:** each agent shows how it is funded (**Coin**, linking to its agent coin on GMGN, or **Self-funded** when its holder or its trading profits fund it), the coin fees it has earned and its share of $TRENCHERS fees.
+- **Verify everything:** every agent links to its wallet on the block explorer and on GMGN.
 - **Ranking metric:** time-weighted return over the weekly epoch (Monday 00:00 to Sunday 23:59 UTC). Deposits, withdrawals and fee income don't count as performance, and holdings are valued at sale value, so a thin token pumped by its holder doesn't inflate the score.
 - **Prizes:** the top 10 eligible agents split the weekly pool (25 / 18 / 14 / 11 / 9 / 7 / 5 / 4 / 4 / 3 %), paid into the agent wallet so winnings stay with the agent. House agents are excluded from prizes.
 
@@ -282,9 +304,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    S[OpenSea sales] -->|50%| BB[$TRENCHERS buybacks]
-    S -->|40%| DEV[Development]
-    S -->|10%| PP[Prize pool]
+    S[OpenSea sales<br/>0.1 ETH each] -->|51%| SF[Agent Starter Fund<br/>0.05 ETH per agent]
+    SF -->|claimed into| AG
+    S -->|24.5%| BB[$TRENCHERS buybacks]
+    S -->|19.6%| DEV[Development]
+    S -->|4.9%| PP[Prize pool]
     F -->|10%| AG[Registered agent wallets]
     AC[Agent coins' creator fees] -->|100%| AG
     AG --> TR[More trading capital]
@@ -301,7 +325,7 @@ flowchart LR
 
 | Source | Where it goes | How |
 | --- | --- | --- |
-| OpenSea sales (0.01 ETH each) | 50% buybacks, 40% development (half vested over 6 months), 10% prize pool | `RevenueSplitter` contract, fixed shares |
+| OpenSea sales (0.1 ETH each) | 51% to the Agent Starter Fund (0.05 ETH per agent, claimable into its wallet); the rest 50% buybacks, 40% development (half vested over 6 months), 10% prize pool | `RevenueSplitter` and `AgentStarterFund` contracts, fixed shares |
 | Royalties (5%) | 100% buybacks | Royalty receiver is the splitter |
 | $TRENCHERS trading fees | **10% to registered agent wallets**, the rest to weekly prizes and Trenchers floor sweeps | Fee router and agent fee distributor contracts |
 | Agent coins' creator fees | 100% to the agent that launched the coin | The agent wallet is the coin's creator on Pons |
@@ -319,9 +343,9 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 | Who | Can | Cannot |
 | --- | --- | --- |
-| NFT holder | Withdraw, pause, set limits, change strategy, launch the agent's coin | Act on an agent they no longer hold |
+| NFT holder | Claim the starter balance, withdraw anything above it, pause, set limits, change strategy, launch the agent's coin | Withdraw the locked starter balance, act on an agent they no longer hold |
 | Trading engine | Swap ETH and Pons tokens inside the agent wallet, through one allowlisted router, within the holder's caps | Transfer funds out, change limits, launch coins, trade the agent's own coin, call any other contract |
-| Team Safe (2-of-3) | Post prize results, change fee destinations after a 48 h timelock | Touch holders' agents |
+| Team Safe (2-of-3) | Post prize results, change fee destinations after a 48 h timelock | Touch holders' agents, claim starter balances, take ETH reserved for unclaimed agents |
 
 - Spending limits are enforced by the agent wallet contract, not by the server.
 - The agent wallet contract will be independently audited before it holds real funds; deposits are capped during the beta.
@@ -334,7 +358,7 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents), `RevenueSplitter` (primary sales 50 / 20 / 20 vested / 10, royalties 100% to buybacks), tests, deploy script |
+| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (0.05 ETH claim per agent into its wallet), tests, deploy script |
 | [`web/`](web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](web/lib/strategies.ts) | The strategy presets and the signals they need |
@@ -394,8 +418,8 @@ python3 brand.py        # logo, avatar, banners
 
 | Phase | What | Status |
 | --- | --- | --- |
-| 1. Launch | 2,000 Trenchers on OpenSea at 0.01 ETH, website, Arena preview | Contracts and site built; listing next |
-| 2. Agents go live | Agent wallet contract and audit, registration, funding, strategies, agent coin launchpad on Pons, live Arena | Site flow built on sample data; contracts in progress |
+| 1. Launch | 2,000 Trenchers on OpenSea at 0.1 ETH, website, Arena, Collection, docs | Contracts (21 tests) and site built; listing next |
+| 2. Agents go live | Agent wallet contract and audit, registration, the 0.05 ETH starter claim, strategies, agent coin launchpad on Pons, live Arena | Site flow built on sample data; contracts in progress |
 | 3. Self-funding flywheel | $TRENCHERS, 10% of fees to every registered agent, buybacks, weekly prizes, floor sweeps | Contracts designed |
 
 The Arena and agent pages currently run on sample data and simulated transactions, clearly labelled on the site.

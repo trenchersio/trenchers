@@ -10,7 +10,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @notice Single receiving address for Trenchers primary-sale proceeds and secondary royalties.
 ///
 ///         Primary sales: all 1,995 public Trenchers are minted free to a treasury wallet and listed
-///         on OpenSea at 0.01 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
+///         on OpenSea at 0.1 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
+///           51% to the Agent Starter Fund, which pays each buyer's agent a 0.05 ETH starter
+///               balance (the extra 1% covers marketplace fees; the fund returns any surplus to
+///               buybacks), and the rest to the ecosystem:
 ///           50% buybacks, 20% development (immediate), 20% development (vested linearly
 ///           over VEST_DURATION), 10% prize pool.
 ///         Royalties (ETH from anyone else, and any ERC-20 such as WETH): 100% buybacks.
@@ -23,9 +26,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 contract RevenueSplitter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    enum Bucket { Buyback, Dev, Prize }
+    enum Bucket { Buyback, Dev, Prize, Starter }
 
     uint256 public constant BPS = 10_000;
+    uint256 public constant PRIMARY_STARTER_BPS = 5_100; // of the primary sale, to the Agent Starter Fund
+    // The rest of the primary sale (the ecosystem half) is split:
     uint256 public constant PRIMARY_BUYBACK_BPS = 5_000;
     uint256 public constant PRIMARY_DEV_NOW_BPS = 2_000;
     uint256 public constant PRIMARY_DEV_VESTED_BPS = 2_000;
@@ -87,13 +92,16 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
 
     receive() external payable {
         if (msg.sender == primarySeller && primarySeller != address(0)) {
-            uint256 dev = (msg.value * PRIMARY_DEV_NOW_BPS) / BPS;
-            uint256 vest = (msg.value * PRIMARY_DEV_VESTED_BPS) / BPS;
-            uint256 prize = (msg.value * PRIMARY_PRIZE_BPS) / BPS;
+            uint256 starter = (msg.value * PRIMARY_STARTER_BPS) / BPS;
+            uint256 eco = msg.value - starter;
+            uint256 dev = (eco * PRIMARY_DEV_NOW_BPS) / BPS;
+            uint256 vest = (eco * PRIMARY_DEV_VESTED_BPS) / BPS;
+            uint256 prize = (eco * PRIMARY_PRIZE_BPS) / BPS;
+            owed[Bucket.Starter] += starter;
             owed[Bucket.Dev] += dev;
             owed[Bucket.Prize] += prize;
             vestedTotal += vest;
-            owed[Bucket.Buyback] += msg.value - dev - vest - prize; // rounding dust to buybacks
+            owed[Bucket.Buyback] += eco - dev - vest - prize; // rounding dust to buybacks
             totalPrimarySales += msg.value;
             emit PrimarySaleReceived(msg.value);
         } else {

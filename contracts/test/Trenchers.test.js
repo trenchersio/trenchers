@@ -2,8 +2,8 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-const LIST_PRICE = ethers.parseEther("0.05");
-const Bucket = { Buyback: 0, Dev: 1, Prize: 2 };
+const LIST_PRICE = ethers.parseEther("0.1");
+const Bucket = { Buyback: 0, Dev: 1, Prize: 2, Starter: 3 };
 
 async function deploy() {
   const [deployer, safe, dev, team, treasury, alice, bob, buyback, prize, market] = await ethers.getSigners();
@@ -83,12 +83,13 @@ describe("RevenueSplitter", () => {
     return ctx;
   }
 
-  it("splits primary-sale proceeds from the treasury 50 / 20 now / 20 vested / 10", async () => {
+  it("sends 51% of primary sales to the Agent Starter Fund and splits the rest 50 / 20 now / 20 vested / 10", async () => {
     const { splitter } = await sold("1");
-    expect(await splitter.owed(Bucket.Buyback)).to.equal(ethers.parseEther("0.5"));
-    expect(await splitter.owed(Bucket.Dev)).to.equal(ethers.parseEther("0.2"));
-    expect(await splitter.vestedTotal()).to.equal(ethers.parseEther("0.2"));
-    expect(await splitter.owed(Bucket.Prize)).to.equal(ethers.parseEther("0.1"));
+    expect(await splitter.owed(Bucket.Starter)).to.equal(ethers.parseEther("0.51"));
+    expect(await splitter.owed(Bucket.Buyback)).to.equal(ethers.parseEther("0.245"));
+    expect(await splitter.owed(Bucket.Dev)).to.equal(ethers.parseEther("0.098"));
+    expect(await splitter.vestedTotal()).to.equal(ethers.parseEther("0.098"));
+    expect(await splitter.owed(Bucket.Prize)).to.equal(ethers.parseEther("0.049"));
     expect(await splitter.totalPrimarySales()).to.equal(ethers.parseEther("1"));
   });
 
@@ -100,16 +101,16 @@ describe("RevenueSplitter", () => {
     expect(await splitter.totalRoyalties()).to.equal(ethers.parseEther("0.05"));
   });
 
-  it("vests the dev half linearly over 180 days", async () => {
+  it("vests half of the dev share linearly over 180 days", async () => {
     const { splitter, dev, start } = await sold("1");
     const before = await ethers.provider.getBalance(dev.address);
     await time.increaseTo(start + 90 * 86400);
     await splitter.release(Bucket.Dev);
     const got = (await ethers.provider.getBalance(dev.address)) - before;
-    expect(got).to.be.closeTo(ethers.parseEther("0.3"), ethers.parseEther("0.0001"));
+    expect(got).to.be.closeTo(ethers.parseEther("0.147"), ethers.parseEther("0.0001"));
     await time.increaseTo(start + 200 * 86400);
     await splitter.release(Bucket.Dev);
-    expect((await ethers.provider.getBalance(dev.address)) - before).to.equal(ethers.parseEther("0.4"));
+    expect((await ethers.provider.getBalance(dev.address)) - before).to.equal(ethers.parseEther("0.196"));
   });
 
   it("holds buyback and prize funds until their contracts exist, then releases to them", async () => {
@@ -119,7 +120,7 @@ describe("RevenueSplitter", () => {
     await splitter.connect(safe).proposeDestination(Bucket.Prize, prize.address);
     const b0 = await ethers.provider.getBalance(buyback.address);
     await splitter.connect(alice).release(Bucket.Buyback);
-    expect((await ethers.provider.getBalance(buyback.address)) - b0).to.equal(ethers.parseEther("0.5"));
+    expect((await ethers.provider.getBalance(buyback.address)) - b0).to.equal(ethers.parseEther("0.245"));
     await expect(splitter.release(Bucket.Buyback)).to.be.revertedWithCustomError(splitter, "NothingOwed");
   });
 
@@ -146,5 +147,88 @@ describe("RevenueSplitter", () => {
     await splitter.connect(safe).proposeDestination(Bucket.Buyback, buyback.address);
     await splitter.connect(market).releaseToken(await token.getAddress());
     expect(await token.balanceOf(buyback.address)).to.equal(1000n);
+  });
+});
+
+describe("AgentStarterFund", () => {
+  async function setup({ fundEth = "1" } = {}) {
+    const ctx = await deploy();
+    const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
+      ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ctx.treasury.address
+    );
+    await fund.connect(ctx.safe).setAccount(ctx.bob.address /* any non-zero implementation */, ethers.ZeroHash);
+    await ctx.nft.ownerMint(ctx.treasury.address, 20); // ids 6..25
+    // a sale on OpenSea: treasury -> alice
+    await ctx.nft.connect(ctx.treasury).transferFrom(ctx.treasury.address, ctx.alice.address, 6);
+    if (fundEth !== "0") await ctx.deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther(fundEth) });
+    const register = async (id) => {
+      const w = await (await ethers.getContractFactory("MockAgentWallet")).deploy();
+      await registry.setWallet(id, await w.getAddress());
+      return w.getAddress();
+    };
+    return { ...ctx, fund, registry, register };
+  }
+
+  it("is the Starter bucket of the splitter: 51% of primary sales flow into it", async () => {
+    const { splitter, safe, treasury, fund } = await setup({ fundEth: "0" });
+    await splitter.connect(safe).proposeDestination(Bucket.Starter, await fund.getAddress());
+    await treasury.sendTransaction({ to: await splitter.getAddress(), value: ethers.parseEther("0.1") });
+    await splitter.release(Bucket.Starter);
+    expect(await ethers.provider.getBalance(await fund.getAddress())).to.equal(ethers.parseEther("0.051"));
+  });
+
+  it("pays 0.05 ETH into a registered Trencher's agent wallet, once, at the holder's request", async () => {
+    const { fund, alice, register } = await setup();
+    const wallet = await register(6);
+    await expect(fund.connect(alice).claim(6)).to.emit(fund, "Claimed").withArgs(6, alice.address, wallet, ethers.parseEther("0.05"));
+    expect(await ethers.provider.getBalance(wallet)).to.equal(ethers.parseEther("0.05"));
+    await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "AlreadyClaimed");
+    expect(await fund.claimedCount()).to.equal(1n);
+  });
+
+  it("requires the agent to be registered first", async () => {
+    const { fund, alice } = await setup();
+    await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "NotRegistered");
+  });
+
+  it("only the current holder can claim; the treasury and house agents never can", async () => {
+    const { fund, nft, alice, bob, treasury, team, register } = await setup();
+    await register(6); await register(7); await register(1);
+    await expect(fund.connect(bob).claim(6)).to.be.revertedWithCustomError(fund, "NotHolder");
+    await expect(fund.connect(treasury).claim(7)).to.be.revertedWithCustomError(fund, "TreasuryCannotClaim");
+    await expect(fund.connect(team).claim(1)).to.be.revertedWithCustomError(fund, "NotEligible");
+    // resold before claiming: the new holder can claim
+    await nft.connect(alice).transferFrom(alice.address, bob.address, 6);
+    await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "NotHolder");
+    await fund.connect(bob).claim(6);
+  });
+
+  it("reverts when the fund can't cover a claim", async () => {
+    const { fund, alice, register } = await setup({ fundEth: "0.01" });
+    await register(6);
+    await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "Underfunded");
+  });
+
+  it("keeps 0.05 ETH reserved for every unclaimed Trencher and only releases ETH above that", async () => {
+    const { fund, safe, alice, buyback, register, deployer } = await setup({ fundEth: "0" });
+    await fund.connect(safe).setExcessTo(buyback.address);
+    expect(await fund.reserve()).to.equal(ethers.parseEther("0.05") * 1995n);
+    await deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther("100") });
+    expect(await fund.excess()).to.equal(ethers.parseEther("0.25"));
+    await register(6); await fund.connect(alice).claim(6);
+    expect(await fund.excess()).to.equal(ethers.parseEther("0.25"));
+    const b0 = await ethers.provider.getBalance(buyback.address);
+    await fund.releaseExcess();
+    expect((await ethers.provider.getBalance(buyback.address)) - b0).to.equal(ethers.parseEther("0.25"));
+    await expect(fund.releaseExcess()).to.be.revertedWithCustomError(fund, "NothingToRelease");
+  });
+
+  it("account settings and the excess destination can be set only once, by the owner", async () => {
+    const { fund, safe, alice, bob } = await setup();
+    await expect(fund.connect(safe).setAccount(bob.address, ethers.ZeroHash)).to.be.revertedWithCustomError(fund, "AlreadySet");
+    await expect(fund.connect(alice).setExcessTo(bob.address)).to.be.revertedWith("Ownable: caller is not the owner");
+    await fund.connect(safe).setExcessTo(bob.address);
+    await expect(fund.connect(safe).setExcessTo(alice.address)).to.be.revertedWithCustomError(fund, "AlreadySet");
   });
 });

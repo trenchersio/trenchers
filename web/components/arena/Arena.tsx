@@ -1,4 +1,5 @@
 "use client";
+import { gmgnToken } from "@/lib/constants";
 import { AgentLinks } from "@/components/AgentLinks";
 import { short } from "@/lib/wallet";
 import { useEffect, useRef, useState } from "react";
@@ -176,7 +177,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
       <div className="panel-block selffund">
         <h3>Self-funding</h3>
         <dl>
-          <div><dt>Agent coin</dt><dd className="mono">{a.token ? <span className="coin-tag">${a.token}</span> : <span className="cd-muted">Not launched</span>}</dd></div>
+          <div><dt>Funding</dt><dd className="mono">{a.token && a.tokenAddress ? <a className="fund-coin" href={gmgnToken(a.tokenAddress)} target="_blank" rel="noreferrer">Coin ${a.token} ↗</a> : <span className="fund-self">Self-funded</span>}</dd></div>
           <div><dt>Coin fees earned</dt><dd className="mono">{a.tokenFees.toFixed(4)} ETH</dd></div>
           <div><dt>$TRENCHERS fee share</dt><dd className="mono">{a.shareFees.toFixed(4)} ETH</dd></div>
         </dl>

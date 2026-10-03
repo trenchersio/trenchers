@@ -1,11 +1,28 @@
-import { Socials } from "./Socials";
 import { WalletMenu } from "./WalletMenu";
 import { ConnectModal } from "./ConnectModal";
 import { MobileMenu } from "./MobileMenu";
-import { ROUTES, SOCIALS } from "@/lib/constants";
+import { NavDropdown, type NavItem } from "./NavDropdown";
+import { GITHUB_URL, ROUTES, SOCIALS } from "@/lib/constants";
 
-/** Shared top bar. `page` marks the current page; the home page also shows its section links. */
-export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "agents" | "docs" | "collection"; wide?: boolean }) {
+type Page = "home" | "arena" | "agents" | "docs" | "collection";
+
+/** Shared top bar: Arena and Collection up front, everything else in two compact dropdowns. */
+export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean }) {
+  const home = page === "home" ? "" : ROUTES.home;
+  const learn: NavItem[] = [
+    { label: "How it works", href: `${home}#how`, hint: "From NFT to self-funding agent" },
+    { label: "Self-funding agents", href: `${home}#self-funding`, hint: "Starter ETH, agent coins, fee share" },
+    { label: "Flywheel", href: `${home}#flywheel`, hint: "Where every ETH goes" },
+    { label: "Roadmap", href: `${home}#roadmap` },
+    { label: "FAQ", href: `${home}#faq` },
+    { label: "Docs", href: ROUTES.docs, hint: "The full technical write-up" },
+  ];
+  const community: NavItem[] = [
+    ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersio", external: true }] : []),
+    ...(SOCIALS.discord ? [{ label: "Discord", href: SOCIALS.discord, external: true }] : []),
+    ...(SOCIALS.telegram ? [{ label: "Telegram", href: SOCIALS.telegram, external: true }] : []),
+    { label: "GitHub", href: GITHUB_URL, hint: "Contracts, site and docs", external: true },
+  ];
   return (
     <>
       <header className={`bar${wide ? " bar-wide" : ""}`}>
@@ -13,17 +30,11 @@ export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "a
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
         </a>
         <nav>
-          {page !== "home" && <a href={ROUTES.home} className="tbtn nav-sec">Home</a>}
-          <a href={ROUTES.arena} className={`tbtn nav-arena${page === "arena" ? " tbtn-on" : ""}`} aria-current={page === "arena" ? "page" : undefined}>Arena</a>
-          <a href={ROUTES.collection} className={`tbtn nav-coll${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
-          {page === "home" && <>
-            <a href="#how" className="tbtn nav-sec">How it works</a>
-            <a href="#self-funding" className="tbtn nav-sec">Self-funding</a>
-            <a href="#flywheel" className="tbtn nav-sec">Flywheel</a>
-            <a href="#faq" className="tbtn nav-sec">FAQ</a>
-          </>}
-          <a href={ROUTES.docs} className={`tbtn nav-docs${page === "docs" ? " tbtn-on" : ""}`} aria-current={page === "docs" ? "page" : undefined}>Docs</a>
-          <Socials links={SOCIALS} />
+          <a href={ROUTES.arena} className={`tbtn${page === "arena" ? " tbtn-on" : ""}`} aria-current={page === "arena" ? "page" : undefined}>Arena</a>
+          <a href={ROUTES.collection} className={`tbtn${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
+          <NavDropdown label="Learn" items={learn} active={page === "docs"} />
+          <NavDropdown label="Community" items={community} />
+          <span className="nav-sep" aria-hidden="true" />
           <WalletMenu />
         </nav>
         <MobileMenu page={page} />

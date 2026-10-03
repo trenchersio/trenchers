@@ -25,6 +25,8 @@ export type AgentState = {
   strategy: Strategy | null;
   live: boolean;       // trading enabled, competing in the Arena
   registeredAt?: number | null;
+  starterClaimed?: boolean;    // the 0.05 ETH starter balance from the Agent Starter Fund
+  locked?: number;             // starter ETH still in the agent: spendable on launches and trades, not withdrawable
   token?: AgentToken | null;   // the agent's own Pons token, if launched
   log: { t: number; text: string }[];
 };

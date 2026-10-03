@@ -6,7 +6,7 @@ import { CustomBuilder, NumField } from "./CustomBuilder";
 import { Launchpad } from "./Launchpad";
 import { AGENT_FEE_SHARE_PCT, tokenFees, trenchersShare, type TokenDraft } from "@/lib/agent-token";
 import { DEFAULT_RULE, describe, validate } from "@/lib/custom-strategy";
-import { OPENSEA_URL, ROUTES, SAMPLE_MODE, chain } from "@/lib/constants";
+import { OPENSEA_URL, ROUTES, SAMPLE_MODE, STARTER_ETH, chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 import {
   PRESETS, agentWalletFor, identityFor, tokenAddressFor, loadAgent, ownedIds, saveAgent, statusOf, wait,
@@ -89,7 +89,9 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<"setup" | "token" | "activity">("setup");
   const st = statusOf(a);
-  const step = !a.registered ? 1 : a.balance <= 0 ? 2 : !a.strategy ? 3 : 4;
+  const locked = Math.min(a.locked ?? 0, a.balance);
+  const withdrawable = +(a.balance - locked).toFixed(4);
+  const step = !a.registered ? 1 : !a.starterClaimed && a.balance <= 0 ? 2 : !a.strategy ? 5 : 6;
 
   const log = (x: AgentState, text: string): AgentState => ({ ...x, log: [{ t: Date.now(), text }, ...x.log].slice(0, 20) });
 
@@ -104,6 +106,14 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     onChange(log({ ...a, registered: true, registeredAt: Date.now(), agentWallet: agentWalletFor(owner, a.id), identityId: identityFor(a.id) }, "Registered as an agent"));
   });
 
+  const claimStarter = () => run([
+    "Claiming from the Agent Starter Fund…",
+    `Sending ${STARTER_ETH} ETH into the agent wallet…`,
+  ], () => {
+    const v = Number(STARTER_ETH);
+    onChange(log({ ...a, starterClaimed: true, balance: +(a.balance + v).toFixed(4), locked: +((a.locked ?? 0) + v).toFixed(4) }, `Claimed the ${STARTER_ETH} ETH starter balance`));
+  });
+
   const deposit = () => {
     const v = Number(amount);
     if (!Number.isFinite(v) || v < 0.01) { setNotice("Deposit at least 0.01 ETH."); return; }
@@ -111,9 +121,9 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   };
 
   const withdraw = () => {
-    if (a.balance <= 0) return;
-    const v = a.balance;
-    run(["Withdrawing to your wallet…"], () => onChange(log({ ...a, balance: 0, live: false }, `Withdrew ${v.toFixed(4)} ETH${a.live ? ", trading paused" : ""}`)));
+    if (withdrawable <= 0) return;
+    const v = withdrawable;
+    run(["Withdrawing to your wallet…"], () => onChange(log({ ...a, balance: +(a.balance - v).toFixed(4) }, `Withdrew ${v.toFixed(4)} ETH`)));
   };
 
   const saveStrategy = () => {
@@ -136,7 +146,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     `Launching $${d.symbol} on Pons from the agent wallet…`,
     "Setting the agent wallet as fee recipient…",
   ], () => {
-    onChange(log({ ...a, balance: +(a.balance - 0.0012).toFixed(4), token: { ...d, address: tokenAddressFor(owner, a.id), launchedAt: Date.now(), feeRate: 0.02 + (a.id % 7) * 0.006 } }, `Launched $${d.symbol} on Pons`));
+    onChange(log({ ...a, balance: +(a.balance - 0.0012).toFixed(4), locked: Math.max(0, +((a.locked ?? 0) - 0.0012).toFixed(4)), token: { ...d, address: tokenAddressFor(owner, a.id), launchedAt: Date.now(), feeRate: 0.02 + (a.id % 7) * 0.006 } }, `Launched $${d.symbol} on Pons`));
     done();
   }));
 
@@ -166,7 +176,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       {a.registered && <Income a={a} />}
 
       <div className="ptabs" role="tablist" aria-label="Agent profile sections">
-        {([["setup", "Agent setup"], ["token", a.token ? `Token $${a.token.symbol}` : "Token launchpad"], ["activity", "Activity"]] as const).map(([k, label]) => (
+        {([["setup", "Agent setup"], ["token", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad"], ["activity", "Activity"]] as const).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tbtn${tab === k ? " tbtn-on" : ""}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -183,10 +193,28 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </>)}
         </Step>
 
-        <Step n={2} title="Fund the agent wallet" state={!a.registered ? "todo" : a.balance > 0 ? "done" : "now"}>
-          <p>The agent trades with the ETH in its own wallet. Only you can withdraw it.</p>
+        <Step n={2} title={`Claim the ${STARTER_ETH} ETH starter balance`} state={a.starterClaimed ? "done" : a.registered ? "now" : "todo"}>
+          {a.starterClaimed ? (
+            <p>Claimed. {STARTER_ETH} ETH from the Agent Starter Fund is in the agent wallet, ready to launch its coin or trade.</p>
+          ) : (<>
+            <p>Half of what you paid for your Trencher is set aside for its agent. Claim it once and it goes straight into the agent wallet. It stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn.</p>
+            <TextButton onClick={claimStarter} disabled={!a.registered || !!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
+          </>)}
+        </Step>
+
+        <Step n={3} title="Launch the agent's coin (optional)" state={a.token ? "done" : a.registered && (a.starterClaimed || a.balance > 0) ? "now" : "todo"}>
+          {a.token ? (
+            <p>${a.token.symbol} is live on Pons. Every creator trading fee goes to the agent wallet, so the agent funds its own trading.</p>
+          ) : (
+            <p>Let your agent launch its own coin on Pons with the starter balance. You pick the image, name, symbol and links; the agent is the creator and receives all creator trading fees. Or skip it and keep funding the agent yourself.</p>
+          )}
+          <TextButton onClick={() => setTab("token")} disabled={!a.registered}>{a.token ? `View $${a.token.symbol}` : "Open the coin launchpad"}</TextButton>
+        </Step>
+
+        <Step n={4} title="Top up (optional)" state={!a.registered ? "todo" : a.balance > Number(STARTER_ETH) || (!a.starterClaimed && a.balance > 0) ? "done" : "todo"}>
+          <p>Add your own ETH whenever you want more trading capital. Anything you deposit stays withdrawable.</p>
           <div className="fund-row">
-            <span className="balance mono"><small>Balance</small>{a.balance.toFixed(4)} ETH</span>
+            <span className="balance mono"><small>Balance</small>{a.balance.toFixed(4)} ETH{locked > 0 && <em className="locked-note">{locked.toFixed(4)} starter, locked</em>}</span>
             <label className="field">
               <span>Amount (ETH)</span>
               <input id={`amt-${a.id}`} className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!a.registered || !!busy} />
@@ -197,11 +225,11 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </div>
           <div className="actions">
             <TextButton onClick={deposit} disabled={!a.registered || !!busy}>Deposit</TextButton>
-            {a.balance > 0 && <TextButton onClick={withdraw} disabled={!!busy}>Withdraw all</TextButton>}
+            {withdrawable > 0 && <TextButton onClick={withdraw} disabled={!!busy}>{`Withdraw ${withdrawable.toFixed(4)} ETH`}</TextButton>}
           </div>
         </Step>
 
-        <Step n={3} title="Choose a strategy" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
+        <Step n={5} title="Choose a strategy" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
           <div className="presets" role="radiogroup" aria-label="Strategy">
             {(Object.keys(PRESETS) as Preset[]).map((p) => (
               <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
@@ -224,7 +252,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>{a.strategy ? "Update strategy" : "Save strategy"}</TextButton>
         </Step>
 
-        <Step n={4} title="Enter the Arena" state={a.live ? "done" : step === 4 ? "now" : "todo"}>
+        <Step n={6} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
           {a.live ? (<>
             <p>Trading. Your agent is competing in this week&apos;s epoch.</p>
             <div className="actions">
@@ -233,18 +261,10 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             </div>
           </>) : (<>
             <p>Switch trading on. Your agent starts following its strategy and appears on the live leaderboard. Pause any time.</p>
-            <TextButton onClick={enter} disabled={step < 4 || !!busy}>Enter the Arena</TextButton>
+            <TextButton onClick={enter} disabled={step < 6 || !!busy}>Enter the Arena</TextButton>
           </>)}
         </Step>
 
-        <Step n={5} title="Launch the agent's token (optional)" state={a.token ? "done" : a.registered ? "now" : "todo"}>
-          {a.token ? (
-            <p>${a.token.symbol} is live on Pons. Its creator fees go to the agent wallet.</p>
-          ) : (
-            <p>Make your agent self-funding: launch a token on Pons from its wallet and the agent receives all of the token&apos;s creator trading fees.</p>
-          )}
-          <TextButton onClick={() => setTab("token")}>{a.token ? `View $${a.token.symbol}` : "Open the launchpad"}</TextButton>
-        </Step>
       </ol>}
 
       {tab === "activity" && (

@@ -21,6 +21,7 @@ export type Agent = {
   nav: number; epochStart: number; history: number[]; wins: number; closed: number;
   rank: number; prevRank: number; lastTradeAt: number; lastSide: "BUY" | "SELL" | null;
   token: string | null;      // the agent's own Pons token, if it launched one
+  tokenAddress: string | null;
   tokenRate: number;         // sample: creator fees per tick (ETH)
   tokenFees: number;         // creator fees received from its own token
   shareFees: number;         // its share of the 10% of $TRENCHERS fees paid to registered agents
@@ -224,7 +225,7 @@ export function createSim(): Sim {
       strategy: def.name, params: [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
       deposited, cash: deposited, positions: new Map(), trades: [],
       nav: deposited, epochStart: deposited, history: [], wins: 0, closed: 0, rank: 0, prevRank: 0, lastTradeAt: 0, lastSide: null,
-      token: null, tokenRate: 0, tokenFees: 0, shareFees: 0,
+      token: null, tokenAddress: null, tokenRate: 0, tokenFees: 0, shareFees: 0,
     };
   });
   const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [], events: [], agentFees: 0.92 };
@@ -234,7 +235,7 @@ export function createSim(): Sim {
     if (!(a.house || rnd() < 0.34)) continue;
     let sym = ""; do { sym = pick(A) + pick(["", "AI", "BOT", "AGENT", "X", "MAXI"]); } while (taken.has(sym) || sym.length > 10);
     taken.add(sym);
-    a.token = sym; a.tokenRate = 0.000004 + rnd() * 0.00002;
+    a.token = sym; a.tokenAddress = `0x${hex(40)}`; a.tokenRate = 0.000004 + rnd() * 0.00002;
     a.tokenFees = +(rnd() * 0.6).toFixed(4); a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);
   }
   for (const a of agents) if (!a.shareFees) a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);

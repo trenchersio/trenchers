@@ -8,3 +8,4 @@ art/preview/
 *.log
 .next/
 web/out/
+__pycache__/

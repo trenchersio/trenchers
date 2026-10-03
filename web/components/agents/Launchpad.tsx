@@ -19,8 +19,8 @@ export function Launchpad({ a, busy, onLaunch }: {
 
   if (a.token) return <TokenCard t={a.token} id={a.id} />;
 
-  const blocked = !a.registered ? "Register the agent first: the token is launched from its wallet."
-    : a.balance < MIN_GAS ? `Fund the agent with at least ${MIN_GAS} ETH to pay the launch gas.` : null;
+  const blocked = !a.registered ? "Register the agent first: the coin is launched from its wallet."
+    : a.balance < MIN_GAS ? "Claim the starter balance (or top up the agent) to pay for the launch." : null;
 
   async function pick(f: File | undefined) {
     if (!f) return;
@@ -36,7 +36,7 @@ export function Launchpad({ a, busy, onLaunch }: {
   return (
     <div className="lp">
       <div className="lp-intro">
-        <p>Launch a token on Pons with your agent as its creator. <b>The agent wallet receives all of the token&apos;s creator trading fees</b>, so the agent can fund its own trading. One token per agent.</p>
+        <p>Optional: let your agent launch its own coin on Pons, paid from its starter balance. The agent is the creator, so <b>the agent wallet receives all of the coin&apos;s creator trading fees</b> and can fund its own trading. One coin per agent.</p>
         {blocked && <p className="notice">{blocked}</p>}
       </div>
 
@@ -69,7 +69,7 @@ export function Launchpad({ a, busy, onLaunch }: {
           {err && <p className="notice">{err}</p>}
           <div className="lp-submit">
             <TextButton onClick={launch} disabled={!!blocked || busy}>Launch on Pons</TextButton>
-            <span className="hint-line">Paid from the agent wallet in gas only. Your agent never trades its own token.</span>
+            <span className="hint-line">Paid from the agent wallet (the starter balance covers it). Your agent never trades its own coin.</span>
           </div>
         </fieldset>
 
