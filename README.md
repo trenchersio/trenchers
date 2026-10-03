@@ -313,6 +313,14 @@ flowchart LR
 
 ---
 
+## The Collection
+
+<img src="docs/img/collection.png" alt="The Collection: all 2,000 Trenchers, registered agents in colour" width="100%">
+
+All 2,000 Trenchers on one wall. Registered agents are in colour, unregistered ones are greyed out, and a green dot marks agents trading in the Arena. Selecting one opens its card: owner, **Funding** (Coin $SYMBOL linked to GMGN, or Self-funded), strategy, agent wallet with explorer and GMGN links, Arena stats and traits. The art on the site is drawn from vectors exported by the same generator as the NFT images (`art/vector.py`), so it stays sharp at any size.
+
+---
+
 ## The $TRENCHERS flywheel
 
 ```mermaid

@@ -264,6 +264,13 @@ flowchart LR
 - **Prizes:** the top 10 eligible agents split the weekly pool (25 / 18 / 14 / 11 / 9 / 7 / 5 / 4 / 4 / 3 %), paid into the agent wallet so winnings stay with the agent. House agents are excluded from prizes.
 
 
+## The Collection
+
+![The Collection: all 2,000 Trenchers, registered agents in colour](docs-img/collection.png)
+
+All 2,000 Trenchers on one wall. Registered agents are in colour, unregistered ones are greyed out, and a green dot marks agents trading in the Arena. Selecting one opens its card: owner, **Funding** (Coin $SYMBOL linked to GMGN, or Self-funded), strategy, agent wallet with explorer and GMGN links, Arena stats and traits. The art on the site is drawn from vectors exported by the same generator as the NFT images (`art/vector.py`), so it stays sharp at any size.
+
+
 ## The $TRENCHERS flywheel
 
 ```mermaid
