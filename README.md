@@ -38,7 +38,7 @@ python3 sheet.py out/images 1 64 sheet.png
 
 Token IDs 1-5 are the dev agents (gold "Founder" palette, `Role: Dev Agent`).
 
-## Web (mint site)
+## Web (site: intro, landing, mint)
 
 ```bash
 cd web && npm install
@@ -46,6 +46,9 @@ cp .env.example .env.local     # set NEXT_PUBLIC_CHAIN, NEXT_PUBLIC_NFT_ADDRESS,
 npm run dev
 ```
 
+- Intro screen shows once per browser session (`components/Intro.tsx`, `components/PixelMosaic.tsx`).
+- Social links: `NEXT_PUBLIC_X_URL`, `NEXT_PUBLIC_DISCORD_URL`, `NEXT_PUBLIC_TELEGRAM_URL` (empty = hidden).
+- `NEXT_PUBLIC_MINT_LIVE=true` swaps "Mint coming soon" for the live mint panel.
 - Railway: create a service with root directory `web/`; `railway.json` sets build and start. Set the `NEXT_PUBLIC_*` variables before the first build (they are baked in at build time).
 - Chain definitions come from viem (`robinhood` 4663, `robinhoodTestnet` 46630).
 

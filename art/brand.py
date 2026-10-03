@@ -117,7 +117,7 @@ def banner(name, w, h, ids, tagline=True):
     draw_lockup(d, x0, y0, px)
     if tagline:
         f = ImageFont.truetype(FONT, max(14, int(px * 2.6)))
-        text = "An on-chain AI trading agent ecosystem  ·  Robinhood Chain"
+        text = "An on-chain AI trading agent ecosystem"
         tw = d.textlength(text, font=f)
         d.text(((w - tw) / 2, y0 + lh + px * 3), text, font=f, fill=QUIET)
     img.save(os.path.join(OUT, name))
