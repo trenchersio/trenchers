@@ -1,6 +1,7 @@
-// Deploys RevenueSplitter + TrenchersNFT, links them, hands ownership to the Safe.
+// Deploys RevenueSplitter + TrenchersNFT, mints all 2,000 for free (5 to the team, 1,995 to the
+// treasury that lists them on OpenSea), then hands ownership to the Safe.
 // Usage:
-//   DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... \
+//   DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... TREASURY=0x... \
 //   PREREVEAL_URI=ipfs://... CONTRACT_URI=ipfs://... \
 //   npx hardhat run scripts/deploy.js --network robinhoodTestnet
 const { ethers, network } = require("hardhat");
@@ -21,7 +22,7 @@ async function hasCode(addr) {
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  const safe = need("SAFE"), devSafe = need("DEV_SAFE"), team = need("TEAM");
+  const safe = need("SAFE"), devSafe = need("DEV_SAFE"), team = need("TEAM"), treasury = need("TREASURY");
   const prereveal = need("PREREVEAL_URI"), contractUri = need("CONTRACT_URI");
   const { chainId } = await ethers.provider.getNetwork();
 
@@ -49,11 +50,18 @@ async function main() {
   console.log(`TrenchersNFT    ${await nft.getAddress()}`);
   console.log(`  transfer validator: ${await nft.getTransferValidator()}`);
 
-  await (await splitter.setNft(await nft.getAddress())).wait();
+  await (await splitter.setPrimarySeller(treasury)).wait();
+  // Free mint of the remaining 1,995 to the treasury, in batches to stay well under the block gas limit.
+  const BATCH = Number(process.env.MINT_BATCH || 200);
+  for (let left = 1995; left > 0; left -= BATCH) {
+    const n = Math.min(BATCH, left);
+    await (await nft.ownerMint(treasury, n)).wait();
+    console.log(`  minted ${n} to treasury (supply ${await nft.totalSupply()})`);
+  }
   await (await splitter.transferOwnership(safe)).wait();
   await (await nft.transferOwnership(safe)).wait();
   console.log(`Ownership of both contracts transferred to ${safe}`);
-  console.log("Next (from the Safe): setMintOpen(true) at launch; after mint, set OpenSea creator earnings.");
+  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.05 ETH; forward sale proceeds to the splitter.");
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; });

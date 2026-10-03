@@ -7,12 +7,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title RevenueSplitter
-/// @notice Single receiving address for Trenchers mint proceeds and secondary royalties.
+/// @notice Single receiving address for Trenchers primary-sale proceeds and secondary royalties.
 ///
-///         Mint proceeds (ETH sent by the NFT contract):
+///         Primary sales: all 1,995 public Trenchers are minted free to a treasury wallet and listed
+///         on OpenSea at 0.05 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
 ///           50% buybacks, 20% development (immediate), 20% development (vested linearly
 ///           over VEST_DURATION), 10% prize pool.
-///         Royalties (any other ETH, and any ERC-20 such as WETH): 100% buybacks.
+///         Royalties (ETH from anyone else, and any ERC-20 such as WETH): 100% buybacks.
 ///
 /// @dev    Amounts are owed to *buckets*, not addresses, so a bucket's destination can be
 ///         changed (behind a timelock) without misrouting what is already owed. Release is
@@ -25,15 +26,15 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
     enum Bucket { Buyback, Dev, Prize }
 
     uint256 public constant BPS = 10_000;
-    uint256 public constant MINT_BUYBACK_BPS = 5_000;
-    uint256 public constant MINT_DEV_NOW_BPS = 2_000;
-    uint256 public constant MINT_DEV_VESTED_BPS = 2_000;
-    uint256 public constant MINT_PRIZE_BPS = 1_000;
+    uint256 public constant PRIMARY_BUYBACK_BPS = 5_000;
+    uint256 public constant PRIMARY_DEV_NOW_BPS = 2_000;
+    uint256 public constant PRIMARY_DEV_VESTED_BPS = 2_000;
+    uint256 public constant PRIMARY_PRIZE_BPS = 1_000;
     uint256 public constant VEST_DURATION = 180 days;
     uint256 public constant TIMELOCK = 48 hours;
 
-    /// @notice The NFT contract; ETH from it is treated as mint proceeds.
-    address public nft;
+    /// @notice The treasury wallet that lists the NFTs; ETH from it counts as primary-sale proceeds.
+    address public primarySeller;
     uint256 public immutable vestStart;
 
     mapping(Bucket => address payable) public destination;
@@ -42,15 +43,15 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
     uint256 public vestedReleased; // ETH moved from vesting into the Dev bucket
 
     // Totals for public verification.
-    uint256 public totalMintProceeds;
+    uint256 public totalPrimarySales;
     uint256 public totalRoyalties;
     mapping(Bucket => uint256) public totalReleased;
 
     struct Pending { address payable to; uint64 eta; }
     mapping(Bucket => Pending) public pendingDestination;
 
-    event NftSet(address nft);
-    event MintProceedsReceived(uint256 amount);
+    event PrimarySellerSet(address seller);
+    event PrimarySaleReceived(uint256 amount);
     event RoyaltyReceived(address indexed from, uint256 amount);
     event Released(Bucket indexed bucket, address indexed to, uint256 amount);
     event TokenReleased(address indexed token, address indexed to, uint256 amount);
@@ -65,9 +66,9 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
     error NoPending();
     error TransferFailed();
 
-    /// @param owner_   Initial owner (the deployer, who links the NFT and then hands ownership to the Safe).
+    /// @param owner_   Initial owner (the deployer, who sets the primary seller and then hands ownership to the Safe).
     /// @param devSafe  Destination of the Dev bucket.
-    /// @param vestStart_ Start of the dev vesting schedule (normally the mint date).
+    /// @param vestStart_ Start of the dev vesting schedule (normally the listing date).
     constructor(address owner_, address payable devSafe, uint256 vestStart_) {
         if (owner_ == address(0) || devSafe == address(0)) revert ZeroAddress();
         _transferOwnership(owner_);
@@ -76,25 +77,25 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
         emit DestinationSet(Bucket.Dev, devSafe);
     }
 
-    /// @notice One-time link to the NFT contract (deployed after the splitter).
-    function setNft(address nft_) external onlyOwner {
-        if (nft != address(0)) revert AlreadySet();
-        if (nft_ == address(0)) revert ZeroAddress();
-        nft = nft_;
-        emit NftSet(nft_);
+    /// @notice One-time setting of the treasury wallet whose ETH counts as primary-sale proceeds.
+    function setPrimarySeller(address seller) external onlyOwner {
+        if (primarySeller != address(0)) revert AlreadySet();
+        if (seller == address(0)) revert ZeroAddress();
+        primarySeller = seller;
+        emit PrimarySellerSet(seller);
     }
 
     receive() external payable {
-        if (msg.sender == nft && nft != address(0)) {
-            uint256 dev = (msg.value * MINT_DEV_NOW_BPS) / BPS;
-            uint256 vest = (msg.value * MINT_DEV_VESTED_BPS) / BPS;
-            uint256 prize = (msg.value * MINT_PRIZE_BPS) / BPS;
+        if (msg.sender == primarySeller && primarySeller != address(0)) {
+            uint256 dev = (msg.value * PRIMARY_DEV_NOW_BPS) / BPS;
+            uint256 vest = (msg.value * PRIMARY_DEV_VESTED_BPS) / BPS;
+            uint256 prize = (msg.value * PRIMARY_PRIZE_BPS) / BPS;
             owed[Bucket.Dev] += dev;
             owed[Bucket.Prize] += prize;
             vestedTotal += vest;
             owed[Bucket.Buyback] += msg.value - dev - vest - prize; // rounding dust to buybacks
-            totalMintProceeds += msg.value;
-            emit MintProceedsReceived(msg.value);
+            totalPrimarySales += msg.value;
+            emit PrimarySaleReceived(msg.value);
         } else {
             owed[Bucket.Buyback] += msg.value;
             totalRoyalties += msg.value;

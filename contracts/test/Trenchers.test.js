@@ -2,22 +2,22 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-const PRICE = ethers.parseEther("0.1");
+const LIST_PRICE = ethers.parseEther("0.05");
 const Bucket = { Buyback: 0, Dev: 1, Prize: 2 };
 
 async function deploy() {
-  const [deployer, safe, dev, team, alice, bob, carol, buyback, prize, market] = await ethers.getSigners();
+  const [deployer, safe, dev, team, treasury, alice, bob, buyback, prize, market] = await ethers.getSigners();
   const start = await time.latest();
   const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(safe.address, dev.address, start);
   const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(
     await splitter.getAddress(), team.address, "ipfs://prereveal.json", "ipfs://contract.json"
   );
-  await splitter.connect(safe).setNft(await nft.getAddress());
-  return { nft, splitter, deployer, safe, dev, team, alice, bob, carol, buyback, prize, market, start };
+  await splitter.connect(safe).setPrimarySeller(treasury.address);
+  return { nft, splitter, deployer, safe, dev, team, treasury, alice, bob, buyback, prize, market, start };
 }
 
 describe("TrenchersNFT", () => {
-  it("mints the 5 reserved tokens to the team and nothing else", async () => {
+  it("mints the 5 house agents to the team at deploy", async () => {
     const { nft, team } = await deploy();
     expect(await nft.totalSupply()).to.equal(5n);
     expect(await nft.balanceOf(team.address)).to.equal(5n);
@@ -25,46 +25,27 @@ describe("TrenchersNFT", () => {
     expect(await nft.name()).to.equal("Trenchers");
   });
 
-  it("is closed until the owner opens the mint", async () => {
-    const { nft, alice } = await deploy();
-    await expect(nft.connect(alice).mint(1, { value: PRICE })).to.be.revertedWithCustomError(nft, "MintClosed");
+  it("has no paid mint: the owner mints the rest for free, in batches, to the treasury", async () => {
+    const { nft, treasury } = await deploy();
+    await nft.ownerMint(treasury.address, 400);
+    expect(await nft.ownerOf(6)).to.equal(treasury.address);
+    expect(await nft.ownerOf(405)).to.equal(treasury.address);
+    expect(nft.mint).to.equal(undefined);
   });
 
-  it("public mint charges exactly 0.1 ETH each, with no per-wallet limit", async () => {
-    const { nft, alice } = await deploy();
-    await nft.setMintOpen(true);
-    await expect(nft.connect(alice).mint(2, { value: PRICE })).to.be.revertedWithCustomError(nft, "WrongPayment");
-    await nft.connect(alice).mint(3, { value: PRICE * 3n });
-    expect(await nft.ownerOf(6)).to.equal(alice.address);
-    expect(await nft.ownerOf(8)).to.equal(alice.address);
-    await nft.connect(alice).mint(50, { value: PRICE * 50n });
-    expect(await nft.balanceOf(alice.address)).to.equal(53n);
-    await expect(nft.connect(alice).mint(0, { value: 0 })).to.be.revertedWithCustomError(nft, "ZeroQuantity");
-  });
-
-  it("can be closed again by the owner", async () => {
-    const { nft, alice } = await deploy();
-    await nft.setMintOpen(true);
-    await nft.setMintOpen(false);
-    await expect(nft.connect(alice).mint(1, { value: PRICE })).to.be.revertedWithCustomError(nft, "MintClosed");
-  });
-
-  it("caps total supply at 2,000 (1,995 sellable)", async () => {
-    const { nft } = await deploy();
-    await nft.setMintOpen(true);
-    const signers = await ethers.getSigners();
-    const buyer = signers[11];
-    await ethers.provider.send("hardhat_setBalance", [buyer.address, "0x" + (10n ** 24n).toString(16)]);
-    for (let i = 0; i < 1995; i += 285) await nft.connect(buyer).mint(285, { value: PRICE * 285n });
+  it("caps supply at 2,000 (1,995 for the treasury)", async () => {
+    const { nft, treasury } = await deploy();
+    for (let i = 0; i < 5; i++) await nft.ownerMint(treasury.address, 399);
     expect(await nft.totalSupply()).to.equal(2000n);
-    await expect(nft.connect(buyer).mint(1, { value: PRICE })).to.be.revertedWithCustomError(nft, "SoldOut");
-    expect(await ethers.provider.getBalance(await nft.getAddress())).to.equal(PRICE * 1995n); // 199.5 ETH
+    expect(await nft.balanceOf(treasury.address)).to.equal(1995n);
+    await expect(nft.ownerMint(treasury.address, 1)).to.be.revertedWithCustomError(nft, "SoldOut");
   });
 
-  it("only the owner can administer", async () => {
+  it("only the owner can mint or administer", async () => {
     const { nft, alice } = await deploy();
-    await expect(nft.connect(alice).setMintOpen(true)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(nft.connect(alice).ownerMint(alice.address, 1)).to.be.revertedWith("Ownable: caller is not the owner");
     await expect(nft.connect(alice).setBaseURI("x")).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(nft.ownerMint(alice.address, 0)).to.be.revertedWithCustomError(nft, "ZeroQuantity");
   });
 
   it("serves pre-reveal metadata, then per-token URIs, and can be frozen", async () => {
@@ -79,9 +60,9 @@ describe("TrenchersNFT", () => {
 
   it("reports a 5% royalty to the splitter and supports ERC-2981, ERC-721, EIP-4906", async () => {
     const { nft, splitter } = await deploy();
-    const [receiver, amount] = await nft.royaltyInfo(1, ethers.parseEther("1"));
+    const [receiver, amount] = await nft.royaltyInfo(1, LIST_PRICE);
     expect(receiver).to.equal(await splitter.getAddress());
-    expect(amount).to.equal(ethers.parseEther("0.05"));
+    expect(amount).to.equal(LIST_PRICE / 20n);
     expect(await nft.supportsInterface("0x2a55205a")).to.equal(true);
     expect(await nft.supportsInterface("0x80ac58cd")).to.equal(true);
     expect(await nft.supportsInterface("0x49064906")).to.equal(true);
@@ -93,35 +74,25 @@ describe("TrenchersNFT", () => {
     await nft.connect(team).transferFrom(team.address, alice.address, 1);
     expect(await nft.ownerOf(1)).to.equal(alice.address);
   });
-
-  it("withdraw can be called by anyone but only pays the splitter", async () => {
-    const { nft, splitter, alice, bob } = await deploy();
-    await nft.setMintOpen(true);
-    await nft.connect(alice).mint(2, { value: PRICE * 2n });
-    await expect(nft.connect(bob).withdraw()).to.emit(splitter, "MintProceedsReceived").withArgs(PRICE * 2n);
-    expect(await ethers.provider.getBalance(await nft.getAddress())).to.equal(0n);
-  });
 });
 
 describe("RevenueSplitter", () => {
-  async function minted(n) {
+  async function sold(ethAmount) {
     const ctx = await deploy();
-    await ctx.nft.setMintOpen(true);
-    await ctx.nft.connect(ctx.alice).mint(n, { value: PRICE * BigInt(n) });
-    await ctx.nft.withdraw();
+    await ctx.treasury.sendTransaction({ to: await ctx.splitter.getAddress(), value: ethers.parseEther(ethAmount) });
     return ctx;
   }
 
-  it("splits mint proceeds 50 / 20 now / 20 vested / 10", async () => {
-    const { splitter } = await minted(10); // 1 ETH
+  it("splits primary-sale proceeds from the treasury 50 / 20 now / 20 vested / 10", async () => {
+    const { splitter } = await sold("1");
     expect(await splitter.owed(Bucket.Buyback)).to.equal(ethers.parseEther("0.5"));
     expect(await splitter.owed(Bucket.Dev)).to.equal(ethers.parseEther("0.2"));
     expect(await splitter.vestedTotal()).to.equal(ethers.parseEther("0.2"));
     expect(await splitter.owed(Bucket.Prize)).to.equal(ethers.parseEther("0.1"));
-    expect(await splitter.totalMintProceeds()).to.equal(ethers.parseEther("1"));
+    expect(await splitter.totalPrimarySales()).to.equal(ethers.parseEther("1"));
   });
 
-  it("treats any other ETH as royalties, 100% to buybacks", async () => {
+  it("treats ETH from anyone else as royalties, 100% to buybacks", async () => {
     const { splitter, market } = await deploy();
     await market.sendTransaction({ to: await splitter.getAddress(), value: ethers.parseEther("0.05") });
     expect(await splitter.owed(Bucket.Buyback)).to.equal(ethers.parseEther("0.05"));
@@ -130,12 +101,11 @@ describe("RevenueSplitter", () => {
   });
 
   it("vests the dev half linearly over 180 days", async () => {
-    const { splitter, dev, start } = await minted(10);
+    const { splitter, dev, start } = await sold("1");
     const before = await ethers.provider.getBalance(dev.address);
     await time.increaseTo(start + 90 * 86400);
     await splitter.release(Bucket.Dev);
     const got = (await ethers.provider.getBalance(dev.address)) - before;
-    // 0.2 immediate + ~0.1 vested (half of 0.2), within a block of rounding
     expect(got).to.be.closeTo(ethers.parseEther("0.3"), ethers.parseEther("0.0001"));
     await time.increaseTo(start + 200 * 86400);
     await splitter.release(Bucket.Dev);
@@ -143,12 +113,12 @@ describe("RevenueSplitter", () => {
   });
 
   it("holds buyback and prize funds until their contracts exist, then releases to them", async () => {
-    const { splitter, safe, buyback, prize, alice } = await minted(10);
+    const { splitter, safe, buyback, prize, alice } = await sold("1");
     await expect(splitter.release(Bucket.Buyback)).to.be.revertedWithCustomError(splitter, "NoDestination");
-    await splitter.connect(safe).proposeDestination(Bucket.Buyback, buyback.address); // first set: immediate
+    await splitter.connect(safe).proposeDestination(Bucket.Buyback, buyback.address);
     await splitter.connect(safe).proposeDestination(Bucket.Prize, prize.address);
     const b0 = await ethers.provider.getBalance(buyback.address);
-    await splitter.connect(alice).release(Bucket.Buyback); // permissionless
+    await splitter.connect(alice).release(Bucket.Buyback);
     expect((await ethers.provider.getBalance(buyback.address)) - b0).to.equal(ethers.parseEther("0.5"));
     await expect(splitter.release(Bucket.Buyback)).to.be.revertedWithCustomError(splitter, "NothingOwed");
   });
@@ -163,9 +133,9 @@ describe("RevenueSplitter", () => {
     expect(await splitter.destination(Bucket.Dev)).to.equal(bob.address);
   });
 
-  it("the NFT link can be set only once", async () => {
+  it("the primary seller can be set only once", async () => {
     const { splitter, safe, alice } = await deploy();
-    await expect(splitter.connect(safe).setNft(alice.address)).to.be.revertedWithCustomError(splitter, "AlreadySet");
+    await expect(splitter.connect(safe).setPrimarySeller(alice.address)).to.be.revertedWithCustomError(splitter, "AlreadySet");
   });
 
   it("sends ERC-20 royalties (e.g. WETH) to the buyback destination", async () => {

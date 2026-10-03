@@ -4,8 +4,11 @@ import type { Address } from "viem";
 export const chain = process.env.NEXT_PUBLIC_CHAIN === "robinhood" ? robinhood : robinhoodTestnet;
 export const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS ||
   "0x0000000000000000000000000000000000000000") as Address;
-export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "https://opensea.io";
 export const EXPLORER = chain.blockExplorers?.default.url ?? "";
+
+/** OpenSea collection page. Empty until the collection is listed: buttons then read "listing soon". */
+export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "";
+export const LIST_PRICE_ETH = "0.05";
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
@@ -13,5 +16,10 @@ export const SOCIALS = {
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "",
   telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "",
 };
-/** Set NEXT_PUBLIC_MINT_LIVE=true at launch to show the mint panel instead of "coming soon". */
-export const MINT_LIVE = process.env.NEXT_PUBLIC_MINT_LIVE === "true";
+
+// Page links. The static preview serves pages as .html files next to each other.
+const PREVIEW = process.env.NEXT_PUBLIC_PREVIEW === "1";
+export const ROUTES = {
+  home: PREVIEW ? "site.html" : "/",
+  arena: PREVIEW ? "arena.html" : "/arena",
+};

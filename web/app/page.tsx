@@ -1,16 +1,15 @@
 import { SiteShell } from "@/components/SiteShell";
 import { ArtCycler } from "@/components/ArtCycler";
-import { MintPanel } from "@/components/MintPanel";
 import { Socials } from "@/components/Socials";
-import { WalletButton } from "@/components/WalletButton";
-import { MINT_LIVE, OPENSEA_URL, SOCIALS } from "@/lib/constants";
+import { TextButton } from "@/components/TextButton";
+import { LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
 import ids from "@/lib/nft-ids.json";
 
 const STEPS = [
-  { n: "01", title: "Mint a Trencher", body: "Each of the 2,000 Trenchers is a unique pixel agent. 0.1 ETH, no wallet limit." },
+  { n: "01", title: "Get a Trencher", body: `All 2,000 Trenchers are listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Every one is a unique pixel agent.` },
   { n: "02", title: "Register it as an agent", body: "One click gives your Trencher an on-chain identity and its own wallet, bound to the NFT." },
   { n: "03", title: "Fund it and pick a strategy", body: "Deposit ETH, choose a preset or set your own rules, and change them whenever you like." },
-  { n: "04", title: "Compete in the trenches", body: "Agents trade new token launches around the clock. The best performers win weekly prizes." },
+  { n: "04", title: "Compete in the Arena", body: "Agents trade new token launches around the clock. The best performers win weekly prizes." },
 ];
 
 const STRATEGIES = [
@@ -20,26 +19,32 @@ const STRATEGIES = [
 ];
 
 const FLYWHEEL = [
-  { from: "Mint", to: "50% buys back $TRENCHERS", note: "40% development, 10% prize pool" },
+  { from: "OpenSea sales", to: "50% buys back $TRENCHERS", note: "40% development, 10% prize pool" },
   { from: "OpenSea royalties", to: "100% buys back $TRENCHERS", note: "5% on every resale" },
   { from: "$TRENCHERS trading fees", to: "Weekly prizes + floor sweeps", note: "rewards the best agents, supports the floor" },
-  { from: "Dev agents' profits", to: "Buy back $TRENCHERS", note: "5 team-run agents trade for the treasury" },
+  { from: "House agents' profits", to: "Buy back $TRENCHERS", note: "5 team-run agents trade for the treasury" },
 ];
 
 const ROADMAP = [
-  { phase: "Phase 1", title: "Mint", items: ["2,000 Trenchers", "Open public mint", "OpenSea listing"] },
-  { phase: "Phase 2", title: "Agents go live", items: ["Agent registration", "Funding and strategies", "Live leaderboard"] },
+  { phase: "Phase 1", title: "Launch", items: ["2,000 Trenchers on OpenSea", `${LIST_PRICE_ETH} ETH per agent`, "Trading Arena preview"] },
+  { phase: "Phase 2", title: "Agents go live", items: ["Agent registration", "Funding and strategies", "Live Arena leaderboard"] },
   { phase: "Phase 3", title: "The flywheel", items: ["$TRENCHERS launch", "Buybacks and weekly prizes", "Floor sweeps, plain-English strategies"] },
 ];
 
 const FAQ = [
   { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as an AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
+  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. The team keeps 5 as house agents, whose profits go to $TRENCHERS buybacks.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
   { q: "What does an agent trade?", a: "New tokens launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose." },
-  { q: "When is the mint?", a: "Soon. Follow us to hear first. There is no allowlist: everyone mints at the same time, at the same price." },
   { q: "Is this financial advice?", a: "No. Trading newly launched tokens is extremely risky and agents can lose all the ETH you deposit. Only use what you can afford to lose." },
 ];
+
+function OpenSeaButton() {
+  return OPENSEA_URL
+    ? <TextButton href={OPENSEA_URL} external>Buy an agent on OpenSea</TextButton>
+    : <TextButton disabled>OpenSea listing soon</TextButton>;
+}
 
 export default function Home() {
   const strip = (ids as number[]).filter((i) => i > 5);
@@ -48,12 +53,12 @@ export default function Home() {
       <header className="bar">
         <a href="#top" aria-label="Trenchers home"><img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" /></a>
         <nav>
+          <a href={ROUTES.arena} className="nav-arena">Arena</a>
           <a href="#how">How it works</a>
           <a href="#flywheel">Flywheel</a>
           <a href="#roadmap">Roadmap</a>
           <a href="#faq">FAQ</a>
           <Socials links={SOCIALS} />
-          {MINT_LIVE && <WalletButton />}
         </nav>
       </header>
 
@@ -61,18 +66,18 @@ export default function Home() {
         <section className="hero">
           <div className="pitch">
             <p className="eyebrow">AgentFi on Robinhood Chain</p>
-            <h1>Mint an agent.<br />Send it into the trenches.</h1>
+            <h1>Own an agent.<br />Send it into the trenches.</h1>
             <p className="lede">
               Trenchers is an ecosystem of 2,000 on-chain AI trading agents. Every NFT is an agent with its own
-              wallet. Fund it, give it a strategy, and compete for the top of the leaderboard.
+              wallet. Fund it, give it a strategy, and fight for the top of the Arena leaderboard.
             </p>
             <div className="cta">
-              <a className="primary" href="#mint">{MINT_LIVE ? "Mint now" : "Mint coming soon"}</a>
-              <a className="secondary" href="#how">How it works</a>
+              <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
+              <OpenSeaButton />
             </div>
             <ul className="facts">
               <li><span>Agents</span><b>2,000</b></li>
-              <li><span>Mint price</span><b>0.1 ETH</b></li>
+              <li><span>Price on OpenSea</span><b>{LIST_PRICE_ETH} ETH</b></li>
               <li><span>Royalties</span><b>100% to buybacks</b></li>
             </ul>
           </div>
@@ -95,6 +100,25 @@ export default function Home() {
               <li key={s.n}><span className="mono step-n">{s.n}</span><h3>{s.title}</h3><p>{s.body}</p></li>
             ))}
           </ol>
+        </section>
+
+        <section className="section arena-teaser">
+          <div>
+            <p className="eyebrow">The Arena</p>
+            <h2>Every agent, ranked live</h2>
+            <p className="lede">Watch the leaderboard move as agents trade. Open any agent to see its strategy, positions and every trade it made.</p>
+            <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
+          </div>
+          <div className="teaser-rows" aria-hidden="true">
+            {strip.slice(0, 5).map((id, i) => (
+              <div key={id} className="teaser-row">
+                <span className="mono">{i + 1}</span>
+                <img src={`nft/${id}.webp`} alt="" width={36} height={36} />
+                <span>Trencher #{id}</span>
+                <span className="mono up">+{(38 - i * 6.3).toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="section">
@@ -142,19 +166,14 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="mint" className="section mint-section">
-          {MINT_LIVE ? (
-            <div className="mint-wrap"><div><p className="eyebrow">Mint</p><h2>Mint your agent</h2>
-              <p className="lede">0.1 ETH each. 2,000 total. When it sells out, find Trenchers on <a href={OPENSEA_URL}>OpenSea</a>.</p></div>
-              <MintPanel /></div>
-          ) : (
-            <div className="soon">
-              <p className="eyebrow">Mint</p>
-              <h2>The trenches open soon</h2>
-              <p className="lede">No allowlist, no tiers: everyone mints at the same time for 0.1 ETH. Follow along so you don&apos;t miss it.</p>
-              <Socials links={SOCIALS} large />
-            </div>
-          )}
+        <section id="get" className="section">
+          <div className="soon">
+            <p className="eyebrow">Get an agent</p>
+            <h2>2,000 agents. {LIST_PRICE_ETH} ETH each.</h2>
+            <p className="lede">Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. Follow along to hear when the listing goes live.</p>
+            <div className="cta"><OpenSeaButton /><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
+            <Socials links={SOCIALS} large />
+          </div>
         </section>
 
         <section id="faq" className="section">

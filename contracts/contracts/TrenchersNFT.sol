@@ -4,26 +4,21 @@ pragma solidity 0.8.24;
 import "@limitbreak/creator-token-standards/src/erc721c/ERC721C.sol";
 import "@limitbreak/creator-token-standards/src/access/OwnableBasic.sol";
 import "@limitbreak/creator-token-standards/src/programmable-royalties/BasicRoyalties.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 /// @title Trenchers
-/// @notice 2,000-piece collection on Robinhood Chain. Each token can later be registered as an
-///         on-chain trading agent through its ERC-6551 token-bound account.
-/// @dev    ERC721-C (Limit Break) so OpenSea can enforce creator earnings; ERC-2981 royalty info.
-///         Mint proceeds can only ever go to the immutable `payout` address (the RevenueSplitter).
-contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, ReentrancyGuard {
+/// @notice 2,000 trading agents on Robinhood Chain. Each token can be registered as an on-chain
+///         trading agent through its ERC-6551 token-bound account.
+/// @dev    There is no public mint. The owner mints every token for free: IDs 1-5 to the team
+///         (house agents) at deploy, the other 1,995 in batches to the treasury, which lists them
+///         on OpenSea. ERC721-C (Limit Break) so OpenSea can enforce creator earnings.
+contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     using Strings for uint256;
 
     uint256 public constant MAX_SUPPLY = 2000;
     uint256 public constant TEAM_RESERVE = 5;
-    uint256 public constant PRICE = 0.1 ether;
     uint96 public constant ROYALTY_BPS = 500; // 5%
 
-    /// @notice Receives all mint proceeds. Immutable so the destination is verifiable on-chain.
-    address payable public immutable payout;
-
-    bool public mintOpen;
     uint256 public totalSupply;
 
     string private _baseTokenURI;
@@ -31,30 +26,24 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, ReentrancyGuard 
     string private _contractURI;
     bool public metadataFrozen;
 
-    event MintOpenChanged(bool open);
     event BaseURIChanged(string baseURI);
     event MetadataFrozen();
-    event ProceedsWithdrawn(address indexed to, uint256 amount);
 
-    error MintClosed();
-    error WrongPayment();
     error SoldOut();
     error ZeroQuantity();
     error Frozen();
     error ZeroAddress();
-    error WithdrawFailed();
 
     constructor(
-        address payable payout_,
+        address royaltyReceiver_,
         address team_,
         string memory preRevealURI_,
         string memory contractURI_
     )
         ERC721OpenZeppelin("Trenchers", "TRENCH")
-        BasicRoyalties(payout_, ROYALTY_BPS)
+        BasicRoyalties(royaltyReceiver_, ROYALTY_BPS)
     {
-        if (payout_ == address(0) || team_ == address(0)) revert ZeroAddress();
-        payout = payout_;
+        if (royaltyReceiver_ == address(0) || team_ == address(0)) revert ZeroAddress();
         _preRevealURI = preRevealURI_;
         _contractURI = contractURI_;
 
@@ -64,7 +53,7 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, ReentrancyGuard 
             setTransferValidator(address(0));
         }
 
-        // Token IDs 1-5 go to the team. They are not sold and pay nothing into the splitter.
+        // Token IDs 1-5 go to the team: the house agents, never sold.
         for (uint256 i = 1; i <= TEAM_RESERVE; ++i) {
             _mint(team_, i);
         }
@@ -73,33 +62,19 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, ReentrancyGuard 
 
     // ------------------------------------------------------------------ minting
 
-    /// @notice Public mint, 0.1 ETH each, no per-wallet limit.
-    function mint(uint256 quantity) external payable nonReentrant {
-        if (!mintOpen) revert MintClosed();
+    /// @notice Free mint by the owner, in batches, to the treasury that lists them on OpenSea.
+    function ownerMint(address to, uint256 quantity) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
         if (quantity == 0) revert ZeroQuantity();
-        if (msg.value != PRICE * quantity) revert WrongPayment();
         uint256 supply = totalSupply;
         if (supply + quantity > MAX_SUPPLY) revert SoldOut();
         totalSupply = supply + quantity;
         for (uint256 i = 1; i <= quantity; ++i) {
-            _mint(msg.sender, supply + i);
+            _mint(to, supply + i);
         }
     }
 
-    /// @notice Sends all mint proceeds to the immutable payout address. Callable by anyone.
-    function withdraw() external nonReentrant {
-        uint256 amount = address(this).balance;
-        (bool ok, ) = payout.call{value: amount}("");
-        if (!ok) revert WithdrawFailed();
-        emit ProceedsWithdrawn(payout, amount);
-    }
-
     // ------------------------------------------------------------------ admin
-
-    function setMintOpen(bool open) external onlyOwner {
-        mintOpen = open;
-        emit MintOpenChanged(open);
-    }
 
     function setBaseURI(string calldata baseURI_) external onlyOwner {
         if (metadataFrozen) revert Frozen();

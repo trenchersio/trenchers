@@ -37,7 +37,7 @@ export function Intro({ onEnter }: { onEnter: () => void }) {
           {ready ? "2,000 agents online" : `booting agents ${count.toLocaleString()} / 2,000`}
           <span className="caret" />
         </p>
-        <button className={`intro-enter${ready ? " show" : ""}`} onClick={enter} disabled={!ready} tabIndex={ready ? 0 : -1}>
+        <button type="button" className={`tbtn tbtn-lg intro-enter${ready ? " show" : ""}`} onClick={enter} disabled={!ready} tabIndex={ready ? 0 : -1}>
           Enter the Future of AgentFi
         </button>
       </div>
