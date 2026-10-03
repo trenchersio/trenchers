@@ -9,6 +9,7 @@ import ids from "@/lib/nft-ids.json";
 import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
 import { SelfFunding } from "@/components/SelfFunding";
 import { GuideDemo } from "@/components/GuideDemo";
+import { MobileDock } from "@/components/MobileDock";
 
 const STEPS = [
   { n: "01", title: "Buy a Trencher", body: "Every one of the 2,000 is a unique pixel agent, listed on OpenSea at the same price.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
@@ -42,6 +43,8 @@ const ROADMAP = [
 
 const FAQ = [
   { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as a self-funding AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
+  { q: "How do I tell my agent how to trade?", a: "You talk to it. In your NFT / Agent Profile, write what you want in plain English: which tokens, when to buy, when to sell, what to avoid. The agent replies with the exact rule it would trade, and nothing changes until you apply it. Keep guiding it as the market changes; every version is kept. The house strategies are only templates to start from." },
+  { q: "Why not just use a house strategy?", a: "You can, but they are fixed baselines: they never adapt to the market, so they are built to be beaten. The edge comes from a holder who keeps guiding their agent." },
   { q: "What are option A and option B?", a: `After you register your Trencher and claim its ${STARTER_ETH} ETH starter balance, you choose how it funds itself. A: the agent launches its own coin on Pons and receives every creator trading fee. B: no coin; the agent self-funds from its share of the ${AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees paid to registered agents and from its own trading profits. A self-funded agent can still launch a coin later, and you can always top it up yourself.` },
   { q: "What does self-funding mean?", a: `An agent starts with a ${STARTER_ETH} ETH starter balance and then earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to registered agents. It all lands in the agent wallet as trading capital, so you can fund it a little and let it pay its own way, or keep topping it up yourself.` },
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
@@ -50,8 +53,6 @@ const FAQ = [
   { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every primary sale goes to the Agent Starter Fund contract. Once you register your Trencher, you claim ${STARTER_ETH} ETH from it, once, straight into the agent wallet. The agent can spend it on launching its coin and on trades, but it can't be withdrawn. A Trencher resold before its claim can still be claimed by the new holder.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
-  { q: "How do I tell my agent how to trade?", a: "You talk to it. In your NFT / Agent Profile, write what you want in plain English: which tokens, when to buy, when to sell, what to avoid. The agent replies with the exact rule it would trade, and nothing changes until you apply it. Keep guiding it as the market changes; every version is kept. The house strategies are only templates to start from." },
-  { q: "Why not just use a house strategy?", a: "You can, but they are fixed baselines: they never adapt to the market, so they are built to be beaten. The edge comes from a holder who keeps guiding their agent." },
   { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
   { q: "Is this financial advice?", a: "No. Trading newly launched tokens is extremely risky and agents can lose all the ETH you deposit. Agent coins can go to zero and fee income is never guaranteed. Only use what you can afford to lose." },
 ];
@@ -79,8 +80,8 @@ export default function Home() {
             </h1>
             <p className="lede">
               An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents. Buy one for {LIST_PRICE_ETH} ETH, register it and
-              claim {STARTER_ETH} ETH into its wallet. Then choose: let it launch its own coin, or let it self-fund from its
-              {" "}{AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits. Then talk to it: guide your agent in plain English and let it trade memecoins for you, without emotion.
+              claim {STARTER_ETH} ETH into its wallet.<span className="lede-more"> Then choose: let it launch its own coin, or let it self-fund from its
+              {" "}{AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits. Then talk to it: guide your agent in plain English and let it trade memecoins for you, without emotion.</span>
             </p>
             <div className="cta">
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
@@ -249,6 +250,7 @@ export default function Home() {
         </div>
         <p>Nothing on this site is financial advice. Trading new tokens can lose all deposited funds.</p>
       </footer>
+      <MobileDock />
     </SiteShell>
   );
 }
