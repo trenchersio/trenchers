@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
 import { Launchpad } from "./Launchpad";
+import { AgentChat } from "./AgentChat";
 import { AGENT_FEE_SHARE_PCT, tokenFees, trenchersShare, type TokenDraft } from "@/lib/agent-token";
-import { DEFAULT_RULE, describe, validate } from "@/lib/custom-strategy";
+import { DEFAULT_RULE, describe, validate, type CustomRule } from "@/lib/custom-strategy";
 import { OPENSEA_URL, ROUTES, SAMPLE_MODE, STARTER_ETH, chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 import {
   PRESETS, agentWalletFor, identityFor, tokenAddressFor, loadAgent, ownedIds, saveAgent, statusOf, wait,
-  type AgentState, type Preset, type Strategy,
+  type AgentState, type ChatMsg, type Preset, type Strategy,
 } from "@/lib/agents-store";
 
 export function MyAgents() {
@@ -85,7 +86,7 @@ export function MyAgents() {
 function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange: (a: AgentState) => void }) {
   const [busy, setBusy] = useState<string[] | null>(null);
   const [amount, setAmount] = useState("0.1");
-  const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Launch Flipper", ...PRESETS["Launch Flipper"].defaults });
+  const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Custom", ...PRESETS["Custom"].defaults, custom: undefined });
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<"register" | "coin" | "strategy" | "activity">(
     !a.registered || !a.starterClaimed || (!a.token && !a.fundingMode) ? "register" : a.fundingMode === "coin" && !a.token ? "coin" : "strategy");
@@ -141,6 +142,14 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     run(["Signing the strategy…", "Setting on-chain spending limits…"], () => onChange(log({ ...a, strategy: saved }, `Strategy set: ${what}`)));
   };
 
+  const applyRule = (rule: CustomRule, chat: ChatMsg[]) => {
+    const limits = { perBuy: draft.perBuy, dailyCap: draft.dailyCap, maxPositions: draft.maxPositions };
+    if (!(limits.perBuy > 0) || !(limits.dailyCap >= limits.perBuy) || !(limits.maxPositions >= 1)) { setNotice("Check the limits in step 2 first."); return; }
+    const saved: Strategy = { preset: "Custom", ...limits, custom: rule };
+    setDraft(saved);
+    run(["Signing the new rule…", "Updating the agent's policy…"], () => onChange(log({ ...a, chat, strategy: saved }, `Guidance applied: ${describe(rule)}`)));
+  };
+
   const enter = () => run(["Enabling trading for this agent…"], () => onChange(log({ ...a, live: true }, "Entered the Arena")));
   const launchToken = (d: TokenDraft) => new Promise<void>((done) => run([
     "Uploading the token image and details…",
@@ -183,11 +192,11 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         {([
           ["register", "1", "Register + claim", a.registered && a.starterClaimed ? "done" : ""],
           ["coin", "2", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad", a.token ? "done" : a.fundingMode === "self" ? "skip" : "opt"],
-          ["strategy", "3", "Strategy", a.live ? "done" : ""],
+          ["strategy", "3", "Guide your agent", a.live ? "done" : ""],
         ] as const).map(([k, n, label, state]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`seg${tab === k ? " seg-on" : ""}${state === "done" ? " seg-done" : ""}`} onClick={() => setTab(k)}>
             <span className="seg-n mono">{state === "done" ? "✓" : n}</span>
-            <span className="seg-text"><b>{label}</b><small className="mono">{state === "opt" ? "Optional · option A" : state === "skip" ? "Skipped · self-funded (B)" : state === "done" ? "Done" : k === "register" ? `Wallet, identity, +${STARTER_ETH} ETH` : "Trade and compete"}</small></span>
+            <span className="seg-text"><b>{label}</b><small className="mono">{state === "opt" ? "Optional · option A" : state === "skip" ? "Skipped · self-funded (B)" : state === "done" ? "Done" : k === "register" ? `Wallet, identity, +${STARTER_ETH} ETH` : "Talk to it, set limits, compete"}</small></span>
           </button>
         ))}
         <button type="button" role="tab" aria-selected={tab === "activity"} className={`tbtn seg-log${tab === "activity" ? " tbtn-on" : ""}`} onClick={() => setTab("activity")}>Activity</button>
@@ -255,39 +264,54 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       </ol>}
 
       {tab === "strategy" && <ol className="steps-v">
-        <Step n={1} title="Choose a strategy" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
-          <div className="presets" role="radiogroup" aria-label="Strategy">
-            {(Object.keys(PRESETS) as Preset[]).map((p) => (
-              <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
-                className={`tbtn${draft.preset === p ? " tbtn-on" : ""}`}
-                onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults, custom: p === "Custom" ? (draft.custom ?? DEFAULT_RULE) : undefined })} disabled={!!busy}>{p}</button>
-            ))}
-          </div>
-          {draft.preset === "Custom" ? (
-            <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, custom: r })} disabled={!!busy} />
-          ) : (
-            <p className="preset-line">{PRESETS[draft.preset].line}. {PRESETS[draft.preset].rules.join(" · ")}.{PRESETS[draft.preset].house ? <span className="mono"> Run by house agent #{PRESETS[draft.preset].house}</span> : null}</p>
-          )}
-          <span className="field-label">Limits</span>
+        <Step n={1} title="Talk to your agent" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
+          <p>This is where your edge comes from. Tell your agent how to trade in plain English and keep guiding it as the market changes. Every message becomes a rule you confirm; the agent then executes it 24/7, without fear or greed.</p>
+          <AgentChat id={a.id} rule={a.strategy?.custom ?? null} chat={a.chat ?? []} disabled={!a.registered || a.balance <= 0 || !!busy}
+            onChat={(c) => onChange({ ...a, chat: c })}
+            onApply={(rule, c) => applyRule(rule, c)} />
+          {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
+          <details className="alt-ways">
+            <summary className="mono">Other ways to set it</summary>
+            <div className="alt-body">
+              <span className="field-label">Edit the rule as a form</span>
+              <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? a.strategy?.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, preset: "Custom", custom: r })} disabled={!!busy} />
+              <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy || draft.preset !== "Custom"}>Save this rule</TextButton>
+              <span className="field-label">Or start from a house template</span>
+              <p className="hint-line">Fixed baseline strategies the team runs in public. Fine to start with, but they can&apos;t adapt, so guided agents are built to beat them.</p>
+              <div className="presets" role="radiogroup" aria-label="House templates">
+                {(Object.keys(PRESETS) as Preset[]).filter((p) => p !== "Custom").map((p) => (
+                  <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
+                    className={`tbtn${draft.preset === p ? " tbtn-on" : ""}`}
+                    onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults, custom: undefined })} disabled={!!busy}>{p}</button>
+                ))}
+              </div>
+              {draft.preset !== "Custom" && (<>
+                <p className="preset-line">{PRESETS[draft.preset].line}. {PRESETS[draft.preset].rules.join(" · ")}.</p>
+                <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>Use this template</TextButton>
+              </>)}
+            </div>
+          </details>
+        </Step>
+
+        <Step n={2} title="Set its limits" state={!a.strategy ? "todo" : "done"}>
+          <p>Hard caps enforced by the agent wallet itself. Whatever you tell the agent, the trading engine can never spend more than this, or withdraw.</p>
           <div className="limits">
             <NumField id={`pb-${a.id}`} label="ETH per buy" value={draft.perBuy} onChange={(v) => setDraft({ ...draft, perBuy: v ?? 0 })} />
             <NumField id={`dc-${a.id}`} label="Daily cap" unit="ETH" value={draft.dailyCap} onChange={(v) => setDraft({ ...draft, dailyCap: v ?? 0 })} />
             <NumField id={`mp-${a.id}`} label="Max open positions" value={draft.maxPositions} onChange={(v) => setDraft({ ...draft, maxPositions: v === null ? 0 : Math.round(v) })} />
           </div>
-          <p className="hint-line">These limits are enforced by the agent wallet itself. The trading engine can never spend more, or withdraw.</p>
-          <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>{a.strategy ? "Update strategy" : "Save strategy"}</TextButton>
-          {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
+          {a.strategy && <TextButton onClick={saveStrategy} disabled={!!busy}>Update limits</TextButton>}
         </Step>
 
-        <Step n={2} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
+        <Step n={3} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
           {a.live ? (<>
-            <p>Trading. Your agent is competing in this week&apos;s epoch.</p>
+            <p>Trading. Your agent is competing in this week&apos;s epoch. Keep talking to it whenever you want it to trade differently.</p>
             <div className="actions">
               <TextButton href={ROUTES.arena}>View in the Arena</TextButton>
               <TextButton onClick={pause} disabled={!!busy}>Pause trading</TextButton>
             </div>
           </>) : (<>
-            <p>Switch trading on. Your agent starts following its strategy and appears on the live leaderboard. Pause any time.</p>
+            <p>Switch trading on. Your agent starts following your guidance and appears on the live leaderboard. Pause any time.</p>
             <TextButton onClick={enter} disabled={step < 6 || !!busy}>Enter the Arena</TextButton>
           </>)}
         </Step>

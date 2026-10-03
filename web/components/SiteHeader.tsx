@@ -11,6 +11,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   const home = page === "home" ? "" : ROUTES.home;
   const learn: NavItem[] = [
     { label: "How it works", href: `${home}#how`, hint: "From NFT to self-funding agent" },
+    { label: "Talk to your agent", href: `${home}#guide`, hint: "Guide it in plain English: your edge" },
     { label: "Self-funding agents", href: `${home}#self-funding`, hint: "Starter ETH, agent coins, fee share" },
     { label: "Flywheel", href: `${home}#flywheel`, hint: "Where every ETH goes" },
     { label: "Roadmap", href: `${home}#roadmap` },

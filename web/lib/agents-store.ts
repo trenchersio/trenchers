@@ -15,6 +15,7 @@ import { STRATEGIES, type StrategyName } from "./strategies";
 export type Preset = StrategyName;
 import type { CustomRule } from "./custom-strategy";
 import type { AgentToken } from "./agent-token";
+export type ChatMsg = { role: "you" | "agent"; text: string; t: number; rule?: CustomRule; status?: "proposed" | "applied" | "discarded" };
 export type Strategy = { preset: Preset; perBuy: number; dailyCap: number; maxPositions: number; custom?: CustomRule };
 export type AgentState = {
   id: number;
@@ -26,7 +27,8 @@ export type AgentState = {
   live: boolean;       // trading enabled, competing in the Arena
   registeredAt?: number | null;
   starterClaimed?: boolean;
-  fundingMode?: "coin" | "self"; // option A (agent coin) or B (self-funded from fee share + profits)    // the 0.05 ETH starter balance from the Agent Starter Fund
+  fundingMode?: "coin" | "self";
+  chat?: ChatMsg[];            // the holder's conversation with the agent (custom guidance) // option A (agent coin) or B (self-funded from fee share + profits)    // the 0.05 ETH starter balance from the Agent Starter Fund
   locked?: number;             // starter ETH still in the agent: spendable on launches and trades, not withdrawable
   token?: AgentToken | null;   // the agent's own Pons token, if launched
   log: { t: number; text: string }[];

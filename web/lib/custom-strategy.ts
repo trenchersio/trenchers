@@ -72,9 +72,9 @@ function num(s: string) {
 }
 
 /** Reads plain English into a rule. Returns the rule and what it could not place. */
-export function parse(text: string): { rule: CustomRule; understood: string[]; missed: boolean } {
+export function parse(text: string, base: CustomRule = DEFAULT_RULE): { rule: CustomRule; understood: string[]; missed: boolean } {
   const s = text.toLowerCase();
-  const r: CustomRule = { ...DEFAULT_RULE };
+  const r: CustomRule = { ...base };
   const understood: string[] = [];
 
   if (/dex ?screener/.test(s)) { r.trigger = "dexupdate"; understood.push("signal: DexScreener update"); }
@@ -90,7 +90,7 @@ export function parse(text: string): { rule: CustomRule; understood: string[]; m
     const m = s.match(/(?:market ?cap|mcap)[^0-9]*(\d[\d,.]*\s*[km]?)/);
     r.threshold = num(m?.[1] ?? "") ?? 5;
     understood.push(`signal: market cap crosses ${r.threshold} ETH`);
-  } else if (/launch|new token|every token|new coin/.test(s)) { r.trigger = "launch"; understood.push("signal: new launch"); }
+  } else if (/launch|new token|every token|new coin/.test(s.replace(/launched (in|within) the last[^,.]*/g, ""))) { r.trigger = "launch"; understood.push("signal: new launch"); }
 
   const hold = s.match(/(?:after|hold(?:ing)?(?: for)?|for)\s*(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)\b/);
   if (hold) {
@@ -100,16 +100,18 @@ export function parse(text: string): { rule: CustomRule; understood: string[]; m
   }
   const tp = s.match(/(?:take profit|tp|profit)\s*(?:at|of)?\s*\+?(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*x\b/);
   if (tp) {
-    r.exit = "tpsl"; r.takeProfitPct = tp[1] ? parseFloat(tp[1]) : Math.round((parseFloat(tp[2]) - 1) * 100);
+    if (r.exit !== "tpsl") { r.exit = "tpsl"; r.stopLossPct = null; }
+    r.takeProfitPct = tp[1] ? parseFloat(tp[1]) : Math.round((parseFloat(tp[2]) - 1) * 100);
     understood.push(`take profit: +${r.takeProfitPct}%`);
   }
   const sl = s.match(/(?:stop ?loss|sl|cut)\s*(?:at|of)?\s*-?(\d+(?:\.\d+)?)\s*%/);
-  if (sl) { r.exit = "tpsl"; r.stopLossPct = parseFloat(sl[1]); understood.push(`stop loss: -${r.stopLossPct}%`); }
+  if (sl) { if (r.exit !== "tpsl") { r.exit = "tpsl"; r.takeProfitPct = tp ? r.takeProfitPct : null; } r.stopLossPct = parseFloat(sl[1]); understood.push(`stop loss: -${r.stopLossPct}%`); }
   if (r.exit === "tpsl" && hold) r.holdSec = null;
 
   const age = s.match(/(?:younger than|launched in the last|newer than|under)\s*(\d+)\s*(minutes?|mins?|m|hours?|h)\b/);
   if (age) { r.maxAgeMin = parseInt(age[1]) * (age[2][0] === "h" ? 60 : 1); understood.push(`only tokens launched in the last ${r.maxAgeMin} min`); }
-  const liq = s.match(/liquidity\s*(?:above|over|>|of at least)?\s*(\d+(?:\.\d+)?)\s*eth/);
+  const liqM = s.match(/liquidity\s*(?:above|over|>|of at least|of more than|more than|at least)?\s*(\d+(?:\.\d+)?)\s*eth/) ?? s.match(/(?:more than|over|above|at least|>)?\s*(\d+(?:\.\d+)?)\s*eth\s*(?:of\s*)?liquidity/);
+  const liq = liqM;
   if (liq) { r.minLiquidityEth = parseFloat(liq[1]); understood.push(`liquidity above ${r.minLiquidityEth} ETH`); }
 
   return { rule: r, understood, missed: understood.length === 0 };

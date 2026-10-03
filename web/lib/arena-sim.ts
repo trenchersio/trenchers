@@ -7,6 +7,17 @@
  */
 import ids from "./nft-ids.json";
 import { STRATEGIES, VOLUME_THRESHOLD_USD, strategyByName, type StrategyEvent, type StrategyName } from "./strategies";
+import { DEFAULT_RULE, describe, type CustomRule } from "./custom-strategy";
+
+/** Sample holder guidance: what holders told their agents, and the rule each message became. */
+export const GUIDED: { said: string; rule: CustomRule }[] = [
+  { said: "Only new launches with more than 3 ETH liquidity. Take profit at 40%, cut at 20%.", rule: { ...DEFAULT_RULE, trigger: "launch", exit: "tpsl", holdSec: null, takeProfitPct: 40, stopLossPct: 20, minLiquidityEth: 3 } },
+  { said: "Wait for $100k volume before buying, then hold two minutes.", rule: { ...DEFAULT_RULE, trigger: "volume", threshold: 100_000, exit: "time", holdSec: 120 } },
+  { said: "Graduations only. Let winners run to +60%, stop at -25%.", rule: { ...DEFAULT_RULE, trigger: "graduation", exit: "tpsl", holdSec: null, takeProfitPct: 60, stopLossPct: 25 } },
+  { said: "Buy dev sells on tokens younger than 30 minutes, out after 20 seconds.", rule: { ...DEFAULT_RULE, trigger: "devsell", exit: "time", holdSec: 20, maxAgeMin: 30 } },
+  { said: "DexScreener updates: quick 30% target, tight 15% stop.", rule: { ...DEFAULT_RULE, trigger: "dexupdate", exit: "tpsl", holdSec: null, takeProfitPct: 30, stopLossPct: 15 } },
+  { said: "Flip new launches, but hold 45 seconds instead of 15.", rule: { ...DEFAULT_RULE, trigger: "launch", exit: "time", holdSec: 45 } },
+];
 
 export type { StrategyName };
 export type Token = {
@@ -20,6 +31,8 @@ export type Agent = {
   deposited: number; cash: number; positions: Map<string, Position>; trades: Trade[];
   nav: number; epochStart: number; history: number[]; wins: number; closed: number;
   rank: number; prevRank: number; lastTradeAt: number; lastSide: "BUY" | "SELL" | null;
+  rule: CustomRule | null;   // Custom agents: the rule their holder's guidance compiled to
+  guidance: string | null;   // the holder's latest message to the agent
   token: string | null;      // the agent's own Pons token, if it launched one
   tokenAddress: string | null;
   tokenRate: number;         // sample: creator fees per tick (ETH)
@@ -155,16 +168,26 @@ function runAgents(sim: Sim, fresh: MarketEvent[]) {
     for (const p of [...a.positions.values()]) {
       const t = sim.tokens.get(p.sym);
       if (!t || t.dead) { sell(sim, a, p, "token died"); continue; }
-      if (cfg.holdSec !== null) {
-        if (sim.tick - p.opened >= cfg.holdSec) sell(sim, a, p, `held ${cfg.holdSec >= 60 ? `${cfg.holdSec / 60}m` : `${cfg.holdSec}s`}`);
+      const hold = a.rule ? (a.rule.exit === "time" ? a.rule.holdSec : null) : cfg.holdSec;
+      if (hold !== null) {
+        if (sim.tick - p.opened >= hold) sell(sim, a, p, `held ${hold >= 60 ? `${hold / 60}m` : `${hold}s`}`);
       } else {
         const pnl = (p.qty * t.price * LIQ - p.cost) / p.cost;
-        if (pnl >= 1.5 || pnl <= -0.4) sell(sim, a, p, pnl > 0 ? "take profit" : "stop loss");
+        const tp = (a.rule?.takeProfitPct ?? 150) / 100, sl = (a.rule?.stopLossPct ?? 40) / 100;
+        if (pnl >= tp || pnl <= -sl) sell(sim, a, p, pnl > 0 ? "take profit" : "stop loss");
       }
     }
     // entries
-    if (cfg.event === "custom") {
-      if (rnd() < 0.03) { const live = [...sim.tokens.values()].filter((t) => !t.dead); if (live.length) buy(sim, a, pick(live), "custom rule"); }
+    if (a.rule) {
+      // Guided agents act on their own signal, and their holder's filters skip a lot of the junk.
+      const kind = a.rule.trigger === "mcap" ? "volume" : a.rule.trigger;
+      for (const e of fresh) {
+        if (e.kind !== kind) continue;
+        const t = sim.tokens.get(e.sym);
+        if (!t || t.dead) continue;
+        if (t.drift <= 0 && rnd() < 0.75) continue;
+        buy(sim, a, t, `${WHY[e.kind]}, your rule`);
+      }
       continue;
     }
     for (const e of fresh) {
@@ -218,11 +241,14 @@ export function createSim(): Sim {
   const pool = STRATEGIES.map((s) => s.name);
   const agents: Agent[] = (ids as number[]).map((id) => {
     const house = id <= 5;
-    const def = house ? STRATEGIES.find((s) => s.houseAgent === id)! : strategyByName(pick(pool));
+    // Most holders guide their agent themselves (Custom); some start from a house template.
+    const def = house ? STRATEGIES.find((s) => s.houseAgent === id)! : strategyByName(rnd() < 0.7 ? "Custom" : pick(pool.filter((n) => n !== "Custom")));
+    const g = def.name === "Custom" ? GUIDED[Math.floor(rnd() * GUIDED.length)] : null;
     const deposited = house ? 2 + rnd() * 2 : +(0.1 + Math.pow(rnd(), 2) * 2.4).toFixed(2);
     return {
       id, house, owner: house ? "Trenchers team" : `0x${hex(40)}`, wallet: `0x${hex(40)}`,
-      strategy: def.name, params: [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
+      strategy: def.name, params: g ? [describe(g.rule), "Guided by its holder", `${def.defaults.perBuy} ETH per buy`] : [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
+      rule: g ? g.rule : null, guidance: g ? g.said : null,
       deposited, cash: deposited, positions: new Map(), trades: [],
       nav: deposited, epochStart: deposited, history: [], wins: 0, closed: 0, rank: 0, prevRank: 0, lastTradeAt: 0, lastSide: null,
       token: null, tokenAddress: null, tokenRate: 0, tokenFees: 0, shareFees: 0,

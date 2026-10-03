@@ -6,9 +6,9 @@ import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH }
 import { Flywheel } from "@/components/Flywheel";
 import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
-import { HOUSE_STRATEGIES } from "@/lib/strategies";
 import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
 import { SelfFunding } from "@/components/SelfFunding";
+import { GuideDemo } from "@/components/GuideDemo";
 
 const STEPS = [
   { n: "01", title: "Buy a Trencher", body: "Every one of the 2,000 is a unique pixel agent, listed on OpenSea at the same price.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
@@ -16,7 +16,7 @@ const STEPS = [
   { n: "03", title: `Claim ${STARTER_ETH} ETH`, body: "Half of what you paid comes back as the agent's starter balance, straight into its wallet.", tag: `+${STARTER_ETH} ETH to the agent`, tone: "green" },
 ];
 const STEPS_AFTER = [
-  { n: "05", title: "Pick a strategy", body: "Copy a house strategy or write your own memecoin trading rules. Change them any time.", tag: "5 house + custom", tone: "" },
+  { n: "05", title: "Talk to your agent", body: "Guide it in plain English and keep adjusting as the market moves. Every message becomes a rule it trades 24/7.", tag: "Your edge", tone: "green" },
   { n: "06", title: "Compete in the Arena", body: "Agents trade Pons launches around the clock, climb the live leaderboard and win weekly prizes.", tag: "Ranked live", tone: "" },
 ];
 
@@ -50,6 +50,8 @@ const FAQ = [
   { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every primary sale goes to the Agent Starter Fund contract. Once you register your Trencher, you claim ${STARTER_ETH} ETH from it, once, straight into the agent wallet. The agent can spend it on launching its coin and on trades, but it can't be withdrawn. A Trencher resold before its claim can still be claimed by the new holder.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
+  { q: "How do I tell my agent how to trade?", a: "You talk to it. In your NFT / Agent Profile, write what you want in plain English: which tokens, when to buy, when to sell, what to avoid. The agent replies with the exact rule it would trade, and nothing changes until you apply it. Keep guiding it as the market changes; every version is kept. The house strategies are only templates to start from." },
+  { q: "Why not just use a house strategy?", a: "You can, but they are fixed baselines: they never adapt to the market, so they are built to be beaten. The edge comes from a holder who keeps guiding their agent." },
   { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
   { q: "Is this financial advice?", a: "No. Trading newly launched tokens is extremely risky and agents can lose all the ETH you deposit. Agent coins can go to zero and fee income is never guaranteed. Only use what you can afford to lose." },
 ];
@@ -78,7 +80,7 @@ export default function Home() {
             <p className="lede">
               An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents. Buy one for {LIST_PRICE_ETH} ETH, register it and
               claim {STARTER_ETH} ETH into its wallet. Then choose: let it launch its own coin, or let it self-fund from its
-              {" "}{AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits. Pick an agentic memecoin strategy and let it compete.
+              {" "}{AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits. Then talk to it: guide your agent in plain English and let it trade memecoins for you, without emotion.
             </p>
             <div className="cta">
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
@@ -102,7 +104,7 @@ export default function Home() {
         </section>
 
         <Section id="how" n="01" label="How it works" title="From NFT to self-funding trading agent"
-          lede={`Buy, register and claim ${STARTER_ETH} ETH. Then choose: let the agent launch its own coin (A), or let it self-fund from its $TRENCHERS fee share and trading profits (B). Pick a strategy and compete. Everything stays with the NFT.`}>
+          lede={`Buy, register and claim ${STARTER_ETH} ETH. Then choose: let the agent launch its own coin (A), or let it self-fund from its $TRENCHERS fee share and trading profits (B). Then talk to it: your guidance is its strategy. Everything stays with the NFT.`}>
           <ol className="hiw">
             {STEPS.map((s) => (
               <li key={s.n} className={s.tone ? `hiw-${s.tone}` : undefined}>
@@ -158,31 +160,10 @@ export default function Home() {
           <div className="section-actions"><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
         </Section>
 
-        <Section n="04" label="Strategies" title="Five house strategies, or your own"
-          lede="The team runs each house strategy on its own agent, in public. Copy one for your agent, or build a custom rule.">
-          <div className="strats">
-            {HOUSE_STRATEGIES.map((s) => (
-              <article key={s.name} className="strat">
-                <header><span className="mono strat-id">#{s.houseAgent}</span><span className="mono strat-kind">House agent</span></header>
-                <h3>{s.name}</h3>
-                <p>{s.trigger}.</p>
-                <dl className="mono">
-                  <div><dt>Exit</dt><dd>{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`}</dd></div>
-                  <div><dt>Per buy</dt><dd>{s.defaults.perBuy} ETH</dd></div>
-                </dl>
-              </article>
-            ))}
-            <article className="strat strat-custom">
-              <header><span className="mono strat-id">+</span><TextButton href={ROUTES.agents}>Build one</TextButton></header>
-              <h3>Custom</h3>
-              <p>Pick a buy signal, an exit and filters, or describe it in plain English.</p>
-              <dl className="mono">
-                <div><dt>Signals</dt><dd>6 to pick</dd></div>
-                <div><dt>Exit</dt><dd>Time, TP/SL</dd></div>
-              </dl>
-            </article>
-          </div>
-          <p className="note">Every strategy has hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Switch strategies at any time.</p>
+        <Section id="guide" n="04" label="Talk to your agent" title="Your agent trades the way you tell it to"
+          lede="Custom guidance is the heart of Trenchers. You keep talking to your agent in plain English; it turns every message into a rule you confirm and trades it around the clock. The house strategies are only templates, and a baseline to beat.">
+          <GuideDemo />
+          <p className="note">Every rule runs inside hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Messages are read into typed rules; there is no language model making trades.</p>
         </Section>
 
         <Section id="flywheel" n="05" label="The flywheel" title="Every flow of value points back at $TRENCHERS"

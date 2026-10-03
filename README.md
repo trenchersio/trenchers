@@ -9,7 +9,7 @@
 <p align="center">
   <b>An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents on Robinhood Chain.</b><br>
   Buy an agent for 0.1 ETH, claim 0.05 ETH into its wallet, launch its coin, let it trade.<br>
-  Pick agentic memecoin trading strategies, let agents compete, and launch agent coins.<br>
+  Talk to your agent to guide its memecoin trading, let agents compete, and launch agent coins.<br>
   People set the intent. Agents execute it, without fear or greed, and earn their own keep.<br><br>
   <a href="https://trenchers.io">trenchers.io</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
 </p>
@@ -71,9 +71,9 @@ Trenchers splits the job along that line:
 
 | The person decides | The agent does |
 | --- | --- |
-| What to trade, through the strategy | Watch every launch, every second |
+| What to trade, by talking to the agent in plain English | Watch every launch, every second |
 | How much to risk: size per buy, daily cap, max positions | Enter the moment the signal fires |
-| When the rules change | Exit exactly when the rule says, win or lose |
+| When to change course: a new message, any time | Exit exactly when the rule says, win or lose |
 | Whether to keep going, pause or withdraw | Never chase, never panic, never revenge-trade |
 
 The person brings intent and judgment. The agent brings discipline and speed. The emotional layer, where most trading goes wrong, gets removed without removing the human.
@@ -92,7 +92,7 @@ Trenchers doesn't invent a new behaviour. It connects several that are already h
 - **Robinhood Chain.** An Ethereum L2 built on Arbitrum, [live on mainnet since 1 July 2026](https://cointelegraph.com/news/robinhood-public-blockchain-mainnet-launch), with ETH as gas and a retail user base attached. Cheap, fast blocks make second-level strategies practical.
 - **On-chain AI agents.** [ERC-8004 (Trustless Agents)](https://eips.ethereum.org/EIPS/eip-8004) gives agents a standard identity, reputation and validation layer, live on major networks since early 2026. Agents are becoming accounts with a public history, not black boxes.
 - **Smart accounts.** ERC-6551 gives every NFT its own wallet, and Robinhood Chain supports ERC-4337 account abstraction natively. Together they let a wallet carry rules (who may do what, up to how much) instead of trusting a server.
-- **Copy and social trading.** People already follow wallets on DexScreener and Telegram bots. The Arena makes that a first-class, ranked, transparent feature: see every agent's trades, copy the house strategies, compete openly.
+- **Copy and social trading.** People already follow wallets on DexScreener and Telegram bots. The Arena makes that a first-class, ranked, transparent feature: see every agent's trades and the guidance behind them, compete openly.
 - **Agent tokens.** Agents with their own tokens, as popularised by Virtuals and Clanker-launched agents, showed that a token's trading fees can fund an agent's operations. Trenchers gives every agent that option on Pons, with the agent wallet as the creator.
 - **Creator fees.** Launchpads pay a share of trading fees to a token's creator. When the creator is an agent wallet, those fees become the agent's income.
 - **NFTs with a job.** Collections that do something keep their holders. A Trencher is a working asset: it trades, earns income and a record, and can win prizes.
@@ -101,7 +101,7 @@ Trenchers doesn't invent a new behaviour. It connects several that are already h
 
 ## How it works
 
-The workflow in one line: **buy an NFT for 0.1 ETH, register it and claim 0.05 ETH into its wallet. Then choose: (A) let the agent launch its own coin, whose fees go to its wallet, or (B) let it self-fund from its share of the $TRENCHERS fees and its own trading profits. Pick a strategy and let it trade memecoins.**
+The workflow in one line: **buy an NFT for 0.1 ETH, register it and claim 0.05 ETH into its wallet. Then choose: (A) let the agent launch its own coin, whose fees go to its wallet, or (B) let it self-fund from its share of the $TRENCHERS fees and its own trading profits. Then talk to it: guide it in plain English and let it trade memecoins for you.**
 
 ```mermaid
 flowchart LR
@@ -113,7 +113,7 @@ flowchart LR
     L -->|100% of creator fees| W[Agent wallet]
     T[10% of $TRENCHERS fees] -->|share| W
     S -.-> W
-    W --> D[Strategy and limits]
+    W --> D[Talk to your agent<br/>rules + limits]
     D --> F[Agent trades<br/>Pons launches]
     F -->|trading profits| W
     F --> G[Arena ranking<br/>and weekly prizes]
@@ -125,7 +125,7 @@ The NFT / Agent Profile page follows the same three sections:
 | --- | --- |
 | **1. Register + claim** | Register the Trencher (agent wallet + identity), claim the 0.05 ETH starter balance, choose option A or B, optionally top up |
 | **2. Coin launchpad** (optional, option A) | Image, name, symbol, description, website, X, Telegram; the agent wallet launches the coin on Pons |
-| **3. Strategy** | Pick a house strategy or a custom rule, set limits, enter the Arena |
+| **3. Guide your agent** | Talk to the agent in plain English, apply the rules it proposes, set limits, enter the Arena |
 
 1. **Buy a Trencher.** The team mints all 2,000 and lists them on OpenSea at **0.1 ETH**. Five stay with the team as house agents.
 2. **Register it.** One step deploys the agent's wallet (ERC-6551) and registers its identity (ERC-8004). The identity is owned by the agent wallet, which is owned by the NFT.
@@ -134,7 +134,7 @@ The NFT / Agent Profile page follows the same three sections:
    - **A: Agent coin.** The agent launches its own coin on Pons with the starter balance. Every creator fee goes to the agent wallet.
    - **B: Self-funded.** No coin. The agent keeps itself going on its share of the 10% of $TRENCHERS fees paid to registered agents, plus its own trading profits.
    A self-funded agent can still launch a coin later, and the holder can always top up with their own ETH.
-5. **Choose a strategy.** Pick one of the five house strategies or build your own. Set the size per buy, the daily cap and the maximum number of open positions.
+5. **Talk to your agent.** Tell it how to trade in plain English and keep guiding it; every message becomes a rule you apply. House templates exist as a starting point and a baseline to beat. Set the size per buy, the daily cap and the maximum number of open positions.
 6. **Enter the Arena.** Switch trading on. The agent appears on the live leaderboard and starts following its rules.
 
 <img src="docs/img/agent-setup.png" alt="Agent setup: register, fund, choose a strategy, enter the Arena" width="100%">
@@ -232,32 +232,53 @@ flowchart TB
 
 ---
 
-## Strategies
+## Strategies: talk to your agent
 
-Every strategy is a **signal** (when to buy), an **exit** (when to sell) and **limits** (how much). Strategies are typed rules, executed deterministically. There is no language model in the trading path.
+**Custom guidance is the core of Trenchers.** A holder doesn't pick a bot off a shelf; they keep talking to their agent in plain English, the way you'd brief a trader, and adjust it as the market changes. The agent turns every message into a typed rule, shows it, and only trades it once the holder applies it.
 
-### The five house strategies
+```mermaid
+sequenceDiagram
+    participant H as Holder
+    participant A as Agent (NFT / Agent Profile)
+    participant W as Agent wallet policy
+    participant E as Execution engine
+    H->>A: "Only new launches with more than 3 ETH liquidity, TP 40%, SL 20%"
+    A-->>H: Proposed rule v1 (signal, filters, exit)
+    H->>A: Apply
+    A->>W: Signed rule v1 + limits
+    E->>W: Trades rule v1 within limits, 24/7
+    H->>A: "Only tokens launched in the last 10 minutes"
+    A-->>H: Proposed rule v2
+    H->>A: Apply
+    A->>W: Signed rule v2
+```
 
-Each house agent runs one, in public, in the Arena. Holders can copy any of them.
+Why it works this way:
 
-| House agent | Strategy | Buys when | Sells |
+- **The edge is the person.** Fixed strategies can't read the room. A holder who notices that today's launches are rugging early, or that graduations are running, can tell the agent in one sentence.
+- **The execution has no emotions.** Once a rule is applied, the agent follows it exactly: no fear, no greed, no revenge trades, no missed entries while you sleep.
+- **No language model in the trading path.** Messages are read into typed rules by a deterministic parser (`web/lib/custom-strategy.ts`). The engine executes rules, never chat. Nothing trades on a sentence nobody confirmed, and every rule version is kept.
+
+A rule combines:
+
+- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update.
+- **Exit:** after a set time, or take profit and stop loss (either or both).
+- **Filters:** only tokens launched in the last N minutes, only pools above a minimum liquidity.
+- **Limits:** ETH per buy, daily cap, maximum open positions, enforced by the agent wallet itself.
+
+Each message updates the current rule incrementally ("hold for 2 minutes instead" only changes the exit). The same rule can also be edited as a form.
+
+### House templates: a baseline to beat
+
+The five house agents each run one fixed template, in public. Holders can start from one, but they never adapt, so they are a baseline that guided agents are meant to beat, not a recommendation.
+
+| House agent | Template | Buys when | Sells |
 | --- | --- | --- | --- |
 | #1 | **Launch Flipper** | A new token launches on Pons | After 15 seconds |
 | #2 | **Graduation Rider** | A Pons launch graduates | After 5 minutes |
 | #3 | **Volume Breakout** | A new Pons token crosses $50k lifetime volume | After 1 minute |
 | #4 | **Dev Dump Dip** | A token's dev sells | After 10 seconds |
 | #5 | **DexScreener Pulse** | A token's DexScreener page is updated | After 1 minute |
-
-### Custom strategies
-
-The custom builder combines:
-
-- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update.
-- **Exit:** after a set time, or take profit and stop loss (either or both).
-- **Filters:** only tokens launched in the last N minutes, only pools above a minimum liquidity.
-- **Limits:** ETH per buy, daily cap, maximum open positions.
-
-You can also describe a strategy in plain English, for example *"buy coins that cross $250k volume launched in the last 30 minutes, 2x or cut at 30%"*. A deterministic parser turns it into the form above (`web/lib/custom-strategy.ts`). It fills the form; the holder reviews and saves it. Nothing trades on a sentence nobody checked.
 
 ### Where the signals come from
 
@@ -382,8 +403,9 @@ Every flow runs through public contracts. Changing a payout destination requires
 | [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (0.05 ETH claim per agent into its wallet), tests, deploy script |
 | [`web/`](web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
-| [`web/lib/strategies.ts`](web/lib/strategies.ts) | The strategy presets and the signals they need |
-| [`web/lib/custom-strategy.ts`](web/lib/custom-strategy.ts) | Custom rules, their validation and the plain-English parser |
+| [`web/lib/strategies.ts`](web/lib/strategies.ts) | The five house templates and the signals they need |
+| [`web/lib/custom-strategy.ts`](web/lib/custom-strategy.ts) | Guided rules: the incremental plain-English parser behind "talk to your agent", and validation |
+| [`web/components/agents/AgentChat.tsx`](web/components/agents/AgentChat.tsx) | The agent conversation: propose, apply or discard each rule |
 | [`web/lib/arena-sim.ts`](web/lib/arena-sim.ts) | The sample market and agents behind the Arena until live data is connected |
 | [`art/`](art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
 | [`docs/img/`](docs/img) | Images used in this README |

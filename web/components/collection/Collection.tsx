@@ -207,7 +207,7 @@ function Popup({ children, onClose, onPrev, onNext, label }: { children: React.R
 function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim: Sim | null }) {
   const agent = b.status === "live" && !b.mine ? sim?.agents.find((a) => a.id === id) : undefined;
   const house = id <= 5;
-  const strategy = agent?.strategy ?? b.strategy;
+  const strategy = agent ? (agent.rule ? "Custom, guided by holder" : `${agent.strategy} (template)`) : b.strategy === "Custom" ? "Custom, guided by holder" : b.strategy ? `${b.strategy} (template)` : null;
   const owner = agent?.owner ?? b.owner;
   const wallet = agent?.wallet ?? b.wallet;
   const coin = agent ? agent.token : b.coin;

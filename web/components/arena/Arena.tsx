@@ -130,7 +130,7 @@ function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active:
           <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
           <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
         </span>
-        <span className="col-strat">{a.strategy}</span>
+        <span className={`col-strat${a.rule ? " col-guided" : ""}`}>{a.rule ? "Guided · custom" : `${a.strategy} · template`}</span>
         <span className="mono col-num">{a.nav.toFixed(3)}</span>
         <span className={`mono col-num ${r >= 0 ? "up" : "down"}`}>{signed(r)}</span>
         <span className="mono col-last">{last ? <><b className={last.side === "BUY" ? "up" : "down"}>{last.side}</b> ${last.sym}</> : "—"}</span>
@@ -185,7 +185,8 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
       </div>
 
       <div className="panel-block">
-        <h3>Strategy · {a.strategy}</h3>
+        <h3>Strategy · {a.rule ? "Custom, guided by its holder" : `${a.strategy} (house template)`}</h3>
+        {a.guidance && <blockquote className="guide"><span className="mono">Latest guidance</span>“{a.guidance}”</blockquote>}
         <div className="tags">{a.params.map((p) => <span key={p} className="mono">{p}</span>)}</div>
       </div>
 

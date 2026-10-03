@@ -45,7 +45,7 @@ export function sample(id: number): Sample {
   const owner = house || listed ? "Trenchers team" : `0x${hex(id, 21, 40)}`;
   const reg = status !== "idle";
   const strat = house ? STRATEGIES.find((s) => s.houseAgent === id)!.name
-    : reg ? STRATEGIES[h32(id, 31) % STRATEGIES.length].name : null;
+    : reg ? (h32(id, 31) % 10 < 7 ? "Custom" : STRATEGIES[h32(id, 33) % 5].name) : null;
   return {
     status, owner, listed,
     wallet: reg ? `0x${hex(id, 41, 40)}` : null,
