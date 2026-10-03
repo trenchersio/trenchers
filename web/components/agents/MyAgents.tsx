@@ -160,7 +160,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
               <input id={`amt-${a.id}`} className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!a.registered || !!busy} />
             </label>
             <div className="chips">
-              {["0.05", "0.1", "0.25"].map((v) => <button key={v} type="button" className="chip mono" onClick={() => setAmount(v)} disabled={!a.registered || !!busy}>{v}</button>)}
+              {["0.05", "0.1", "0.25"].map((v) => <button key={v} type="button" className={`tbtn${amount === v ? " tbtn-on" : ""}`} onClick={() => setAmount(v)} disabled={!a.registered || !!busy}>{v}</button>)}
             </div>
           </div>
           <div className="actions">
@@ -173,12 +173,11 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           <div className="presets" role="radiogroup" aria-label="Strategy">
             {(Object.keys(PRESETS) as Preset[]).map((p) => (
               <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
-                className={`preset${draft.preset === p ? " on" : ""}`}
-                onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults })} disabled={!!busy}>
-                <b>{p}</b><span>{PRESETS[p].line}</span>
-              </button>
+                className={`tbtn${draft.preset === p ? " tbtn-on" : ""}`}
+                onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults })} disabled={!!busy}>{p}</button>
             ))}
           </div>
+          <p className="preset-line">{PRESETS[draft.preset].line} <span className="mono">{PRESETS[draft.preset].rules.join(" · ")}</span></p>
           <div className="limits">
             <label className="field"><span>ETH per buy</span>
               <input id={`pb-${a.id}`} className="mono" inputMode="decimal" value={draft.perBuy} onChange={(e) => setDraft({ ...draft, perBuy: Number(e.target.value) || 0 })} /></label>

@@ -21,7 +21,7 @@ export function WalletMenu() {
   return (
     <div className="wallet-menu" ref={ref}>
       <TextButton href={ROUTES.agents}>Register / View NFT</TextButton>
-      <button type="button" className="addr-chip mono" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button type="button" className={`tbtn addr-btn${open ? " tbtn-on" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className={`dot ${w.kind === "demo" ? "dot-demo" : ""}`} />{short(w.address)}
       </button>
       {open && (

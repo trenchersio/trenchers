@@ -10,10 +10,7 @@ export function Socials({ links, large = false }: { links: Record<keyof typeof I
   return (
     <span className={large ? "socials socials-large" : "socials"}>
       {set.map((k) => (
-        <a key={k} href={links[k]} target="_blank" rel="noreferrer" aria-label={ICONS[k].label} title={ICONS[k].label}>
-          <svg viewBox="0 0 24 24" width={large ? 22 : 18} height={large ? 22 : 18} fill="currentColor"><path d={ICONS[k].d} /></svg>
-          {large && <span>{ICONS[k].label}</span>}
-        </a>
+        <a key={k} className="tbtn" href={links[k]} target="_blank" rel="noreferrer" aria-label={ICONS[k].label}>{ICONS[k].label}</a>
       ))}
     </span>
   );

@@ -8,8 +8,11 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://trenchers.io"),
   title: "Trenchers",
-  description: "2,000 on-chain trading agents on Robinhood Chain.",
+  description: "An on-chain AI trading agent ecosystem: 2,000 agents on Robinhood Chain.",
+  openGraph: { title: "Trenchers", description: "An on-chain AI trading agent ecosystem.", url: "https://trenchers.io", siteName: "Trenchers" },
+  twitter: { card: "summary_large_image", site: "@trenchersio", creator: "@trenchersio" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

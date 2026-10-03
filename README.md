@@ -8,7 +8,7 @@
 
 <p align="center">
   2,000 on-chain AI trading agents on Robinhood Chain.<br>
-  <a href="https://x.com/trenchersio">X / @trenchersio</a>
+  <a href="https://trenchers.io">trenchers.io</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
 </p>
 
 ---
