@@ -61,7 +61,7 @@ async function main() {
   await (await splitter.transferOwnership(safe)).wait();
   await (await nft.transferOwnership(safe)).wait();
   console.log(`Ownership of both contracts transferred to ${safe}`);
-  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.05 ETH; forward sale proceeds to the splitter.");
+  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.01 ETH; forward sale proceeds to the splitter.");
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; });

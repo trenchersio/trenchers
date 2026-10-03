@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @notice Single receiving address for Trenchers primary-sale proceeds and secondary royalties.
 ///
 ///         Primary sales: all 1,995 public Trenchers are minted free to a treasury wallet and listed
-///         on OpenSea at 0.05 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
+///         on OpenSea at 0.01 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
 ///           50% buybacks, 20% development (immediate), 20% development (vested linearly
 ///           over VEST_DURATION), 10% prize pool.
 ///         Royalties (ETH from anyone else, and any ERC-20 such as WETH): 100% buybacks.

@@ -8,7 +8,7 @@ export const EXPLORER = chain.blockExplorers?.default.url ?? "";
 
 /** OpenSea collection page. Empty until the collection is listed: buttons then read "listing soon". */
 export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "";
-export const LIST_PRICE_ETH = "0.05";
+export const LIST_PRICE_ETH = "0.01";
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
