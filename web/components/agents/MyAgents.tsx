@@ -87,7 +87,8 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   const [amount, setAmount] = useState("0.1");
   const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Launch Flipper", ...PRESETS["Launch Flipper"].defaults });
   const [notice, setNotice] = useState<string | null>(null);
-  const [tab, setTab] = useState<"setup" | "token" | "activity">("setup");
+  const [tab, setTab] = useState<"register" | "coin" | "strategy" | "activity">(
+    !a.registered || !a.starterClaimed || (!a.token && !a.fundingMode) ? "register" : a.fundingMode === "coin" && !a.token ? "coin" : "strategy");
   const st = statusOf(a);
   const locked = Math.min(a.locked ?? 0, a.balance);
   const withdrawable = +(a.balance - locked).toFixed(4);
@@ -150,6 +151,9 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     done();
   }));
 
+  const chooseCoin = () => { onChange(log({ ...a, fundingMode: "coin" }, "Chose option A: launch an agent coin")); setTab("coin"); };
+  const chooseSelf = () => { onChange(log({ ...a, fundingMode: "self" }, "Chose option B: self-funded from the $TRENCHERS fee share and trading profits")); setTab("strategy"); };
+
   const pause = () => run(["Pausing trading…"], () => onChange(log({ ...a, live: false }, "Trading paused")));
 
   return (
@@ -175,16 +179,32 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
 
       {a.registered && <Income a={a} />}
 
-      <div className="ptabs" role="tablist" aria-label="Agent profile sections">
-        {([["setup", "Agent setup"], ["token", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad"], ["activity", "Activity"]] as const).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tbtn${tab === k ? " tbtn-on" : ""}`} onClick={() => setTab(k)}>{label}</button>
+      <div className="segs" role="tablist" aria-label="Agent profile sections">
+        {([
+          ["register", "1", "Register + claim", a.registered && a.starterClaimed ? "done" : ""],
+          ["coin", "2", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad", a.token ? "done" : a.fundingMode === "self" ? "skip" : "opt"],
+          ["strategy", "3", "Strategy", a.live ? "done" : ""],
+        ] as const).map(([k, n, label, state]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={`seg${tab === k ? " seg-on" : ""}${state === "done" ? " seg-done" : ""}`} onClick={() => setTab(k)}>
+            <span className="seg-n mono">{state === "done" ? "✓" : n}</span>
+            <span className="seg-text"><b>{label}</b><small className="mono">{state === "opt" ? "Optional · option A" : state === "skip" ? "Skipped · self-funded (B)" : state === "done" ? "Done" : k === "register" ? `Wallet, identity, +${STARTER_ETH} ETH` : "Trade and compete"}</small></span>
+          </button>
         ))}
+        <button type="button" role="tab" aria-selected={tab === "activity"} className={`tbtn seg-log${tab === "activity" ? " tbtn-on" : ""}`} onClick={() => setTab("activity")}>Activity</button>
       </div>
 
-      {tab === "token" && <Launchpad a={a} busy={!!busy} onLaunch={launchToken} />}
+      {tab === "coin" && (<>
+        <Launchpad a={a} busy={!!busy} onLaunch={launchToken} />
+        {!a.token && (
+          <div className="seg-foot">
+            <span>Rather not launch a coin?</span>
+            <TextButton onClick={chooseSelf} disabled={!a.registered || !!busy}>Self-fund instead (option B)</TextButton>
+          </div>
+        )}
+      </>)}
 
-      {tab === "setup" && <ol className="steps-v">
-        <Step n={1} title="Register as an agent" state={a.registered ? "done" : step === 1 ? "now" : "todo"}>
+      {tab === "register" && <ol className="steps-v">
+        <Step n={1} title="Register as an agent" state={a.registered ? "done" : "now"}>
           {a.registered ? (
             <p>Registered. Your Trencher has its own wallet and an on-chain identity. Both stay with the NFT if you sell it.</p>
           ) : (<>
@@ -202,13 +222,17 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </>)}
         </Step>
 
-        <Step n={3} title="Launch the agent's coin (optional)" state={a.token ? "done" : a.registered && (a.starterClaimed || a.balance > 0) ? "now" : "todo"}>
-          {a.token ? (
-            <p>${a.token.symbol} is live on Pons. Every creator trading fee goes to the agent wallet, so the agent funds its own trading.</p>
-          ) : (
-            <p>Let your agent launch its own coin on Pons with the starter balance. You pick the image, name, symbol and links; the agent is the creator and receives all creator trading fees. Or skip it and keep funding the agent yourself.</p>
-          )}
-          <TextButton onClick={() => setTab("token")} disabled={!a.registered}>{a.token ? `View $${a.token.symbol}` : "Open the coin launchpad"}</TextButton>
+        <Step n={3} title="Choose how your agent funds itself" state={a.token || a.fundingMode === "self" ? "done" : a.starterClaimed ? "now" : "todo"}>
+          <div className="ab">
+            <button type="button" className={`ab-opt ab-a${a.fundingMode === "coin" || a.token ? " ab-on" : ""}`} onClick={chooseCoin} disabled={!a.registered || !!busy}>
+              <span className="sf-letter">A</span>
+              <span><b>Let it launch a coin</b><small>Opens the coin launchpad. Every creator fee goes to the agent.</small></span>
+            </button>
+            <button type="button" className={`ab-opt ab-b${a.fundingMode === "self" && !a.token ? " ab-on" : ""}`} onClick={chooseSelf} disabled={!a.registered || !!busy}>
+              <span className="sf-letter">B</span>
+              <span><b>Let it self-fund</b><small>No coin: its $TRENCHERS fee share and trading profits keep it going.</small></span>
+            </button>
+          </div>
         </Step>
 
         <Step n={4} title="Top up (optional)" state={!a.registered ? "todo" : a.balance > Number(STARTER_ETH) || (!a.starterClaimed && a.balance > 0) ? "done" : "todo"}>
@@ -228,8 +252,10 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             {withdrawable > 0 && <TextButton onClick={withdraw} disabled={!!busy}>{`Withdraw ${withdrawable.toFixed(4)} ETH`}</TextButton>}
           </div>
         </Step>
+      </ol>}
 
-        <Step n={5} title="Choose a strategy" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
+      {tab === "strategy" && <ol className="steps-v">
+        <Step n={1} title="Choose a strategy" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
           <div className="presets" role="radiogroup" aria-label="Strategy">
             {(Object.keys(PRESETS) as Preset[]).map((p) => (
               <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
@@ -250,9 +276,10 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </div>
           <p className="hint-line">These limits are enforced by the agent wallet itself. The trading engine can never spend more, or withdraw.</p>
           <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>{a.strategy ? "Update strategy" : "Save strategy"}</TextButton>
+          {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
         </Step>
 
-        <Step n={6} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
+        <Step n={2} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
           {a.live ? (<>
             <p>Trading. Your agent is competing in this week&apos;s epoch.</p>
             <div className="actions">
@@ -264,7 +291,6 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             <TextButton onClick={enter} disabled={step < 6 || !!busy}>Enter the Arena</TextButton>
           </>)}
         </Step>
-
       </ol>}
 
       {tab === "activity" && (
@@ -304,7 +330,7 @@ function Income({ a }: { a: AgentState }) {
         <p>Fee income lands in the agent wallet as trading capital.</p>
       </div>
       <dl>
-        <div><dt className="mono">Own token fees</dt><dd className="mono">{a.token ? `${tok.toFixed(5)} ETH` : <span className="cd-muted">No token yet</span>}</dd></div>
+        <div><dt className="mono">Own coin fees</dt><dd className="mono">{a.token ? `${tok.toFixed(5)} ETH` : <span className="cd-muted">{a.fundingMode === "self" ? "Option B, no coin" : "No coin yet"}</span>}</dd></div>
         <div><dt className="mono">{AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees</dt><dd className="mono">{share.toFixed(5)} ETH</dd></div>
         <div><dt className="mono">Total self-funded</dt><dd className="mono up">{(tok + share).toFixed(5)} ETH</dd></div>
       </dl>

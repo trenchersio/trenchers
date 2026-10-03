@@ -1,43 +1,49 @@
 import { TextButton } from "@/components/TextButton";
 import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
-import { ROUTES, STARTER_ETH } from "@/lib/constants";
+import { LIST_PRICE_ETH, ROUTES, STARTER_ETH } from "@/lib/constants";
 
-/** Landing section: the two income streams that make every agent self-funding. */
+/** Landing section: after registering and claiming the starter balance, the holder picks option A or B. */
 export function SelfFunding() {
   return (
     <div className="sf">
+      <ol className="sf-path" aria-label="Before you choose">
+        <li><span className="mono">Buy</span><b>{LIST_PRICE_ETH} ETH</b></li>
+        <li><span className="mono">Register</span><b>Wallet + identity</b></li>
+        <li><span className="mono">Claim</span><b>+{STARTER_ETH} ETH to the agent</b></li>
+        <li className="sf-path-choose"><span className="mono">Then choose</span><b>A or B</b></li>
+      </ol>
+
       <div className="sf-pillars">
-        <article className="sf-card">
-          <span className="mono sf-kicker">Income 01 · Agent coins</span>
-          <h3>Your agent launches its own coin</h3>
-          <p>Optional, from the NFT / Agent Profile: the agent launches a coin on Pons with its {STARTER_ETH} ETH starter balance, as the coin&apos;s creator. Pick the image, name, symbol, website and socials. <b>Every creator trading fee goes to the agent.</b></p>
+        <article className="sf-card sf-a">
+          <div className="sf-opt"><span className="sf-letter">A</span><span className="mono sf-kicker">Option A · Agent coin</span></div>
+          <h3>Let the agent launch its own coin</h3>
+          <p>The agent launches a coin on Pons from its wallet, paid with the starter balance. You pick the image, name, symbol, website and socials. <b>Every creator trading fee goes to the agent</b>, on top of its trading profits and its {AGENT_FEE_SHARE_PCT}% $TRENCHERS fee share.</p>
           <div className="sf-coin" aria-hidden="true">
             <img src="nft/3.webp" alt="" width={48} height={48} />
-            <div><span className="mono sf-sym">$LASERAI</span><span className="sf-by">by Trencher #3</span></div>
-            <span className="mono sf-fee">+0.0042 ETH<small>fees to agent</small></span>
+            <div><span className="mono sf-sym">$LASERAI</span><span className="sf-by">launched by Trencher #3</span></div>
+            <span className="mono sf-fee">+0.0042 ETH<small>coin fees to agent</small></span>
           </div>
+          <ul className="sf-streams mono">
+            <li><i className="fw-agent" />Coin creator fees</li>
+            <li><i className="fw-buy" />{AGENT_FEE_SHARE_PCT}% $TRENCHERS fee share</li>
+            <li><i className="fw-floor" />Trading profits</li>
+          </ul>
         </article>
-        <article className="sf-card">
-          <span className="mono sf-kicker">Income 02 · $TRENCHERS fees</span>
-          <h3>{AGENT_FEE_SHARE_PCT}% of all $TRENCHERS fees, to every agent</h3>
-          <p>Every registered agent with a wallet automatically receives a share of {AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees. <b>No claiming, no staking:</b> it is paid straight into the agent wallet.</p>
+        <article className="sf-card sf-b">
+          <div className="sf-opt"><span className="sf-letter">B</span><span className="mono sf-kicker">Option B · Self-funded</span></div>
+          <h3>Let it fund itself from fees and profits</h3>
+          <p>No coin needed. The agent trades with its starter balance, then keeps itself going on <b>its share of the {AGENT_FEE_SHARE_PCT}% of all $TRENCHERS fees</b> it is entitled to, plus its own trading profits. Paid straight into its wallet; nothing to claim or stake.</p>
           <div className="sf-split" aria-hidden="true">
             <div className="sf-split-bar"><span style={{ width: `${AGENT_FEE_SHARE_PCT}%` }} /></div>
-            <div className="sf-split-legend mono"><span><i className="fw-agent" />{AGENT_FEE_SHARE_PCT}% to registered agents</span><span><i className="fw-prize" />rest to prizes and floor sweeps</span></div>
+            <div className="sf-split-legend mono"><span><i className="fw-agent" />{AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees to registered agents</span><span><i className="fw-prize" />rest to prizes and floor sweeps</span></div>
           </div>
+          <ul className="sf-streams mono">
+            <li><i className="fw-buy" />{AGENT_FEE_SHARE_PCT}% $TRENCHERS fee share</li>
+            <li><i className="fw-floor" />Trading profits</li>
+          </ul>
         </article>
       </div>
-
-      <div className="sf-equation" aria-label="Trading capital equals your deposit plus agent coin fees plus the $TRENCHERS fee share">
-        <div><span className="mono">{STARTER_ETH} ETH starter</span></div>
-        <b>+</b>
-        <div><span className="mono">Agent coin fees</span></div>
-        <b>+</b>
-        <div><span className="mono">{AGENT_FEE_SHARE_PCT}% $TRENCHERS fees</span></div>
-        <b>=</b>
-        <div className="sf-eq-out"><span className="mono">Trading capital that refills itself</span></div>
-      </div>
-      <p className="note">Fund it a little and let it pay its own way, or keep topping it up yourself. Fee income is paid into the agent wallet like a deposit, so it funds trading but never inflates an agent&apos;s Arena return. Agents never trade their own coin.</p>
+      <p className="note">You choose, and you can change your mind: a self-funded agent can still launch a coin later. Either way you can top it up yourself whenever you like. Fee income is paid in like a deposit, so it funds trading but never inflates an agent&apos;s Arena return, and agents never trade their own coin.</p>
       <div className="section-actions"><TextButton href={ROUTES.agents}>Open your NFT / Agent Profile</TextButton></div>
     </div>
   );

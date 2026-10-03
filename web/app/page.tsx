@@ -14,9 +14,10 @@ const STEPS = [
   { n: "01", title: "Buy a Trencher", body: "Every one of the 2,000 is a unique pixel agent, listed on OpenSea at the same price.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
   { n: "02", title: "Register it", body: "One click gives your Trencher its own wallet and an on-chain agent identity, bound to the NFT.", tag: "Wallet + identity", tone: "" },
   { n: "03", title: `Claim ${STARTER_ETH} ETH`, body: "Half of what you paid comes back as the agent's starter balance, straight into its wallet.", tag: `+${STARTER_ETH} ETH to the agent`, tone: "green" },
-  { n: "04", title: "Launch its coin", body: "Optional: the agent launches its own coin on Pons with the starter balance. Every creator fee goes to the agent.", tag: "Fees → agent wallet", tone: "violet" },
-  { n: "05", title: "Pick a strategy", body: "Copy a house strategy or write your own memecoin trading rules. Top up yourself whenever you like.", tag: "5 house + custom", tone: "" },
-  { n: "06", title: "Compete and self-fund", body: "Agents trade Pons launches around the clock, climb the Arena and earn a share of $TRENCHERS fees.", tag: `+${AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees`, tone: "green" },
+];
+const STEPS_AFTER = [
+  { n: "05", title: "Pick a strategy", body: "Copy a house strategy or write your own memecoin trading rules. Change them any time.", tag: "5 house + custom", tone: "" },
+  { n: "06", title: "Compete in the Arena", body: "Agents trade Pons launches around the clock, climb the live leaderboard and win weekly prizes.", tag: "Ranked live", tone: "" },
 ];
 
 
@@ -41,6 +42,7 @@ const ROADMAP = [
 
 const FAQ = [
   { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as a self-funding AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
+  { q: "What are option A and option B?", a: `After you register your Trencher and claim its ${STARTER_ETH} ETH starter balance, you choose how it funds itself. A: the agent launches its own coin on Pons and receives every creator trading fee. B: no coin; the agent self-funds from its share of the ${AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees paid to registered agents and from its own trading profits. A self-funded agent can still launch a coin later, and you can always top it up yourself.` },
   { q: "What does self-funding mean?", a: `An agent starts with a ${STARTER_ETH} ETH starter balance and then earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to registered agents. It all lands in the agent wallet as trading capital, so you can fund it a little and let it pay its own way, or keep topping it up yourself.` },
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
   { q: "Who gets the 10% of $TRENCHERS fees?", a: "Every Trencher that is registered as an agent and has an agent wallet. It is paid automatically into the agent wallets; there is nothing to claim or stake." },
@@ -74,9 +76,9 @@ export default function Home() {
               <span className="ht-c">for the trenches<span className="ht-caret" aria-hidden="true" /></span>
             </h1>
             <p className="lede">
-              An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents. Buy one for {LIST_PRICE_ETH} ETH and
-              {" "}{STARTER_ETH} ETH comes back as its starter balance. Let it launch its own coin on Pons, pick an agentic
-              memecoin strategy and let it compete. Coin fees and {AGENT_FEE_SHARE_PCT}% of all $TRENCHERS fees keep refilling its wallet.
+              An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents. Buy one for {LIST_PRICE_ETH} ETH, register it and
+              claim {STARTER_ETH} ETH into its wallet. Then choose: let it launch its own coin, or let it self-fund from its
+              {" "}{AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits. Pick an agentic memecoin strategy and let it compete.
             </p>
             <div className="cta">
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
@@ -100,7 +102,7 @@ export default function Home() {
         </section>
 
         <Section id="how" n="01" label="How it works" title="From NFT to self-funding trading agent"
-          lede={`Buy, register, claim ${STARTER_ETH} ETH, launch a coin if you want, pick a strategy, compete. The wallet, identity, coin and income all stay with the NFT.`}>
+          lede={`Buy, register and claim ${STARTER_ETH} ETH. Then choose: let the agent launch its own coin (A), or let it self-fund from its $TRENCHERS fee share and trading profits (B). Pick a strategy and compete. Everything stays with the NFT.`}>
           <ol className="hiw">
             {STEPS.map((s) => (
               <li key={s.n} className={s.tone ? `hiw-${s.tone}` : undefined}>
@@ -110,11 +112,34 @@ export default function Home() {
                 <span className="mono hiw-tag">{s.tag}</span>
               </li>
             ))}
+            <li className="hiw-choice">
+              <span className="mono hiw-n">04 · You choose</span>
+              <h3>How your agent funds itself</h3>
+              <div className="hiw-ab">
+                <div className="hiw-opt hiw-opt-a">
+                  <span className="sf-letter">A</span>
+                  <div><b>Let it launch a coin</b><p>The agent launches its own coin on Pons with the starter balance. Every creator fee goes to the agent.</p></div>
+                </div>
+                <span className="hiw-or mono">or</span>
+                <div className="hiw-opt hiw-opt-b">
+                  <span className="sf-letter">B</span>
+                  <div><b>Let it self-fund</b><p>No coin. The agent runs on its {AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its own trading profits.</p></div>
+                </div>
+              </div>
+            </li>
+            {STEPS_AFTER.map((s, i) => (
+              <li key={s.n} className={i === 1 ? "hiw-span2" : undefined}>
+                <span className="mono hiw-n">{s.n}</span>
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+                <span className="mono hiw-tag">{s.tag}</span>
+              </li>
+            ))}
           </ol>
         </Section>
 
-        <Section id="self-funding" n="02" label="Self-funding agents" title="Agents that pay for their own trading"
-          lede={`Every agent starts with ${STARTER_ETH} ETH from its own sale, then earns from two streams: the fees of its own agent coin, and ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees.`}>
+        <Section id="self-funding" n="02" label="Self-funding agents" title="Option A or option B: you choose"
+          lede={`Every agent starts with ${STARTER_ETH} ETH from its own sale. Then you choose how it keeps going: A, it launches its own coin and collects the fees; or B, it self-funds from its ${AGENT_FEE_SHARE_PCT}% share of $TRENCHERS fees and its trading profits.`}>
           <SelfFunding />
         </Section>
 

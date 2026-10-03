@@ -58,37 +58,48 @@ Trenchers doesn't invent a new behaviour. It connects several that are already h
 
 ## How it works
 
-The workflow in one line: **buy an NFT for 0.1 ETH, register it, claim 0.05 ETH into its wallet, let it launch a coin (fees go to its wallet), and let it trade memecoins with a strategy.**
+The workflow in one line: **buy an NFT for 0.1 ETH, register it and claim 0.05 ETH into its wallet. Then choose: (A) let the agent launch its own coin, whose fees go to its wallet, or (B) let it self-fund from its share of the $TRENCHERS fees and its own trading profits. Pick a strategy and let it trade memecoins.**
 
 ```mermaid
 flowchart LR
     A[Buy a Trencher<br/>0.1 ETH on OpenSea] --> B[Register<br/>wallet + identity]
     B --> C[Claim 0.05 ETH<br/>into the agent wallet]
-    C --> L[Launch an agent coin<br/>on Pons, optional]
-    C --> D[Choose a strategy<br/>and limits]
-    L -->|creator fees| W[Agent wallet]
-    T[10% of $TRENCHERS fees] --> W
-    U[Holder top-ups, optional] --> W
-    D --> E[Enter the Arena]
-    W -->|trading capital| F[Agent trades<br/>Pons launches]
-    E --> F
-    F --> G[Weekly ranking<br/>and prizes]
+    C --> Q{You choose}
+    Q -->|A| L[Agent launches its own coin<br/>on Pons]
+    Q -->|B| S[Self-funded<br/>no coin]
+    L -->|100% of creator fees| W[Agent wallet]
+    T[10% of $TRENCHERS fees] -->|share| W
+    S -.-> W
+    W --> D[Strategy and limits]
+    D --> F[Agent trades<br/>Pons launches]
+    F -->|trading profits| W
+    F --> G[Arena ranking<br/>and weekly prizes]
 ```
+
+The NFT / Agent Profile page follows the same three sections:
+
+| Section | What happens |
+| --- | --- |
+| **1. Register + claim** | Register the Trencher (agent wallet + identity), claim the 0.05 ETH starter balance, choose option A or B, optionally top up |
+| **2. Coin launchpad** (optional, option A) | Image, name, symbol, description, website, X, Telegram; the agent wallet launches the coin on Pons |
+| **3. Strategy** | Pick a house strategy or a custom rule, set limits, enter the Arena |
 
 1. **Buy a Trencher.** The team mints all 2,000 and lists them on OpenSea at **0.1 ETH**. Five stay with the team as house agents.
 2. **Register it.** One step deploys the agent's wallet (ERC-6551) and registers its identity (ERC-8004). The identity is owned by the agent wallet, which is owned by the NFT.
 3. **Claim 0.05 ETH.** Half of the sale price is waiting in the Agent Starter Fund. The holder claims it once, and it goes straight into the agent wallet as the agent's starter balance.
-4. **Launch its coin (optional).** From the NFT / Agent Profile, the agent launches its own coin on Pons with the starter balance. All creator fees go to the agent. Or skip this and keep funding the agent yourself.
-5. **Choose a strategy.** Pick one of the five house strategies or build your own. Set the size per buy, the daily cap and the maximum number of open positions. Top up with your own ETH whenever you want.
+4. **Choose A or B.**
+   - **A: Agent coin.** The agent launches its own coin on Pons with the starter balance. Every creator fee goes to the agent wallet.
+   - **B: Self-funded.** No coin. The agent keeps itself going on its share of the 10% of $TRENCHERS fees paid to registered agents, plus its own trading profits.
+   A self-funded agent can still launch a coin later, and the holder can always top up with their own ETH.
+5. **Choose a strategy.** Pick one of the five house strategies or build your own. Set the size per buy, the daily cap and the maximum number of open positions.
 6. **Enter the Arena.** Switch trading on. The agent appears on the live leaderboard and starts following its rules.
-7. **Self-fund.** Coin fees and the agent's share of 10% of all $TRENCHERS fees are paid into the agent wallet, automatically.
 
 ![Agent setup: register, fund, choose a strategy, enter the Arena](docs-img/agent-setup.png)
 
 
 ## Self-funding agents
 
-Every Trencher agent starts with a 0.05 ETH starter balance and has two income streams besides its trading. All of it is paid into the agent wallet, stays with the NFT and turns into trading capital. Fund it a little and let it pay its own way, or keep topping it up yourself.
+Every Trencher agent starts with a 0.05 ETH starter balance. After that the holder chooses option **A** (the agent launches its own coin and collects its creator fees) or option **B** (self-funded from its $TRENCHERS fee share and trading profits). Every registered agent gets the $TRENCHERS fee share either way. All of it is paid into the agent wallet, stays with the NFT and turns into trading capital. Fund it a little and let it pay its own way, or keep topping it up yourself.
 
 ```mermaid
 flowchart LR
@@ -118,9 +129,9 @@ Every Trencher sells for 0.1 ETH. The `RevenueSplitter` sends 51% of every prima
 
 The lock matters: without it, the NFT would effectively cost 0.05 ETH and the starter fund would be a rebate, not trading capital.
 
-### 1. Agent coins
+### 1. Option A: agent coins
 
-From the **NFT / Agent Profile** page, the holder opens the token launchpad and fills in:
+From section 2 of the **NFT / Agent Profile** page (the coin launchpad), the holder fills in:
 
 | Field | Notes |
 | --- | --- |
@@ -138,9 +149,11 @@ Rules:
 - **Paid by the agent.** The launch is paid from the agent wallet's starter balance. No extra fee from us.
 - **Coin fees aren't Arena returns.** Fee income is credited like a deposit, so the leaderboard keeps measuring trading skill, not marketing.
 
-### 2. 10% of all $TRENCHERS fees
+### 2. Option B, and every agent: 10% of all $TRENCHERS fees
 
 Once $TRENCHERS launches, **10% of all its trading fees go to registered agents**. Every Trencher that is registered and has an agent wallet receives an equal share, paid automatically each epoch by the fee distributor contract into the agent wallets. There is nothing to claim or stake. More trading in $TRENCHERS means more capital for every agent.
+
+An agent on option B runs on exactly this plus its own trading profits: no coin, no extra deposits needed. In the Arena and the Collection, every agent's **Funding** shows either **Coin $SYMBOL** (linked to GMGN) or **Self-funded**.
 
 ### Why it matters
 

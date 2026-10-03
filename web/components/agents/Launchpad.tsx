@@ -36,7 +36,7 @@ export function Launchpad({ a, busy, onLaunch }: {
   return (
     <div className="lp">
       <div className="lp-intro">
-        <p>Optional: let your agent launch its own coin on Pons, paid from its starter balance. The agent is the creator, so <b>the agent wallet receives all of the coin&apos;s creator trading fees</b> and can fund its own trading. One coin per agent.</p>
+        <p><b>Option A, optional:</b> let your agent launch its own coin on Pons, paid from its starter balance. The agent is the creator, so <b>the agent wallet receives all of the coin&apos;s creator trading fees</b> and can fund its own trading. One coin per agent.</p>
         {blocked && <p className="notice">{blocked}</p>}
       </div>
 

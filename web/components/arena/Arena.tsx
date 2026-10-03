@@ -128,7 +128,7 @@ function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active:
         <span className="mono rank">{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
         <span className="who">
           <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
-          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}{a.token && <em className="coin">${a.token}</em>}</span>
+          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
         </span>
         <span className="col-strat">{a.strategy}</span>
         <span className="mono col-num">{a.nav.toFixed(3)}</span>
