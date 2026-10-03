@@ -1,59 +1,101 @@
-# Trenchers
+<p align="center">
+  <img src="docs/img/banner.png" alt="Trenchers: an on-chain AI trading agent ecosystem" width="100%">
+</p>
 
-2,000-piece NFT collection on Robinhood Chain (chain ID 4663) where every NFT can be registered as an on-chain trading agent.
+<p align="center">
+  <img src="docs/img/logo.png" alt="Trenchers" height="48">
+</p>
 
-## Layout
+<p align="center">
+  2,000 on-chain AI trading agents on Robinhood Chain.<br>
+  <a href="https://x.com/trenchersio">X / @trenchersio</a>
+</p>
+
+---
+
+Every Trencher is an NFT and an AI trading agent. Register it and it gets its own wallet and an on-chain identity, both bound to the NFT. Fund it with ETH, pick a strategy, and it trades new token launches on Pons around the clock, ranked live against every other agent in the Arena. Sell the NFT and the agent, its wallet and its track record go with it.
+
+<p align="center">
+  <img src="docs/img/trenchers-1-32.png" alt="Trenchers #1 to #32" width="720">
+</p>
+
+## How it works
+
+1. **Get a Trencher.** All 2,000 are minted by the team and listed on OpenSea at 0.01 ETH. Five stay with the team as house agents.
+2. **Register it.** One step creates the agent's wallet (ERC-6551, bound to the NFT) and its on-chain identity (ERC-8004).
+3. **Fund it and choose a strategy.** Sniper, Momentum, Graduation hunter, or custom limits. Spending caps live in the agent wallet itself.
+4. **Enter the Arena.** The agent trades, the leaderboard updates live, and the weekly top 10 share the prize pool.
+
+The trading engine can only swap inside an agent's wallet, within the holder's limits. It cannot withdraw. Only the NFT holder can.
+
+## The Arena
+
+<img src="docs/img/arena.png" alt="The Trading Arena: live leaderboard and agent detail" width="100%">
+
+## Your agents
+
+<img src="docs/img/agent-setup.png" alt="Agent setup: register, fund, choose a strategy, enter the Arena" width="100%">
+
+## The $TRENCHERS flywheel
+
+| Source | Where it goes |
+| --- | --- |
+| OpenSea sales | 50% $TRENCHERS buybacks, 40% development (half vested over 6 months), 10% prize pool |
+| Royalties (5%) | 100% $TRENCHERS buybacks |
+| $TRENCHERS trading fees | Weekly prizes and Trenchers floor sweeps |
+| House agents' profits | $TRENCHERS buybacks |
+
+All flows run through public contracts.
+
+## Repository
 
 | Path | What |
 | --- | --- |
-| `contracts/` | Hardhat project: `TrenchersNFT` (ERC721-C, ERC-2981 5%, 5 reserved, open public mint, no wallet limit), `RevenueSplitter` (mint 50/20/20 vested/10, royalties 100% buybacks), tests, deploy script |
-| `art/generate.py` | Deterministic generator for all 2,000 images (pixel blocks and circles, all unique) + metadata + provenance hash |
-| `art/brand.py` | Logo mark, wordmark lockup, avatar, OpenSea / X / Discord banners, OG image, palette |
-| `art/out/metadata/` | Token metadata (image URLs use the `ipfs://IMAGES_CID/` placeholder) |
-| `art/out/provenance.json` | Per-image SHA-256 and the collection provenance hash; publish before reveal |
+| `contracts/` | Hardhat project: `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents) and `RevenueSplitter` (primary sales 50 / 20 / 20 vested / 10, royalties 100% to buybacks), tests and deploy script |
+| `web/` | Next.js site: intro, landing page, the Arena and the agent setup page |
+| `art/` | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
+| `docs/img/` | Images used in this README |
 
-## Contracts
+### Contracts
 
 ```bash
 cd contracts && npm install
 npx hardhat test
-# deploy (Robinhood Chain testnet 46630 or mainnet 4663)
+# deploy to Robinhood Chain testnet (46630) or mainnet (4663)
 DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... \
 PREREVEAL_URI=ipfs://... CONTRACT_URI=ipfs://... \
 npx hardhat run scripts/deploy.js --network robinhoodTestnet
 ```
 
-The deploy script prints whether Limit Break's transfer validator, the ERC-6551 registry and Nick's CREATE2 factory exist on the target chain. If the validator is missing, the NFT deploys with no validator (transfers work, OpenSea royalties are not enforced) until one is set.
+The deploy script checks whether Limit Break's transfer validator and the ERC-6551 registry exist on the target chain. Without the validator, the NFT deploys with no transfer validator: transfers work, and OpenSea royalty enforcement can be switched on once a validator exists.
 
-Compilation uses solc-js 0.8.24 from npm (see `hardhat.config.js`).
-
-## Art
-
-```bash
-cd art && pip install pillow fonttools brotli && npm install
-python3 generate.py            # ~3 min, writes out/images, out/metadata, out/provenance.json
-python3 brand.py               # writes brand/
-python3 sheet.py out/images 1 64 sheet.png
-```
-
-Token IDs 1-5 are the dev agents (gold "Founder" palette, `Role: Dev Agent`).
-
-## Web (site: intro, landing, mint)
+### Website
 
 ```bash
 cd web && npm install
-cp .env.example .env.local     # set NEXT_PUBLIC_CHAIN, NEXT_PUBLIC_NFT_ADDRESS, NEXT_PUBLIC_WC_PROJECT_ID
+cp .env.example .env.local
 npm run dev
 ```
 
-- Intro screen shows once per browser session (`components/Intro.tsx`, `components/PixelMosaic.tsx`).
-- Social links: `NEXT_PUBLIC_X_URL`, `NEXT_PUBLIC_DISCORD_URL`, `NEXT_PUBLIC_TELEGRAM_URL` (empty = hidden).
-- `NEXT_PUBLIC_MINT_LIVE=true` swaps "Mint coming soon" for the live mint panel.
-- Railway: create a service with root directory `web/`; `railway.json` sets build and start. Set the `NEXT_PUBLIC_*` variables before the first build (they are baked in at build time).
-- Chain definitions come from viem (`robinhood` 4663, `robinhoodTestnet` 46630).
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_CHAIN` | `robinhood` or `robinhoodTestnet` |
+| `NEXT_PUBLIC_NFT_ADDRESS` | Trenchers contract; empty runs the site in sample mode |
+| `NEXT_PUBLIC_OPENSEA_URL` | Collection page; empty shows "OpenSea listing soon" |
+| `NEXT_PUBLIC_X_URL`, `NEXT_PUBLIC_DISCORD_URL`, `NEXT_PUBLIC_TELEGRAM_URL` | Social links; empty hides them |
 
-## Not done yet (needs you)
+The Arena and agent pages run on sample data until the contracts and indexer are live.
 
-- Testnet and mainnet deploys: need a funded deployer key, the Safe address and the dev Safe address. The Robinhood Chain RPCs were not reachable from the build environment, so the on-chain preflight (Limit Break validator, ERC-6551 registry) has not run against the real chain yet.
-- IPFS upload of `art/out/images` and `art/out/metadata`, then `setBaseURI` at reveal. Publish the provenance hash before the mint opens.
-- OpenSea creator-earnings enforcement: set in OpenSea Studio after deploy (requires the Limit Break validator on chain 4663).
+### Art
+
+```bash
+cd art && pip install pillow fonttools brotli && npm install
+python3 generate.py     # writes out/images, out/metadata, out/provenance.json
+python3 brand.py        # writes brand/
+```
+
+Token IDs 1 to 5 are the house agents (gold "Founder" palette).
+
+## Risk
+
+Nothing here is financial advice. Trading newly launched tokens is extremely risky, and an agent can lose all the ETH deposited in it.

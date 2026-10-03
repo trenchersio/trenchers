@@ -12,7 +12,7 @@ export const LIST_PRICE_ETH = "0.01";
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
-  x: process.env.NEXT_PUBLIC_X_URL || "",
+  x: process.env.NEXT_PUBLIC_X_URL || "https://x.com/trenchersio",
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "",
   telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "",
 };
@@ -22,4 +22,7 @@ const PREVIEW = process.env.NEXT_PUBLIC_PREVIEW === "1";
 export const ROUTES = {
   home: PREVIEW ? "site.html" : "/",
   arena: PREVIEW ? "arena.html" : "/arena",
+  agents: PREVIEW ? "agents.html" : "/agents",
 };
+/** True until the NFT contract is deployed: ownership and transactions are simulated. */
+export const SAMPLE_MODE = NFT_ADDRESS === "0x0000000000000000000000000000000000000000";

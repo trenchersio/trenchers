@@ -1,4 +1,5 @@
 import { SiteShell } from "@/components/SiteShell";
+import { SiteHeader } from "@/components/SiteHeader";
 import { ArtCycler } from "@/components/ArtCycler";
 import { Socials } from "@/components/Socials";
 import { TextButton } from "@/components/TextButton";
@@ -50,17 +51,7 @@ export default function Home() {
   const strip = (ids as number[]).filter((i) => i > 5);
   return (
     <SiteShell>
-      <header className="bar">
-        <a href="#top" aria-label="Trenchers home"><img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" /></a>
-        <nav>
-          <a href={ROUTES.arena} className="nav-arena">Arena</a>
-          <a href="#how">How it works</a>
-          <a href="#flywheel">Flywheel</a>
-          <a href="#roadmap">Roadmap</a>
-          <a href="#faq">FAQ</a>
-          <Socials links={SOCIALS} />
-        </nav>
-      </header>
+      <SiteHeader page="home" />
 
       <main id="top">
         <section className="hero">

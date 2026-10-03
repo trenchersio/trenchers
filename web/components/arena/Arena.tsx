@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createSim, step, pct, ago, type Agent, type Sim } from "@/lib/arena-sim";
 import { LineChart } from "./LineChart";
+import { useWallet } from "@/lib/wallet";
+import { liveAgentIds } from "@/lib/agents-store";
 
 const ROW_H = 52;
 
@@ -34,6 +36,14 @@ const signed = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`;
 export function Arena() {
   const sim = useSim();
   const [selected, setSelected] = useState<number | null>(null);
+  const { address } = useWallet();
+  const [mine, setMine] = useState<number[]>([]);
+  useEffect(() => {
+    const load = () => setMine(liveAgentIds(address));
+    load();
+    window.addEventListener("trenchers-agents-changed", load);
+    return () => window.removeEventListener("trenchers-agents-changed", load);
+  }, [address]);
   const detailRef = useRef<HTMLElement>(null);
 
   const leaderId = sim?.agents.find((a) => a.rank === 0)?.id ?? null;
@@ -58,8 +68,8 @@ export function Arena() {
         <div className="stat stat-main">
           <span className="stat-label">Total value of all agents</span>
           <span className="stat-value mono">{total.toFixed(2)} <small>ETH</small></span>
-          <span className={`mono ${total >= total0 ? "up" : "down"}`}>{signed(((total - total0) / total0) * 100, 2)} last 4 min</span>
-          <LineChart data={sim.totalHistory} height={56} compact />
+          <span className={`mono stat-delta ${total >= total0 ? "up" : "down"}`}>{signed(((total - total0) / total0) * 100, 2)} last 4 min</span>
+          <LineChart data={sim.totalHistory} height={64} compact />
         </div>
         <div className="stat"><span className="stat-label">Active agents</span><span className="stat-value mono">{sim.agents.length}</span><span className="stat-sub">of 2,000</span></div>
         <div className="stat"><span className="stat-label">Trades today</span><span className="stat-value mono">{sim.tradesToday.toLocaleString()}</span><span className="stat-sub">across all agents</span></div>
@@ -75,14 +85,15 @@ export function Arena() {
         <section className="board" aria-label="Leaderboard">
           <div className="board-head">
             <h1>Leaderboard</h1>
-            <span className="sample mono">Sample data</span>
+            <span className="board-meta">{sim.agents.length} agents · ranked by epoch return</span>
+            <span className="sample">Sample data</span>
           </div>
           <div className="board-cols mono" aria-hidden="true">
             <span>#</span><span>Agent</span><span className="col-strat">Strategy</span><span className="col-num">Value ETH</span><span className="col-num">Epoch</span><span className="col-last">Last trade</span>
           </div>
           <div className="board-scroll">
             <ol className="board-rows" style={{ height: sim.agents.length * ROW_H }}>
-              {sim.agents.map((a) => <Row key={a.id} a={a} now={now} active={a.id === sel?.id} onClick={() => choose(a.id)} />)}
+              {sim.agents.map((a) => <Row key={a.id} a={a} now={now} mine={mine.includes(a.id)} active={a.id === sel?.id} onClick={() => choose(a.id)} />)}
             </ol>
           </div>
         </section>
@@ -95,21 +106,21 @@ export function Arena() {
   );
 }
 
-function Row({ a, now, active, onClick }: { a: Agent; now: number; active: boolean; onClick: () => void }) {
+function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active: boolean; mine: boolean; onClick: () => void }) {
   const r = pct(a);
   const moved = a.prevRank - a.rank;
   const fresh = now - a.lastTradeAt < 1400;
   const last = a.trades[0];
   return (
     <li
-      className={`row${active ? " active" : ""}${fresh ? (a.lastSide === "BUY" ? " flash-buy" : " flash-sell") : ""}`}
+      className={`row${active ? " active" : ""}${moved > 0 ? " rising" : ""}${fresh ? (a.lastSide === "BUY" ? " flash-buy" : " flash-sell") : ""}`}
       style={{ transform: `translateY(${a.rank * ROW_H}px)` }}
     >
       <button type="button" onClick={onClick} aria-label={`Trencher #${a.id}, rank ${a.rank + 1}, ${signed(r)}`}>
         <span className="mono rank">{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
         <span className="who">
           <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
-          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}</span>
+          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
         </span>
         <span className="col-strat">{a.strategy}</span>
         <span className="mono col-num">{a.nav.toFixed(3)}</span>
