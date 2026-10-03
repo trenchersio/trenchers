@@ -4,7 +4,7 @@ import { ConnectModal } from "./ConnectModal";
 import { ROUTES, SOCIALS } from "@/lib/constants";
 
 /** Shared top bar. `page` marks the current page; the home page also shows its section links. */
-export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "agents"; wide?: boolean }) {
+export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "agents" | "docs"; wide?: boolean }) {
   return (
     <>
       <header className={`bar${wide ? " bar-wide" : ""}`}>
@@ -19,6 +19,7 @@ export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "a
             <a href="#flywheel" className="tbtn nav-sec">Flywheel</a>
             <a href="#faq" className="tbtn nav-sec">FAQ</a>
           </>}
+          <a href={ROUTES.docs} className={`tbtn nav-docs${page === "docs" ? " tbtn-on" : ""}`} aria-current={page === "docs" ? "page" : undefined}>Docs</a>
           <Socials links={SOCIALS} />
           <WalletMenu />
         </nav>

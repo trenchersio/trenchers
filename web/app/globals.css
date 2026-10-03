@@ -411,3 +411,52 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .custom-summary { margin: 0 !important; border-top: 1px solid var(--line); padding-top: 14px; color: var(--fog) !important; font-size: 14px !important; }
 .custom-summary .mono { display: block; color: var(--green); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
 .field input::placeholder, .custom textarea::placeholder { color: #4E5753; }
+
+/* ---------------------------------------------------------------- docs */
+.docs-main { max-width: 1240px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 64px; padding-top: 24px; padding-bottom: 96px; }
+.docs-side { position: sticky; top: 88px; align-self: start; max-height: calc(100dvh - 112px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.docs-side-label { margin: 0; color: var(--quiet); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.docs-side nav { display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+.docs-toc { display: flex; gap: 12px; padding: 7px 0 7px 16px; margin-left: -1px; border-left: 1px solid transparent; color: var(--quiet); text-decoration: none; font-size: 14px; line-height: 1.35; }
+.docs-toc .mono { color: var(--line); font-size: 11px; padding-top: 2px; }
+.docs-toc:hover { color: var(--fog); border-left-color: var(--green); }
+.docs-toc:hover .mono { color: var(--green); }
+.docs-side-links { display: flex; gap: 16px; }
+
+.docs { min-width: 0; max-width: 820px; font-size: 16px; line-height: 1.7; color: #C9D0CC; }
+.docs h1 { font-size: 48px; line-height: 1.05; margin: 0 0 16px; color: var(--fog); letter-spacing: -.02em; }
+.docs-lede { font-size: 18px; color: var(--quiet); margin: 0 0 24px; }
+.docs h2 { max-width: none; font-size: 28px; line-height: 1.2; color: var(--fog); margin: 72px 0 20px; padding-top: 32px; border-top: 1px solid var(--line); scroll-margin-top: 80px; letter-spacing: -.01em; }
+.docs-lede + h2 { margin-top: 40px; }
+.docs h3 { font-size: 19px; color: var(--fog); margin: 40px 0 12px; scroll-margin-top: 80px; }
+.docs h4 { font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--green); margin: 32px 0 8px; }
+.docs p { margin: 0 0 16px; }
+.docs strong { color: var(--fog); }
+.docs a { color: var(--green); text-decoration: none; border-bottom: 1px solid rgba(57,255,136,.3); }
+.docs a:hover { border-bottom-color: var(--green); }
+.docs ul, .docs ol { margin: 0 0 16px; padding-left: 22px; }
+.docs li { margin: 4px 0; }
+.docs li::marker { color: var(--green); }
+.docs blockquote { margin: 24px 0; padding: 16px 20px; border-left: 2px solid var(--green); background: var(--panel); border-radius: 0 6px 6px 0; color: var(--fog); }
+.docs blockquote p:last-child { margin: 0; }
+.docs img { display: block; max-width: 100%; height: auto; margin: 28px 0; border: 1px solid var(--line); border-radius: 8px; }
+.docs code { font: 13px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; color: var(--fog); }
+.docs pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; overflow-x: auto; margin: 0 0 20px; line-height: 1.55; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.docs pre code { background: none; border: 0; padding: 0; font-size: 13px; }
+.docs hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+.docs-table { overflow-x: auto; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 8px; }
+.docs table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+.docs th { text-align: left; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--quiet); background: var(--panel); }
+.docs th, .docs td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.docs tr:last-child td { border-bottom: 0; }
+.docs td code { white-space: nowrap; }
+.docs-diagram { margin: 24px 0 28px; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; text-align: center; }
+.docs-diagram svg { max-width: 100%; height: auto; }
+.docs-diagram-src { text-align: left; color: var(--quiet); }
+
+@media (max-width: 900px) {
+  .docs-main { grid-template-columns: 1fr; gap: 24px; }
+  .docs-side { display: none; }
+  .docs h1 { font-size: 36px; }
+  .docs h2 { font-size: 24px; margin-top: 56px; }
+}

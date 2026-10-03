@@ -24,6 +24,7 @@ export const ROUTES = {
   home: PREVIEW ? "site.html" : "/",
   arena: PREVIEW ? "arena.html" : "/arena",
   agents: PREVIEW ? "agents.html" : "/agents",
+  docs: PREVIEW ? "docs.html" : "/docs",
 };
 /** True until the NFT contract is deployed: ownership and transactions are simulated. */
 export const SAMPLE_MODE = NFT_ADDRESS === "0x0000000000000000000000000000000000000000";

@@ -169,6 +169,7 @@ export default function Home() {
           <span className="foot-name">Trenchers</span>
           <nav className="foot-links">
             <a className="tbtn" href={ROUTES.arena}>Arena</a>
+            <a className="tbtn" href={ROUTES.docs}>Docs</a>
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
           </nav>
         </div>
