@@ -7,3 +7,4 @@ art/preview/
 .env
 *.log
 .next/
+web/out/

@@ -24,7 +24,7 @@ export function PixelMosaic({ dim = 0.25, exiting = false }: { dim?: number; exi
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const images: HTMLImageElement[] = (ids as number[]).map((id) => {
       const im = new Image();
-      im.src = `/nft/${id}.webp`;
+      im.src = `nft/${id}.webp`;
       return im;
     });
 

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
+const preview = process.env.PREVIEW_EXPORT === "1";
 export default {
   reactStrictMode: true,
+  // PREVIEW_EXPORT=1 builds a static copy with relative paths, for a shareable preview link.
+  ...(preview ? { output: "export", assetPrefix: ".", images: { unoptimized: true } } : {}),
   webpack: (config) => {
     // Optional dependencies of wallet connectors that this site never uses.
     config.externals.push("pino-pretty", "lokijs", "encoding");

@@ -13,7 +13,7 @@ export function ArtCycler({ every = 3200 }: { every?: number }) {
     const CELLS = 28, S = 560;
     canvas.width = S; canvas.height = S;
     ctx.imageSmoothingEnabled = false;
-    const load = (id: number) => { const im = new Image(); im.src = `/nft/${id}.webp`; return im; };
+    const load = (id: number) => { const im = new Image(); im.src = `nft/${id}.webp`; return im; };
     let idx = Math.floor(Math.random() * list.length);
     let cur = load(list[idx]), prev: HTMLImageElement | null = null;
     let order = Array.from({ length: CELLS * CELLS }, (_, i) => i), start = performance.now(), raf = 0, last = start;

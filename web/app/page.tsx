@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { SiteShell } from "@/components/SiteShell";
 import { ArtCycler } from "@/components/ArtCycler";
 import { MintPanel } from "@/components/MintPanel";
@@ -47,7 +46,7 @@ export default function Home() {
   return (
     <SiteShell>
       <header className="bar">
-        <a href="#top" aria-label="Trenchers home"><Image src="/brand/lockup.svg" alt="Trenchers" width={200} height={22} priority className="lockup" /></a>
+        <a href="#top" aria-label="Trenchers home"><img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" /></a>
         <nav>
           <a href="#how">How it works</a>
           <a href="#flywheel">Flywheel</a>
@@ -83,7 +82,7 @@ export default function Home() {
         <section className="ticker" aria-hidden="true">
           <div className="ticker-track">
             {[...strip, ...strip].map((id, k) => (
-              <Image key={k} src={`/nft/${id}.webp`} alt="" width={120} height={120} />
+              <img key={k} src={`nft/${id}.webp`} alt="" width={120} height={120} loading="lazy" />
             ))}
           </div>
         </section>
@@ -170,7 +169,7 @@ export default function Home() {
       </main>
 
       <footer className="foot">
-        <Image src="/brand/mark.svg" alt="" width={28} height={28} />
+        <img src="brand/mark.svg" alt="" width={28} height={28} />
         <span>Trenchers</span>
         <Socials links={SOCIALS} />
         <p>Nothing on this site is financial advice. Trading new tokens can lose all deposited funds.</p>
