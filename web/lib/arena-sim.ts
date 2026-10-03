@@ -1,23 +1,31 @@
 /**
- * Sample-data engine for the Trading Arena. Everything here is simulated: fake Pons tokens with
- * random-walk prices, and registered agents that trade them by strategy. It is replaced by the
- * real indexer API once agents go live.
+ * Sample-data engine for the Trading Arena. Everything here is simulated: fake Pons tokens and
+ * registered agents trading them. One tick is one second. The market emits the same signals the
+ * live indexer will (launches, graduations, $50k volume crosses, dev sells, DexScreener updates)
+ * and each agent reacts according to its strategy (lib/strategies.ts), selling on its timer.
+ * It is replaced by the real indexer API once agents go live.
  */
 import ids from "./nft-ids.json";
+import { STRATEGIES, VOLUME_THRESHOLD_USD, strategyByName, type StrategyEvent, type StrategyName } from "./strategies";
 
-export type StrategyName = "Sniper" | "Momentum" | "Graduation hunter" | "Custom";
-export type Token = { sym: string; price: number; born: number; grad: number; supply: number; dead: boolean };
-export type Trade = { t: number; side: "BUY" | "SELL"; sym: string; eth: number; price: number; pnlPct?: number };
-export type Position = { sym: string; qty: number; entry: number; cost: number };
+export type { StrategyName };
+export type Token = {
+  sym: string; price: number; born: number; grad: number; graduated: boolean; supply: number; dead: boolean;
+  volumeUsd: number; crossed: boolean; drift: number;
+};
+export type Trade = { t: number; side: "BUY" | "SELL"; sym: string; eth: number; price: number; pnlPct?: number; why?: string };
+export type Position = { sym: string; qty: number; entry: number; cost: number; opened: number };
 export type Agent = {
   id: number; house: boolean; owner: string; wallet: string; strategy: StrategyName; params: string[];
   deposited: number; cash: number; positions: Map<string, Position>; trades: Trade[];
   nav: number; epochStart: number; history: number[]; wins: number; closed: number;
   rank: number; prevRank: number; lastTradeAt: number; lastSide: "BUY" | "SELL" | null;
 };
+export type MarketEvent = { t: number; kind: Exclude<StrategyEvent, "custom">; sym: string };
 export type Sim = {
   now: number; tick: number; agents: Agent[]; tokens: Map<string, Token>; launches: string[];
   totalHistory: number[]; tradesToday: number; prizePool: number; feed: (Trade & { agent: number })[];
+  events: MarketEvent[];
 };
 
 // Small seeded PRNG so the starting board is the same on every visit; live ticks then diverge.
@@ -40,14 +48,12 @@ function newSymbol(existing: Map<string, Token>) {
   for (;;) { const s = pick(A) + pick(B); if (!existing.has(s) && s.length <= 10) return s; }
 }
 
-const STRATS: Record<StrategyName, { params: string[]; size: [number, number]; vol: number; tp: number; sl: number }> = {
-  "Sniper": { params: ["every new launch", "0.001 ETH per buy", "max 20 buys / hour", "sell at 3x or -50%"], size: [0.001, 0.003], vol: 1.4, tp: 2.0, sl: -0.5 },
-  "Momentum": { params: ["market cap > 5 ETH", "liquidity > 2 ETH", "0.01 ETH per buy", "take profit 2x"], size: [0.01, 0.03], vol: 1.0, tp: 1.0, sl: -0.35 },
-  "Graduation hunter": { params: ["graduation > 70%", "0.02 ETH per buy", "sell on graduation", "trailing stop 25%"], size: [0.02, 0.05], vol: 0.8, tp: 0.6, sl: -0.25 },
-  "Custom": { params: ["natural-language rules", "0.005 ETH per buy", "daily cap 0.25 ETH"], size: [0.005, 0.015], vol: 1.2, tp: 1.5, sl: -0.4 },
+const LIQ = 0.97;          // holdings valued at what a sale would fetch, not the mid price
+const ETH_USD = 3000;      // sample conversion for the volume threshold
+const YOUNG = 30 * 60;     // "new" token: launched in the last 30 minutes
+const WHY: Record<MarketEvent["kind"], string> = {
+  launch: "new launch", graduation: "graduated", volume: "crossed $50k volume", devsell: "dev sold", dexupdate: "DexScreener update",
 };
-
-const LIQ = 0.97; // holdings valued at what a sale would fetch, not the mid price
 
 function navOf(a: Agent, tokens: Map<string, Token>) {
   let v = a.cash;
@@ -55,70 +61,117 @@ function navOf(a: Agent, tokens: Map<string, Token>) {
   return v;
 }
 
+let pending: MarketEvent[] = []; // signals raised during the current tick
+function emit(sim: Sim, kind: MarketEvent["kind"], sym: string) {
+  const e = { t: sim.now, kind, sym };
+  pending.push(e);
+  sim.events.unshift(e);
+  if (sim.events.length > 40) sim.events.pop();
+}
+
 function launch(sim: Sim) {
   const sym = newSymbol(sim.tokens);
-  sim.tokens.set(sym, { sym, price: 1e-9 * (0.5 + rnd()), born: sim.tick, grad: rnd() * 0.2, supply: 1e9, dead: false });
+  sim.tokens.set(sym, {
+    sym, price: 1e-9 * (0.5 + rnd()), born: sim.tick, grad: rnd() * 0.25, graduated: false, supply: 1e9, dead: false,
+    volumeUsd: 0, crossed: false, drift: 0.01 + rnd() * 0.03, // fresh launches catch an early bid
+  });
   sim.launches.unshift(sym);
   if (sim.launches.length > 12) sim.launches.pop();
+  emit(sim, "launch", sym);
 }
 
 function moveMarket(sim: Sim) {
-  sim.tokens.forEach((t) => {
-    if (t.dead) return;
+  const live = [...sim.tokens.values()].filter((t) => !t.dead);
+  for (const t of live) {
     const age = sim.tick - t.born;
-    const vol = age < 20 ? 0.09 : 0.04;
-    const pump = rnd() < 0.006 ? 1.6 + rnd() : 1;     // occasional pumps
-    const rug = rnd() < 0.002 ? 0.08 : 1;             // and rugs
-    t.price *= Math.exp(gauss() * vol - 0.0035) * pump * rug;  // most launches bleed out
-    t.grad = Math.min(1, Math.max(0, t.grad + gauss() * 0.02 + 0.004));
-    if (rug < 1 && rnd() < 0.5) t.dead = true;
-  });
+    const vol = age < 30 ? 0.07 : 0.03;
+    const rug = rnd() < 0.0015 ? 0.1 : 1;
+    t.price *= Math.exp(gauss() * vol + t.drift - 0.0025) * rug;   // most launches bleed out slowly
+    t.drift *= 0.88;                                               // event impulses fade
+    if (rug < 1) t.dead = true;
+    // activity: younger and moving tokens trade more
+    t.volumeUsd += Math.abs(gauss()) * (age < 600 ? 900 : 180) * (1 + Math.abs(t.drift) * 40);
+    if (!t.crossed && t.volumeUsd >= VOLUME_THRESHOLD_USD) {
+      t.crossed = true;
+      if (age < YOUNG) { t.drift += 0.012; emit(sim, "volume", t.sym); }
+    }
+    if (!t.graduated) {
+      t.grad = Math.min(1, Math.max(0, t.grad + gauss() * 0.012 + 0.0035));
+      if (t.grad >= 1) { t.graduated = true; t.drift += 0.02; emit(sim, "graduation", t.sym); }
+    }
+  }
+  // dev sells: price drops hard, then partly bounces
+  if (live.length && rnd() < 0.05) {
+    const young = live.filter((t) => sim.tick - t.born < YOUNG);
+    const t = young.length ? pick(young) : pick(live);
+    t.price *= 0.7 + rnd() * 0.15; t.drift += 0.018 + rnd() * 0.012;
+    emit(sim, "devsell", t.sym);
+  }
+  // DexScreener page updates: attention, usually a short pop
+  if (live.length && rnd() < 0.045) {
+    const t = pick(live);
+    t.drift += (rnd() < 0.7 ? 1 : -0.5) * (0.01 + rnd() * 0.02);
+    emit(sim, "dexupdate", t.sym);
+  }
   // retire old tokens so the market stays a manageable size
-  if (sim.tokens.size > 90) {
+  if (sim.tokens.size > 120) {
     const held = new Set<string>();
     sim.agents.forEach((a) => a.positions.forEach((_, k) => held.add(k)));
     const old = [...sim.tokens.values()].filter((t) => !held.has(t.sym)).sort((x, y) => x.born - y.born);
-    for (const t of old.slice(0, sim.tokens.size - 90)) sim.tokens.delete(t.sym);
+    for (const t of old.slice(0, sim.tokens.size - 120)) sim.tokens.delete(t.sym);
   }
 }
 
-function chooseToken(sim: Sim, s: StrategyName): Token | null {
-  const live = [...sim.tokens.values()].filter((t) => !t.dead);
-  if (!live.length) return null;
-  if (s === "Sniper") return sim.tokens.get(sim.launches[Math.floor(rnd() * Math.min(3, sim.launches.length))]) ?? null;
-  if (s === "Momentum") { const top = live.sort((a, b) => b.price - a.price).slice(0, 8); return pick(top); }
-  if (s === "Graduation hunter") { const near = live.filter((t) => t.grad > 0.7); return near.length ? pick(near) : null; }
-  return pick(live);
+function sell(sim: Sim, a: Agent, p: Position, why: string) {
+  const t = sim.tokens.get(p.sym);
+  const price = t && !t.dead ? t.price : 0;
+  const eth = p.qty * price * LIQ;
+  const pnl = p.cost ? (eth - p.cost) / p.cost : -1;
+  a.cash += eth; a.positions.delete(p.sym); a.closed++; if (pnl > 0) a.wins++;
+  record(sim, a, { t: sim.now, side: "SELL", sym: p.sym, eth, price, pnlPct: pnl * 100, why });
 }
 
-function act(sim: Sim, a: Agent) {
-  const cfg = STRATS[a.strategy];
-  // exits first
-  for (const p of a.positions.values()) {
-    const t = sim.tokens.get(p.sym);
-    const price = t && !t.dead ? t.price : 0;
-    const pnl = p.cost ? (p.qty * price * LIQ - p.cost) / p.cost : -1;
-    if (pnl >= cfg.tp || pnl <= cfg.sl || (t && t.grad >= 1 && a.strategy === "Graduation hunter") || rnd() < 0.08) {
-      const eth = p.qty * price * LIQ;
-      a.cash += eth; a.positions.delete(p.sym); a.closed++; if (pnl > 0) a.wins++;
-      record(sim, a, { t: sim.now, side: "SELL", sym: p.sym, eth, price, pnlPct: pnl * 100 });
-      return;
+function buy(sim: Sim, a: Agent, t: Token, why: string) {
+  const cfg = strategyByName(a.strategy);
+  if (a.positions.has(t.sym) || a.positions.size >= cfg.defaults.maxPositions) return;
+  const size = cfg.defaults.perBuy * (0.6 + rnd() * 0.8) * (a.house ? 3 : 0.5 + a.deposited);
+  const eth = Math.min(size, a.cash - 0.005);
+  if (eth <= 0.0005) return;
+  a.positions.set(t.sym, { sym: t.sym, qty: eth / t.price, entry: t.price, cost: eth, opened: sim.tick });
+  a.cash -= eth;
+  record(sim, a, { t: sim.now, side: "BUY", sym: t.sym, eth, price: t.price, why });
+}
+
+function runAgents(sim: Sim, fresh: MarketEvent[]) {
+  for (const a of sim.agents) {
+    const cfg = strategyByName(a.strategy);
+    // exits: timed for the house strategies, take-profit / stop-loss for Custom
+    for (const p of [...a.positions.values()]) {
+      const t = sim.tokens.get(p.sym);
+      if (!t || t.dead) { sell(sim, a, p, "token died"); continue; }
+      if (cfg.holdSec !== null) {
+        if (sim.tick - p.opened >= cfg.holdSec) sell(sim, a, p, `held ${cfg.holdSec >= 60 ? `${cfg.holdSec / 60}m` : `${cfg.holdSec}s`}`);
+      } else {
+        const pnl = (p.qty * t.price * LIQ - p.cost) / p.cost;
+        if (pnl >= 1.5 || pnl <= -0.4) sell(sim, a, p, pnl > 0 ? "take profit" : "stop loss");
+      }
+    }
+    // entries
+    if (cfg.event === "custom") {
+      if (rnd() < 0.03) { const live = [...sim.tokens.values()].filter((t) => !t.dead); if (live.length) buy(sim, a, pick(live), "custom rule"); }
+      continue;
+    }
+    for (const e of fresh) {
+      if (e.kind !== cfg.event) continue;
+      if (!a.house && rnd() > 0.55) continue; // holders' agents react a bit less reliably (caps, gas reserve)
+      const t = sim.tokens.get(e.sym);
+      if (t && !t.dead) buy(sim, a, t, WHY[e.kind]);
     }
   }
-  const t = chooseToken(sim, a.strategy);
-  if (!t) return;
-  const size = cfg.size[0] + rnd() * (cfg.size[1] - cfg.size[0]);
-  const eth = Math.min(size * (a.house ? 2 : 1) * (0.5 + a.deposited), a.cash - 0.01);
-  if (eth <= 0.0005 || a.positions.size >= 8) return;
-  const qty = eth / t.price;
-  const cur = a.positions.get(t.sym);
-  a.positions.set(t.sym, cur ? { ...cur, qty: cur.qty + qty, cost: cur.cost + eth } : { sym: t.sym, qty, entry: t.price, cost: eth });
-  a.cash -= eth;
-  record(sim, a, { t: sim.now, side: "BUY", sym: t.sym, eth, price: t.price });
 }
 
 function record(sim: Sim, a: Agent, tr: Trade) {
-  a.trades.unshift(tr); if (a.trades.length > 60) a.trades.pop();
+  a.trades.unshift(tr); if (a.trades.length > 80) a.trades.pop();
   a.lastTradeAt = sim.now; a.lastSide = tr.side;
   sim.tradesToday++;
   sim.feed.unshift({ ...tr, agent: a.id }); if (sim.feed.length > 30) sim.feed.pop();
@@ -131,14 +184,14 @@ function rerank(sim: Sim) {
 
 export function step(sim: Sim, dtMs = 1000) {
   sim.tick++; sim.now += dtMs;
-  if (rnd() < 0.35) launch(sim);
+  pending = [];
+  if (rnd() < 0.3) launch(sim);
   moveMarket(sim);
-  const actors = 2 + Math.floor(rnd() * 4);
-  for (let i = 0; i < actors; i++) act(sim, pick(sim.agents));
+  runAgents(sim, pending);
   let total = 0;
   for (const a of sim.agents) {
     a.nav = navOf(a, sim.tokens);
-    a.history.push(a.nav); if (a.history.length > 180) a.history.shift();
+    a.history.push(a.nav); if (a.history.length > 300) a.history.shift();
     total += a.nav;
   }
   sim.totalHistory.push(total); if (sim.totalHistory.length > 240) sim.totalHistory.shift();
@@ -148,18 +201,19 @@ export function step(sim: Sim, dtMs = 1000) {
 
 export function createSim(): Sim {
   rnd = mulberry32(4663);
-  const names = Object.keys(STRATS) as StrategyName[];
+  const pool = STRATEGIES.map((s) => s.name);
   const agents: Agent[] = (ids as number[]).map((id) => {
     const house = id <= 5;
-    const strategy = house ? (["Momentum", "Graduation hunter", "Sniper", "Momentum", "Custom"] as StrategyName[])[id - 1] : pick(names);
+    const def = house ? STRATEGIES.find((s) => s.houseAgent === id)! : strategyByName(pick(pool));
     const deposited = house ? 2 + rnd() * 2 : +(0.1 + Math.pow(rnd(), 2) * 2.4).toFixed(2);
     return {
       id, house, owner: house ? "Trenchers team" : `0x${hex(4)}…${hex(4)}`, wallet: `0x${hex(4)}…${hex(4)}`,
-      strategy, params: STRATS[strategy].params, deposited, cash: deposited, positions: new Map(), trades: [],
+      strategy: def.name, params: [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
+      deposited, cash: deposited, positions: new Map(), trades: [],
       nav: deposited, epochStart: deposited, history: [], wins: 0, closed: 0, rank: 0, prevRank: 0, lastTradeAt: 0, lastSide: null,
     };
   });
-  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [] };
+  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [], events: [] };
   for (let i = 0; i < 12; i++) launch(sim);
   for (let i = 0; i < 600; i++) step(sim, 1000); // warm up: ten minutes of history
   sim.now = Date.now();
@@ -177,3 +231,5 @@ export function ago(ms: number) {
   return m < 60 ? `${m}m ago` : `${Math.round(m / 60)}h ago`;
 }
 export function mcapEth(t: Token, ethUsd = 1) { return (t.price * t.supply) / ethUsd; }
+export const usd = (eth: number) => eth * ETH_USD;
+export const signalLabel = (e: MarketEvent) => `${WHY[e.kind]} $${e.sym}`;

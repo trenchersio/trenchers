@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
+import { CustomBuilder, NumField } from "./CustomBuilder";
+import { DEFAULT_RULE, describe, validate } from "@/lib/custom-strategy";
 import { OPENSEA_URL, ROUTES, SAMPLE_MODE, chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 import {
@@ -66,7 +68,7 @@ export function MyAgents() {
         </ul>
         <div className="agents-foot">
           <p>Want another agent?</p>
-          {OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>Buy on OpenSea</TextButton> : <TextButton disabled>OpenSea listing soon</TextButton>}
+          {OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>Buy on OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}
         </div>
       </section>
 
@@ -80,7 +82,7 @@ export function MyAgents() {
 function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange: (a: AgentState) => void }) {
   const [busy, setBusy] = useState<string[] | null>(null);
   const [amount, setAmount] = useState("0.1");
-  const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Momentum", ...PRESETS.Momentum.defaults });
+  const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Launch Flipper", ...PRESETS["Launch Flipper"].defaults });
   const [notice, setNotice] = useState<string | null>(null);
   const st = statusOf(a);
   const step = !a.registered ? 1 : a.balance <= 0 ? 2 : !a.strategy ? 3 : 4;
@@ -111,11 +113,17 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   };
 
   const saveStrategy = () => {
-    if (draft.perBuy <= 0 || draft.dailyCap < draft.perBuy || draft.maxPositions < 1) {
+    if (!(draft.perBuy > 0) || !(draft.dailyCap >= draft.perBuy) || !(draft.maxPositions >= 1)) {
       setNotice("Check the limits: the daily cap must be at least one buy, and at least one position is needed.");
       return;
     }
-    run(["Signing the strategy…", "Setting on-chain spending limits…"], () => onChange(log({ ...a, strategy: draft }, `Strategy set: ${draft.preset}`)));
+    if (draft.preset === "Custom") {
+      const problem = validate(draft.custom ?? DEFAULT_RULE);
+      if (problem) { setNotice(problem); return; }
+    }
+    const saved = draft.preset === "Custom" ? { ...draft, custom: draft.custom ?? DEFAULT_RULE } : { ...draft, custom: undefined };
+    const what = saved.custom ? `Custom: ${describe(saved.custom)}` : saved.preset;
+    run(["Signing the strategy…", "Setting on-chain spending limits…"], () => onChange(log({ ...a, strategy: saved }, `Strategy set: ${what}`)));
   };
 
   const enter = () => run(["Enabling trading for this agent…"], () => onChange(log({ ...a, live: true }, "Entered the Arena")));
@@ -174,17 +182,19 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             {(Object.keys(PRESETS) as Preset[]).map((p) => (
               <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
                 className={`tbtn${draft.preset === p ? " tbtn-on" : ""}`}
-                onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults })} disabled={!!busy}>{p}</button>
+                onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults, custom: p === "Custom" ? (draft.custom ?? DEFAULT_RULE) : undefined })} disabled={!!busy}>{p}</button>
             ))}
           </div>
-          <p className="preset-line">{PRESETS[draft.preset].line} <span className="mono">{PRESETS[draft.preset].rules.join(" · ")}</span></p>
+          {draft.preset === "Custom" ? (
+            <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, custom: r })} disabled={!!busy} />
+          ) : (
+            <p className="preset-line">{PRESETS[draft.preset].line}. {PRESETS[draft.preset].rules.join(" · ")}.{PRESETS[draft.preset].house ? <span className="mono"> Run by house agent #{PRESETS[draft.preset].house}</span> : null}</p>
+          )}
+          <span className="field-label">Limits</span>
           <div className="limits">
-            <label className="field"><span>ETH per buy</span>
-              <input id={`pb-${a.id}`} className="mono" inputMode="decimal" value={draft.perBuy} onChange={(e) => setDraft({ ...draft, perBuy: Number(e.target.value) || 0 })} /></label>
-            <label className="field"><span>Daily cap (ETH)</span>
-              <input id={`dc-${a.id}`} className="mono" inputMode="decimal" value={draft.dailyCap} onChange={(e) => setDraft({ ...draft, dailyCap: Number(e.target.value) || 0 })} /></label>
-            <label className="field"><span>Max open positions</span>
-              <input id={`mp-${a.id}`} className="mono" inputMode="numeric" value={draft.maxPositions} onChange={(e) => setDraft({ ...draft, maxPositions: Math.round(Number(e.target.value)) || 0 })} /></label>
+            <NumField id={`pb-${a.id}`} label="ETH per buy" value={draft.perBuy} onChange={(v) => setDraft({ ...draft, perBuy: v ?? 0 })} />
+            <NumField id={`dc-${a.id}`} label="Daily cap" unit="ETH" value={draft.dailyCap} onChange={(v) => setDraft({ ...draft, dailyCap: v ?? 0 })} />
+            <NumField id={`mp-${a.id}`} label="Max open positions" value={draft.maxPositions} onChange={(v) => setDraft({ ...draft, maxPositions: v === null ? 0 : Math.round(v) })} />
           </div>
           <p className="hint-line">These limits are enforced by the agent wallet itself. The trading engine can never spend more, or withdraw.</p>
           <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>{a.strategy ? "Update strategy" : "Save strategy"}</TextButton>

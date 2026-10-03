@@ -12,12 +12,12 @@ export function SiteHeader({ page, wide = false }: { page: "home" | "arena" | "a
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
         </a>
         <nav>
-          {page !== "home" && <a href={ROUTES.home}>Home</a>}
-          <a href={ROUTES.arena} className="nav-arena" aria-current={page === "arena" ? "page" : undefined}>Arena</a>
+          {page !== "home" && <a href={ROUTES.home} className="tbtn nav-sec">Home</a>}
+          <a href={ROUTES.arena} className={`tbtn nav-arena${page === "arena" ? " tbtn-on" : ""}`} aria-current={page === "arena" ? "page" : undefined}>Arena</a>
           {page === "home" && <>
-            <a href="#how" className="nav-sec">How it works</a>
-            <a href="#flywheel" className="nav-sec">Flywheel</a>
-            <a href="#faq" className="nav-sec">FAQ</a>
+            <a href="#how" className="tbtn nav-sec">How it works</a>
+            <a href="#flywheel" className="tbtn nav-sec">Flywheel</a>
+            <a href="#faq" className="tbtn nav-sec">FAQ</a>
           </>}
           <Socials links={SOCIALS} />
           <WalletMenu />

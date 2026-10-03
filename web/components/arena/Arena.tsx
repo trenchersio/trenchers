@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { createSim, step, pct, ago, type Agent, type Sim } from "@/lib/arena-sim";
+import { createSim, step, pct, ago, signalLabel, type Agent, type Sim } from "@/lib/arena-sim";
 import { LineChart } from "./LineChart";
 import { useWallet } from "@/lib/wallet";
 import { liveAgentIds } from "@/lib/agents-store";
@@ -76,8 +76,8 @@ export function Arena() {
         <div className="stat"><span className="stat-label">Weekly prize pool</span><span className="stat-value mono">{sim.prizePool.toFixed(3)} <small>ETH</small></span><span className="stat-sub">top 10 agents</span></div>
         <div className="stat"><span className="stat-label">Epoch ends in</span><span className="stat-value mono">{countdown(nextEpochEnd(now) - now)}</span><span className="stat-sub">Monday 00:00 UTC</span></div>
         <div className="stat stat-launches">
-          <span className="stat-label">Latest Pons launches</span>
-          <ul className="mono">{sim.launches.slice(0, 4).map((s) => <li key={s}>${s}</li>)}</ul>
+          <span className="stat-label">Live Pons signals</span>
+          <ul className="mono signals">{sim.events.slice(0, 3).map((e) => <li key={`${e.t}-${e.kind}-${e.sym}`}><span className={`sig sig-${e.kind}`} />{signalLabel(e)}</li>)}</ul>
         </div>
       </section>
 
@@ -189,7 +189,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
             <li key={`${t.t}-${i}`}>
               <span className="t-ago">{ago(now - t.t)}</span>
               <b className={t.side === "BUY" ? "up" : "down"}>{t.side}</b>
-              <span className="t-sym">${t.sym}</span>
+              <span className="t-sym">${t.sym}{t.why && <i className="t-why">{t.why}</i>}</span>
               <span className="t-eth">{t.eth.toFixed(4)} ETH</span>
               <span className={`t-pnl ${t.pnlPct === undefined ? "" : t.pnlPct >= 0 ? "up" : "down"}`}>{t.pnlPct === undefined ? "" : signed(t.pnlPct)}</span>
             </li>

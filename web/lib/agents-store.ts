@@ -11,8 +11,10 @@
  */
 import ids from "./nft-ids.json";
 
-export type Preset = "Sniper" | "Momentum" | "Graduation hunter" | "Custom";
-export type Strategy = { preset: Preset; perBuy: number; dailyCap: number; maxPositions: number };
+import { STRATEGIES, type StrategyName } from "./strategies";
+export type Preset = StrategyName;
+import type { CustomRule } from "./custom-strategy";
+export type Strategy = { preset: Preset; perBuy: number; dailyCap: number; maxPositions: number; custom?: CustomRule };
 export type AgentState = {
   id: number;
   registered: boolean;
@@ -24,12 +26,9 @@ export type AgentState = {
   log: { t: number; text: string }[];
 };
 
-export const PRESETS: Record<Preset, { line: string; defaults: Omit<Strategy, "preset">; rules: string[] }> = {
-  "Sniper": { line: "Buys every new Pons launch with a small, fixed amount.", defaults: { perBuy: 0.001, dailyCap: 0.25, maxPositions: 8 }, rules: ["every new launch", "sell at 3x or -50%"] },
-  "Momentum": { line: "Buys tokens once market cap and liquidity clear a threshold.", defaults: { perBuy: 0.01, dailyCap: 0.25, maxPositions: 6 }, rules: ["market cap > 5 ETH", "take profit 2x"] },
-  "Graduation hunter": { line: "Targets launches close to graduating and sells into the move.", defaults: { perBuy: 0.02, dailyCap: 0.3, maxPositions: 4 }, rules: ["graduation > 70%", "trailing stop 25%"] },
-  "Custom": { line: "Your own limits. Plain-English rules arrive in Phase 3.", defaults: { perBuy: 0.005, dailyCap: 0.2, maxPositions: 6 }, rules: ["your rules"] },
-};
+export const PRESETS = Object.fromEntries(STRATEGIES.map((d) => [d.name, {
+  line: d.trigger, defaults: d.defaults, rules: [d.exit], house: d.houseAgent,
+}])) as Record<Preset, { line: string; defaults: Omit<Strategy, "preset">; rules: string[]; house: number | null }>;
 
 function hash(s: string) {
   let h = 2166136261;

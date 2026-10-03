@@ -1,0 +1,10 @@
+{
+  "name": "trenchers",
+  "private": true,
+  "description": "Trenchers monorepo. The website lives in web/; these scripts let a host build it from the repo root.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "npm --prefix web ci && npm --prefix web run build",
+    "start": "npm --prefix web start"
+  }
+}

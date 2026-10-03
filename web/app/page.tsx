@@ -3,8 +3,10 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { ArtCycler } from "@/components/ArtCycler";
 import { Socials } from "@/components/Socials";
 import { TextButton } from "@/components/TextButton";
-import { LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
+import { HOUSE_STRATEGIES } from "@/lib/strategies";
 
 const STEPS = [
   { n: "01", title: "Get a Trencher", body: `All 2,000 Trenchers are listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Every one is a unique pixel agent.` },
@@ -13,11 +15,6 @@ const STEPS = [
   { n: "04", title: "Compete in the Arena", body: "Agents trade new token launches around the clock. The best performers win weekly prizes." },
 ];
 
-const STRATEGIES = [
-  { name: "Sniper", line: "Buys every new launch with a small, fixed amount.", tags: ["0.001 ETH per buy", "max 20 buys / hour"] },
-  { name: "Momentum", line: "Buys tokens once their market cap and liquidity clear a threshold.", tags: ["0.01 ETH per buy", "take profit 2x"] },
-  { name: "Graduation hunter", line: "Targets launches close to graduating, and sells into the move.", tags: ["sell on graduation", "trailing stop"] },
-];
 
 const FLYWHEEL = [
   { from: "OpenSea sales", to: "50% buys back $TRENCHERS", note: "40% development, 10% prize pool" },
@@ -44,7 +41,7 @@ const FAQ = [
 function OpenSeaButton() {
   return OPENSEA_URL
     ? <TextButton href={OPENSEA_URL} external>Buy an agent on OpenSea</TextButton>
-    : <TextButton disabled>OpenSea listing soon</TextButton>;
+    : <span className="tbtn tbtn-static">OpenSea</span>;
 }
 
 export default function Home() {
@@ -83,23 +80,17 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="how" className="section">
-          <p className="eyebrow">How it works</p>
-          <h2>From NFT to trading agent in four steps</h2>
+        <Section id="how" n="01" label="How it works" title="From NFT to trading agent in four steps"
+          lede="Every Trencher is both an NFT and an agent. Registering it gives it a wallet and an on-chain identity that stay with the NFT.">
           <ol className="steps">
             {STEPS.map((s) => (
               <li key={s.n}><span className="mono step-n">{s.n}</span><h3>{s.title}</h3><p>{s.body}</p></li>
             ))}
           </ol>
-        </section>
+        </Section>
 
-        <section className="section arena-teaser">
-          <div>
-            <p className="eyebrow">The Arena</p>
-            <h2>Every agent, ranked live</h2>
-            <p className="lede">Watch the leaderboard move as agents trade. Open any agent to see its strategy, positions and every trade it made.</p>
-            <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
-          </div>
+        <Section n="02" label="The Arena" title="Every agent, ranked live"
+          lede="The leaderboard re-ranks as agents trade. Open any agent to see its strategy, positions and every trade it made.">
           <div className="teaser-rows" aria-hidden="true">
             {strip.slice(0, 5).map((id, i) => (
               <div key={id} className="teaser-row">
@@ -110,26 +101,26 @@ export default function Home() {
               </div>
             ))}
           </div>
-        </section>
+          <div className="section-actions"><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
+        </Section>
 
-        <section className="section">
-          <p className="eyebrow">Strategies</p>
-          <h2>Pick a playbook, or write your own</h2>
-          <div className="cards">
-            {STRATEGIES.map((s) => (
+        <Section n="03" label="Strategies" title="Five house strategies"
+          lede="The team runs each one on a house agent, in public. Copy one for your own agent, or set your own limits.">
+          <div className="cards cards-5">
+            {HOUSE_STRATEGIES.map((s) => (
               <article key={s.name} className="card">
+                <span className="mono card-house">House agent #{s.houseAgent}</span>
                 <h3>{s.name}</h3>
-                <p>{s.line}</p>
-                <div className="tags">{s.tags.map((t) => <span key={t} className="mono">{t}</span>)}</div>
+                <p>{s.trigger}.</p>
+                <div className="tags"><span className="mono">{s.exit.toLowerCase()}</span><span className="mono">{s.defaults.perBuy} ETH per buy</span></div>
               </article>
             ))}
           </div>
-          <p className="note">Every strategy has hard limits: a daily spend cap, position limits and a gas reserve. Switch strategies at any time.</p>
-        </section>
+          <p className="note">Every strategy has hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Switch strategies at any time.</p>
+        </Section>
 
-        <section id="flywheel" className="section">
-          <p className="eyebrow">The flywheel</p>
-          <h2>Every flow of value points back at $TRENCHERS</h2>
+        <Section id="flywheel" n="04" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
+          lede="Sales, royalties, token fees and the house agents' profits all feed buybacks, prizes or the floor.">
           <div className="flows">
             {FLYWHEEL.map((f) => (
               <div key={f.from} className="flow">
@@ -140,12 +131,10 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <p className="note">All flows run through public contracts, so anyone can check them on-chain.</p>
-        </section>
+          <p className="note">All flows run through public contracts. The contracts, the website and the agent engine are open on <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>.</p>
+        </Section>
 
-        <section id="roadmap" className="section">
-          <p className="eyebrow">Roadmap</p>
-          <h2>Three phases</h2>
+        <Section id="roadmap" n="05" label="Roadmap" title="Three phases">
           <div className="roadmap">
             {ROADMAP.map((r, i) => (
               <div key={r.phase} className={`phase${i === 0 ? " current" : ""}`}>
@@ -155,33 +144,34 @@ export default function Home() {
               </div>
             ))}
           </div>
-        </section>
+        </Section>
 
-        <section id="get" className="section">
-          <div className="soon">
-            <p className="eyebrow">Get an agent</p>
-            <h2>2,000 agents. {LIST_PRICE_ETH} ETH each.</h2>
-            <p className="lede">Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. Follow along to hear when the listing goes live.</p>
-            <div className="cta"><OpenSeaButton /><TextButton href={ROUTES.arena}>Enter the Arena</TextButton></div>
+        <Section id="get" n="06" label="Get an agent" title={<>2,000 agents. {LIST_PRICE_ETH} ETH each.</>}
+          lede="Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers.">
+          <div className="get-panel">
+            <div className="cta"><OpenSeaButton /><TextButton href={ROUTES.arena}>Enter the Arena</TextButton><TextButton href={GITHUB_URL} external>GitHub</TextButton></div>
             <Socials links={SOCIALS} large />
           </div>
-        </section>
+        </Section>
 
-        <section id="faq" className="section">
-          <p className="eyebrow">FAQ</p>
-          <h2>Questions</h2>
+        <Section id="faq" n="07" label="FAQ" title="Questions">
           <div className="faq">
             {FAQ.map((f) => (
               <details key={f.q}><summary>{f.q}</summary><p>{f.a}</p></details>
             ))}
           </div>
-        </section>
+        </Section>
       </main>
 
       <footer className="foot">
-        <img src="brand/mark.svg" alt="" width={28} height={28} />
-        <span>Trenchers</span>
-        <Socials links={SOCIALS} />
+        <div className="foot-row">
+          <img src="brand/mark.svg" alt="" width={24} height={24} />
+          <span className="foot-name">Trenchers</span>
+          <nav className="foot-links">
+            <a className="tbtn" href={ROUTES.arena}>Arena</a>
+            <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
+          </nav>
+        </div>
         <p>Nothing on this site is financial advice. Trading new tokens can lose all deposited funds.</p>
       </footer>
     </SiteShell>

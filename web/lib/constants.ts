@@ -6,8 +6,9 @@ export const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS ||
   "0x0000000000000000000000000000000000000000") as Address;
 export const EXPLORER = chain.blockExplorers?.default.url ?? "";
 
-/** OpenSea collection page. Empty until the collection is listed: buttons then read "listing soon". */
+/** OpenSea collection page. Empty until listed: the site then shows a plain, unclickable "OpenSea" label. */
 export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "";
+export const GITHUB_URL = "https://github.com/trenchersio/trenchers";
 export const LIST_PRICE_ETH = "0.01";
 
 // Social links: leave a variable empty to hide that link.

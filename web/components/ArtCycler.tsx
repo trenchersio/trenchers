@@ -10,19 +10,20 @@ export function ArtCycler({ every = 3200 }: { every?: number }) {
     const canvas = ref.current!, ctx = canvas.getContext("2d")!;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const list = (ids as number[]).filter((i) => i > 5);
-    const CELLS = 28, S = 560;
+    const CELLS = 28, S = 1120; // full art resolution, sharp on high-density screens
     canvas.width = S; canvas.height = S;
-    ctx.imageSmoothingEnabled = false;
-    const load = (id: number) => { const im = new Image(); im.src = `nft/${id}.webp`; return im; };
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    const load = (id: number) => { const im = new Image(); im.src = `nft-hd/${id}.webp`; return im; };
     let idx = Math.floor(Math.random() * list.length);
     let cur = load(list[idx]), prev: HTMLImageElement | null = null;
+    let next = load(list[(idx + 1) % list.length]); // preload so the dissolve never waits on the network
     let order = Array.from({ length: CELLS * CELLS }, (_, i) => i), start = performance.now(), raf = 0, last = start;
     const shuffle = () => order.sort(() => Math.random() - 0.5);
     const setLabel = () => { if (label.current) label.current.textContent = `#${list[idx]}`; };
     setLabel();
     function frame(now: number) {
       if (!reduce && now - last > every) {
-        last = now; prev = cur; idx = (idx + 1) % list.length; cur = load(list[idx]); shuffle(); start = now; setLabel();
+        last = now; prev = cur; idx = (idx + 1) % list.length; cur = next; next = load(list[(idx + 1) % list.length]); shuffle(); start = now; setLabel();
       }
       const p = reduce ? 1 : Math.min(1, (now - start) / 900);
       const shown = Math.floor(p * order.length), cell = S / CELLS;
