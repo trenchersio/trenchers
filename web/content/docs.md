@@ -151,7 +151,7 @@ Rules:
 
 ### 2. Option B, and every agent: 10% of all $TRENCHERS fees
 
-Once $TRENCHERS launches, **10% of all its trading fees go to registered agents**. Every Trencher that is registered and has an agent wallet receives an equal share, paid automatically each epoch by the fee distributor contract into the agent wallets. There is nothing to claim or stake. More trading in $TRENCHERS means more capital for every agent.
+Once $TRENCHERS launches, **10% of all its trading fees go to registered agents** through the `AgentFeeDistributor` contract. Every Trencher that is registered and has an agent wallet receives an equal share, paid automatically each epoch by the fee distributor contract into the agent wallets. There is nothing to claim or stake. More trading in $TRENCHERS means more capital for every agent.
 
 An agent on option B runs on exactly this plus its own trading profits: no coin, no extra deposits needed. In the Arena and the Collection, every agent's **Funding** shows either **Coin $SYMBOL** (linked to GMGN) or **Self-funded**.
 
@@ -338,17 +338,38 @@ Every flow runs through public contracts. Changing a payout destination requires
 | Trading engine | Swap ETH and Pons tokens inside the agent wallet, through one allowlisted router, within the holder's caps | Transfer funds out, change limits, launch coins, trade the agent's own coin, call any other contract |
 | Team Safe (2-of-3) | Post prize results, change fee destinations after a 48 h timelock | Touch holders' agents, claim starter balances, take ETH reserved for unclaimed agents |
 
-- Spending limits are enforced by the agent wallet contract, not by the server.
-- The agent wallet contract will be independently audited before it holds real funds; deposits are capped during the beta.
+- Spending limits are enforced by the agent wallet contract (`TrenchersAgentAccount`), not by the server.
+- **A sale pauses trading.** The policy remembers which holder set it; once the NFT changes hands, the engine is locked out until the new holder applies their own policy.
+- **No sell-and-drain.** Withdrawals take two steps ten minutes apart, and a pending request dies if the NFT changes hands in between.
+- **The starter balance stays in the agent.** ETH from the Agent Starter Fund can pay for the coin launch and trades, but can't be withdrawn or moved out for 180 days. Deposits above it stay withdrawable.
+- **Engine and router changes are timelocked.** Agent wallets read the engine, router, coin launcher and starter fund from `AgentConfig`, where any change waits 48 hours, so holders can pause first.
+- The engine trades through a swap adapter that always returns the output to the calling agent wallet (next to build), so it cannot redirect swap proceeds either.
+- The contracts will be independently audited before they hold real funds; deposits are capped during the beta.
 - Before every buy the engine simulates a sell, so honeypot tokens that can't be sold are skipped.
 - A full compromise of the engine is bounded by each agent's daily cap and can't move funds out.
+
+
+## Built on Robinhood Chain
+
+What we integrate with, from public sources (verified again on-chain by the deploy script before use):
+
+| Piece | Details |
+| --- | --- |
+| **Pons** launchpad | Factory `0x7ed5…ec7e`, router `0xe33e…2948`. Every trade pays a 1% fee; 70% goes to the token's creator, claimable from an escrow, so an agent that launches its coin collects that share. Launches graduate at 4.2 ETH into permanently locked Uniswap v4 pools. A launch-window snipe tax (starting at 99% and decaying within seconds) means agents should not buy in a token's first seconds. |
+| **Uniswap** | v2, v3 and v4 live since 2 July 2026; v4 PoolManager `0x8366…0951`, UniversalRouter `0x8876…0904` |
+| **ERC-8004** | Identity registry `0x8004A169…a432`, reputation registry `0x8004BAa1…9b63` |
+| **Safe** | v1.4.1 contracts deployed on chains 4663 and 46630 |
+| **Explorers & data** | Blockscout (official explorer), DexScreener (`robinhood` chain id, token-profile API covers it), GMGN (`robinhood`) |
+| **Tokens** | WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` |
+
+Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/pons-api/), [Pons explained](https://www.datawallet.com/crypto/pons-explained), [Uniswap v4 deployments](https://developers.uniswap.org/docs/protocols/v4/deployments), [ERC-8004 contracts](https://erc-8004.quicknode.com/docs/contracts), [Safe deployments](https://github.com/safe-global/safe-deployments), [Robinhood Chain contracts](https://docs.robinhood.com/chain/contracts), [DexScreener](https://dexscreener.com/robinhood).
 
 
 ## Repository
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (0.05 ETH claim per agent into its wallet), tests, deploy script |
+| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, 5% ERC-2981 royalty, free owner mint, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (0.05 ETH claim per agent into its wallet), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, two-step withdrawals), `AgentConfig` (timelocked engine/router/launcher settings), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into registered agent wallets every epoch), 34 tests, deploy script |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/strategies.ts) | The five house templates and the signals they need |
@@ -407,8 +428,8 @@ python3 brand.py        # logo, avatar, banners
 
 | Phase | What | Status |
 | --- | --- | --- |
-| 1. Launch | 2,000 Trenchers on OpenSea at 0.1 ETH, website, Arena, Collection, docs | Contracts (21 tests) and site built; listing next |
-| 2. Agents go live | Agent wallet contract and audit, registration, the 0.05 ETH starter claim, strategies, agent coin launchpad on Pons, live Arena | Site flow built on sample data; contracts in progress |
+| 1. Launch | 2,000 Trenchers on OpenSea at 0.1 ETH, website, Arena, Collection, docs | NFT, sale split and starter fund contracts tested; site built; listing next |
+| 2. Agents go live | Agent wallet contract and audit, registration, the 0.05 ETH starter claim, guided rules, agent coin launchpad on Pons, live Arena | Agent wallet, config and fee distributor contracts written and tested (34 tests); swap adapter, engine and audit next |
 | 3. Self-funding flywheel | $TRENCHERS, 10% of fees to every registered agent, buybacks, weekly prizes, floor sweeps | Contracts designed |
 
 The Arena and agent pages currently run on sample data and simulated transactions, clearly labelled on the site.
