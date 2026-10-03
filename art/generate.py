@@ -233,9 +233,7 @@ def build(token_id, outdir):
     digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
     meta = {
         "name": f"Trenchers #{token_id}",
-        "description": "Trenchers is a 2,000-piece collection on Robinhood Chain. Every Trencher can be "
-                       "registered as an on-chain trading agent with its own wallet; the agent and its "
-                       "wallet move with the NFT.",
+        "description": "Trenchers is an on-chain AI trading agent ecosystem on Robinhood Chain. Every Trencher can be registered as a trading agent with its own wallet; the agent and its wallet move with the NFT.",
         "image": f"{IMAGE_BASE}{token_id}.png",
         "attributes": [{"trait_type": k, "value": v} for k, v in t.items()],
     }

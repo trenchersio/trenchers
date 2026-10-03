@@ -23,15 +23,37 @@ GLYPHS = {
     "H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
     "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
 }
-# The mark: a QR finder square whose centre module is the agent's lit eye.
-MARK = ["1111111", "1000001", "1011101", "101E101", "1011101", "1000001", "1111111"]
+# The mark ("Pixel eye"): blocks and circles around the agent's green eye. S block, O circle, E eye.
+MARK = ["SOS", "OEO", "SOS"]
+MARK_GAP = 0.12   # gap around each mark piece, as a share of its cell
 
 
-def mark_cells():
+def mark_items():
     for r, row in enumerate(MARK):
         for c, ch in enumerate(row):
-            if ch != "0":
-                yield r, c, GREEN if ch == "E" else FOG
+            yield r, c, ch
+
+
+def draw_mark(d, x0, y0, px, fg=FOG):
+    g = max(1, int(px * MARK_GAP))
+    for r, c, ch in mark_items():
+        box = (x0 + c * px + g, y0 + r * px + g, x0 + (c + 1) * px - g - 1, y0 + (r + 1) * px - g - 1)
+        if ch == "S":
+            d.rectangle(box, fill=fg)
+        else:
+            d.ellipse(box, fill=GREEN if ch == "E" else fg)
+
+
+def mark_svg_parts(scale=1.0, ox=0.0, oy=0.0, fg=FOG):
+    parts = []
+    for r, c, ch in mark_items():
+        x, y = ox + c * scale, oy + r * scale
+        if ch == "S":
+            k = MARK_GAP * scale
+            parts.append(f'<rect x="{x + k:.3f}" y="{y + k:.3f}" width="{scale - 2 * k:.3f}" height="{scale - 2 * k:.3f}" fill="{fg}"/>')
+        else:
+            parts.append(f'<circle cx="{x + scale / 2:.3f}" cy="{y + scale / 2:.3f}" r="{scale / 2 - MARK_GAP * scale:.3f}" fill="{GREEN if ch == "E" else fg}"/>')
+    return parts
 
 
 def word_cells(text="TRENCHERS", gap=1):
@@ -47,26 +69,29 @@ def word_cells(text="TRENCHERS", gap=1):
 WORD_W = 9 * 6 - 1  # 9 letters x (5 + 1 gap) - trailing gap
 
 
-def svg(cells, w, h, bg=None):
-    rects = "".join(f'<rect x="{c}" y="{r}" width="1" height="1" fill="{f}"/>' for r, c, f in cells)
-    back = f'<rect width="{w}" height="{h}" fill="{bg}"/>' if bg else ""
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" shape-rendering="crispEdges">'
-            f"{back}{rects}</svg>")
+MARK_UNIT = 7 / 3                     # one mark cell = 7/3 letter pixels, so the mark is as tall as the letters
+WORD_X = 7 + 3                        # wordmark starts after the 7-unit mark and a 3-unit gap
+LOCKUP_W, LOCKUP_H = WORD_X + WORD_W, 7
 
 
-def lockup_cells(fg=FOG):
-    cells = list(mark_cells())
+def word_svg_parts(ox, fg):
+    g = 0.1
+    return [f'<rect x="{ox + c + g:.2f}" y="{r + g:.2f}" width="{1 - 2 * g:.2f}" height="{1 - 2 * g:.2f}" fill="{fg}"/>'
+            for r, c in word_cells()]
+
+
+def write_svg(name, w, h, parts):
+    with open(os.path.join(OUT, name), "w") as f:
+        f.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.3f} {h:.3f}">{"".join(parts)}</svg>')
+
+
+def draw_lockup(d, x0, y0, px, fg=FOG):
+    draw_mark(d, x0, y0, px * MARK_UNIT, fg)
+    g = max(1, int(px * 0.1))
     for r, c in word_cells():
-        cells.append((r, c + 7 + 3, fg))   # wordmark to the right of the mark, 3-module gap
-    return cells
-
-
-LOCKUP_W, LOCKUP_H = 7 + 3 + WORD_W, 7
-
-
-def draw_cells(d, cells, x0, y0, px):
-    for r, c, f in cells:
-        d.rectangle((x0 + c * px, y0 + r * px, x0 + (c + 1) * px - 1, y0 + (r + 1) * px - 1), fill=f)
+        x = x0 + (WORD_X + c) * px
+        y = y0 + r * px
+        d.rectangle((x + g, y + g, x + px - g - 1, y + px - g - 1), fill=fg)
 
 
 def strip(img, ids, y, size, gap, x0=0, dim=1.0):
@@ -89,35 +114,33 @@ def banner(name, w, h, ids, tagline=True):
     px = max(4, int(min(w * 0.55 / LOCKUP_W, h * 0.22 / LOCKUP_H)))
     lw, lh = LOCKUP_W * px, LOCKUP_H * px
     x0, y0 = (w - lw) // 2, int(h * 0.18)
-    draw_cells(d, lockup_cells(), x0, y0, px)
+    draw_lockup(d, x0, y0, px)
     if tagline:
         f = ImageFont.truetype(FONT, max(14, int(px * 2.6)))
-        text = "2,000 on-chain trading agents  ·  Robinhood Chain"
+        text = "An on-chain AI trading agent ecosystem  ·  Robinhood Chain"
         tw = d.textlength(text, font=f)
         d.text(((w - tw) / 2, y0 + lh + px * 3), text, font=f, fill=QUIET)
     img.save(os.path.join(OUT, name))
 
 
 def main():
-    with open(os.path.join(OUT, "mark.svg"), "w") as f:
-        f.write(svg(mark_cells(), 7, 7))
-    with open(os.path.join(OUT, "lockup.svg"), "w") as f:
-        f.write(svg(lockup_cells(), LOCKUP_W, LOCKUP_H))
-    with open(os.path.join(OUT, "lockup-on-light.svg"), "w") as f:
-        f.write(svg([(r, c, BLACK if col == FOG else col) for r, c, col in lockup_cells()], LOCKUP_W, LOCKUP_H))
+    write_svg("mark.svg", 3, 3, mark_svg_parts())
+    write_svg("lockup.svg", LOCKUP_W, LOCKUP_H, mark_svg_parts(MARK_UNIT) + word_svg_parts(WORD_X, FOG))
+    write_svg("lockup-on-light.svg", LOCKUP_W, LOCKUP_H,
+              mark_svg_parts(MARK_UNIT, fg=BLACK) + word_svg_parts(WORD_X, BLACK))
 
-    # Collection avatar: the mark centred on black, square.
+    # Avatar: the mark centred on black, square.
     for size in (1000, 512, 32):
         img = Image.new("RGB", (size, size), BLACK)
-        px = size // 11
-        off = (size - 7 * px) // 2
-        draw_cells(ImageDraw.Draw(img), mark_cells(), off, off, px)
+        px = size / 5
+        off = (size - 3 * px) / 2
+        draw_mark(ImageDraw.Draw(img), off, off, px)
         img.save(os.path.join(OUT, f"avatar-{size}.png" if size != 32 else "favicon-32.png"))
 
     # Wordmark lockup PNG for docs and decks
     px = 24
     img = Image.new("RGB", ((LOCKUP_W + 8) * px, (LOCKUP_H + 8) * px), BLACK)
-    draw_cells(ImageDraw.Draw(img), lockup_cells(), 4 * px, 4 * px, px)
+    draw_lockup(ImageDraw.Draw(img), 4 * px, 4 * px, px)
     img.save(os.path.join(OUT, "lockup.png"))
 
     showcase = [418, 77, 1203, 9, 640, 1555, 333, 1789, 25, 1402, 980, 61, 1650, 207, 1111, 7, 1999, 512]

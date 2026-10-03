@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <main>
       <header className="bar">
-        <Image src="/brand/lockup.svg" alt="Trenchers" width={220} height={25} priority className="lockup" />
+        <Image src="/brand/lockup.svg" alt="Trenchers" width={220} height={24} priority className="lockup" />
         <nav>
           <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>
           <ConnectButton chainStatus="icon" showBalance={false} />
