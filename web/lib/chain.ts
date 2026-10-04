@@ -36,6 +36,8 @@ export const ABI = {
     "function paused() view returns (bool)",
     "function accountLogic() view returns (address)",
     "function accountLogicVersions() view returns (uint256)",
+    "function launcher() view returns (address)",
+    "function pending(uint8 key) view returns (address value, uint64 eta)",
   ]),
   agent: parseAbi([
     "function policy() view returns (uint128 perTrade, uint128 dailyCap, bool live, address setBy)",
@@ -52,6 +54,8 @@ export const ABI = {
     "function agentLogic() view returns (address)",
     "function ORIGINAL_VERSION() view returns (address)",
     "function setAgentVersion(address logic)",
+    "function coin() view returns (address)",
+    "function launchCoin(bytes data, uint256 value, address coin) returns (bytes)",
   ]),
 };
 

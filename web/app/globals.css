@@ -1882,3 +1882,14 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .mint-toast-go { flex: none; font: 700 14px var(--sans); color: #0B0D0C; background: var(--green); border-radius: 9px; padding: 10px 14px; text-decoration: none; }
 .mint-toast-x { flex: none; background: none; border: 0; color: var(--quiet); font-size: 20px; cursor: pointer; padding: 4px 6px; }
 @media (prefers-reduced-motion: reduce) { .mint-toast { animation: none; } }
+
+/* ------------------------------------------------------------------ agent coin */
+.coin-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.coin-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.coin-form label.wide { grid-column: 1 / -1; }
+.coin-form span { font-size: 11px; color: var(--quiet); }
+.coin-form input, .coin-form textarea { background: #0F1211; border: 1px solid var(--line); border-radius: 9px; color: var(--fog); padding: 10px 12px; font: 500 14px var(--sans); resize: vertical; min-width: 0; }
+.coin-form input:focus-visible, .coin-form textarea:focus-visible { outline: 2px dashed var(--green); outline-offset: 2px; }
+.coin-own p { margin: 0 0 6px; }
+.coin-own b { font-size: 20px; }
+@media (max-width: 600px) { .coin-form { grid-template-columns: minmax(0, 1fr); } }

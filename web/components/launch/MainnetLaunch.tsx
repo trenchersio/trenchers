@@ -1,4 +1,6 @@
 "use client";
+import { MAINNET_DEPLOYMENT } from "@/lib/mainnet/deployment";
+import { TextButton } from "@/components/TextButton";
 import { useCallback, useEffect, useState } from "react";
 import {
   createPublicClient, createWalletClient, custom, encodeFunctionData, fallback, formatEther, http, parseAbi, parseEther, toHex, zeroHash,
@@ -36,6 +38,8 @@ export function MainnetLaunch() {
   const w = useWallet();
   const [prov, setProv] = useState<EIP1193Provider | null>(null);
   const [account, setAccount] = useState<Address | null>(null);
+  const [coinLauncher, setCoinLauncher] = useState<Address | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem("trenchers:coinLauncher"); if (v) setCoinLauncher(v as Address); } catch { /* */ } }, []);
   const [chainOk, setChainOk] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [dep, setDep] = useState<Dep>({ done: [] });
@@ -261,6 +265,35 @@ export function MainnetLaunch() {
           <textarea className="tn-code mono" readOnly value={code} onFocus={(e) => e.currentTarget.select()} />
         </section>
       )}
+
+      <section className="tn-card">
+        <h2>6 · Agent coins: the coin launcher</h2>
+        <p>Lets each agent launch its own coin on Pons (creator fees go to the agent wallet). Deploy it from the Deployer, then the Safe proposes it; it goes live after the 48-hour notice and one more Safe transaction.</p>
+        {coinLauncher ? (
+          <>
+            <p className="mono">Coin launcher: <a href={`${EXPLORER}/address/${coinLauncher}`} target="_blank" rel="noreferrer">{coinLauncher}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(coinLauncher)}>Copy</button></p>
+            <ol className="launch-safe">
+              {[
+                { what: "Now: propose the coin launcher (starts the 48-hour notice)", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [2, coinLauncher] }) },
+                { what: "After 48 hours: switch it on", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [2] }) },
+              ].map((c) => (
+                <li key={c.what}><b>{c.what}</b>
+                  <span className="mono">To: {MAINNET_DEPLOYMENT.config} <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(MAINNET_DEPLOYMENT.config)}>Copy</button></span>
+                  <span className="mono">Data: {short(c.data)} <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(c.data)}>Copy</button></span>
+                  <span className="mono">Value: 0</span>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : (
+          <TextButton onClick={async () => {
+            setBusy(true); setError(null);
+            try { const a = await deploy("Coin launcher", "AgentCoinLauncher", [L.ponsFactory]); setCoinLauncher(a); try { localStorage.setItem("trenchers:coinLauncher", a); } catch { /* */ } }
+            catch (e) { setError(errText(e)); }
+            setBusy(false);
+          }} disabled={busy || !isDeployer || !chainOk}>Deploy the coin launcher</TextButton>
+        )}
+      </section>
     </div>
   );
 }

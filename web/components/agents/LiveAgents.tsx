@@ -6,6 +6,7 @@ import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
+import { CoinLaunch } from "./CoinLaunch";
 import { cardFromLive } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
@@ -386,6 +387,8 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           </div>
           {(a.locked ?? 0n) > 0n && <p className="live-lock">🔒 <b>{fmt(a.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still trade with it. Your own deposits and any profits can be withdrawn instantly.</p>}
         </section>
+
+        <CoinLaunch id={a.id} wallet={a.wallet!} me={me} free={a.free ?? 0n} busy={busy} run={run} />
 
         <section className="panel-card">
           <h3>Trades</h3>
