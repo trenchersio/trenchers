@@ -57,6 +57,9 @@ export class Engine {
   cursor = 0n;
   liveFrom = 0n;
   blockTimes = new Map<bigint, number>();
+  /** While replaying history: block times are interpolated between the window's first and last block
+   *  (2 RPC calls per window instead of one per log, which takes hours on a busy chain). */
+  private interp: { a: bigint; b: bigint; ta: number; tb: number } | null = null;
   lastAgentRefresh = 0;
   /** Offset between chain time and this server's clock, updated on every new block; decisions use chain time. */
   clockOffset = 0; lastHead = -1n;
@@ -89,6 +92,7 @@ export class Engine {
     this.cursor = start > 0n ? start - 1n : 0n;
     this.log(`Replaying history from block ${this.cursor + 1n} to ${head}${this.engineAddress ? ` · engine ${this.engineAddress}` : " · read-only (no ENGINE_KEY)"}${ENV.DRY_RUN ? " · DRY RUN" : ""}`);
     await this.sync(head, false);
+    this.interp = null;
     this.liveFrom = head;
     await this.refreshAgents(true);
     this.log(`Ready: ${this.tokens.size} Pons coins, ${this.agents.size} awakened agents, ${this.openCount()} open positions`);
@@ -140,6 +144,10 @@ export class Engine {
   }
 
   private async blockTime(n: bigint) {
+    if (this.interp) {
+      const { a, b, ta, tb } = this.interp;
+      return b === a ? ta : Math.round(ta + ((tb - ta) * Number(n - a)) / Number(b - a));
+    }
     let t = this.blockTimes.get(n);
     if (t === undefined) { t = Number((await this.pub.getBlock({ blockNumber: n })).timestamp); this.blockTimes.set(n, t); }
     if (this.blockTimes.size > 5000) this.blockTimes.clear();
@@ -151,6 +159,10 @@ export class Engine {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
       const to = from + ENV.LOG_RANGE - 1n < head ? from + ENV.LOG_RANGE - 1n : head;
+      if (!live) {
+        const [ba, bb] = await Promise.all([this.pub.getBlock({ blockNumber: from }), this.pub.getBlock({ blockNumber: to })]);
+        this.interp = { a: from, b: to, ta: Number(ba.timestamp), tb: Number(bb.timestamp) };
+      } else this.interp = null;
       const [launches, grads, buys, sells, claims, bought, sold, nftMoves, swepts] = await Promise.all([
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: POOL_GRADUATED, fromBlock: from, toBlock: to }),
@@ -177,8 +189,9 @@ export class Engine {
     // Curve trades are emitted by every Pons coin; skip coins we don't follow before any RPC call
     // (on mainnet that's thousands of logs per replay window).
     if ((l.eventName === "CurveBuy" || l.eventName === "CurveSell") && !this.curves.has(lc(l.address))) return;
-    const t = await this.blockTime(l.blockNumber!);
     const a = l.args as Record<string, any>;
+    // Replayed curve trades only add to a coin's volume; they don't need a time.
+    const t = !live && (l.eventName === "CurveBuy" || l.eventName === "CurveSell") ? 0 : await this.blockTime(l.blockNumber!);
     switch (l.eventName) {
       case "TokenLaunched": {
         if (a.pairToken !== "0x0000000000000000000000000000000000000000") return; // ETH launches only
