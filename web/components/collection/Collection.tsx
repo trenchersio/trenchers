@@ -1,58 +1,81 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { parseAbiItem, formatEther, type Address } from "viem";
 import { TextButton } from "@/components/TextButton";
 import { useWallet, short } from "@/lib/wallet";
-import { ownedIds, loadAgent } from "@/lib/agents-store";
-import { createSim, pct, type Sim } from "@/lib/arena-sim";
-import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, sample, traits, type Sample, type Status } from "@/lib/collection";
+import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, traits, type Status } from "@/lib/collection";
 import { loadArt } from "@/lib/art-vector";
 import { ArtCanvas } from "./ArtCanvas";
-import { LIST_PRICE_ETH, OPENSEA_URL, ROUTES, gmgnToken } from "@/lib/constants";
+import { ENGINE_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, openseaItem } from "@/lib/constants";
+import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader } from "@/lib/chain";
 import { AgentLinks } from "@/components/AgentLinks";
 
 const ALL = Array.from({ length: SUPPLY }, (_, i) => i + 1);
 type Filter = "all" | Status | "mine";
 type Size = "s" | "m" | "l";
+type EngineAgent = { id: number; rank: number; live: boolean; rule: string | null; ruleVersion: number; nav: number; pnlPct: number; trades: number; wins: number; closed: number; wallet: string };
+type Entry = { status: Status; mine: boolean; agent: EngineAgent | null };
+const CLAIMED = parseAbiItem("event Claimed(uint256 indexed tokenId, address indexed holder, address indexed agentWallet, uint256 amount)");
 
-/** Sample data for every token, with the connected holder's own Trenchers taken from this browser. */
+/** The live state of all 2,000 Trenchers: minted or not, dormant or awake, trading in the Arena, and yours. */
 function useBook(address: string | null) {
-  const [ver, setVer] = useState(0);
+  const [supply, setSupply] = useState<number | null>(null);
+  const [claimed, setClaimed] = useState<Set<number>>(new Set());
+  const [agents, setAgents] = useState<Map<number, EngineAgent>>(new Map());
+  const [mine, setMine] = useState<Set<number>>(new Set());
   useEffect(() => {
-    const f = () => setVer((v) => v + 1);
-    window.addEventListener("trenchers-agents-changed", f);
-    return () => window.removeEventListener("trenchers-agents-changed", f);
+    if (!DEPLOYMENT) { setSupply(0); return; }
+    const d = DEPLOYMENT, c = reader();
+    let alive = true;
+    const load = async () => {
+      try {
+        const [s, head] = await Promise.all([c.readContract({ address: d.nft, abi: ABI.nft, functionName: "totalSupply" }), c.getBlockNumber()]);
+        const STEP = 50_000n, ranges: [bigint, bigint][] = [];
+        for (let f = BigInt(d.startBlock); f <= head; f += STEP) ranges.push([f, f + STEP - 1n < head ? f + STEP - 1n : head]);
+        const logs = (await Promise.all(ranges.map(([a, b]) => c.getLogs({ address: d.fund, event: CLAIMED, fromBlock: a, toBlock: b })))).flat();
+        if (!alive) return;
+        setSupply(Number(s));
+        setClaimed(new Set(logs.map((l) => Number(l.args.tokenId))));
+      } catch { if (alive) setSupply((x) => x ?? 0); }
+    };
+    const feed = () => fetch(`${ENGINE_URL}/arena`, { cache: "no-store" }).then((r) => r.json()).then((j: { agents?: EngineAgent[] }) => {
+      if (alive && j.agents) setAgents(new Map(j.agents.map((a) => [a.id, a])));
+    }).catch(() => {});
+    load(); feed();
+    const iv = setInterval(() => { load(); feed(); }, 30_000);
+    return () => { alive = false; clearInterval(iv); };
   }, []);
-  return useMemo(() => {
-    const book = new Map<number, Sample & { mine: boolean }>();
-    for (const id of ALL) book.set(id, { ...sample(id), mine: false });
-    if (address) {
-      for (const id of ownedIds(address)) {
-        const a = loadAgent(address, id);
-        book.set(id, {
-          status: a.live ? "live" : a.registered ? "registered" : "idle", owner: address, listed: false,
-          wallet: a.agentWallet, identity: a.identityId, strategy: a.strategy?.preset ?? null, balance: a.registered ? a.balance : null, mine: true,
-          coin: a.token?.symbol ?? null, coinAddress: a.token?.address ?? null,
-        });
-      }
+  useEffect(() => {
+    if (!address || !DEPLOYMENT) { setMine(new Set()); return; }
+    setMine(new Set(cachedOwned(address as Address) ?? []));
+    ownedTrenchers(address as Address).then((ids) => setMine(new Set(ids))).catch(() => {});
+  }, [address]);
+  const book = useMemo(() => {
+    const m = new Map<number, Entry>();
+    for (const id of ALL) {
+      const agent = agents.get(id) ?? null;
+      const minted = supply !== null && id <= supply;
+      const awake = minted && (id <= 5 || claimed.has(id));
+      const status: Status = !minted ? "unminted" : agent?.live ? "live" : awake ? "registered" : "idle";
+      m.set(id, { status, mine: mine.has(id), agent });
     }
-    return book;
-  }, [address, ver]); // eslint-disable-line react-hooks/exhaustive-deps
+    return m;
+  }, [supply, claimed, agents, mine]);
+  return { book, supply };
 }
 
 export function Collection() {
   const { address } = useWallet();
-  const book = useBook(address);
+  const { book, supply } = useBook(address);
   const [filter, setFilter] = useState<Filter>("all");
   const [palette, setPalette] = useState("");
   const [q, setQ] = useState("");
   const [size, setSize] = useState<Size>("m");
   const [sel, setSel] = useState<number | null>(null);
-  const [sim, setSim] = useState<Sim | null>(null);
-  useEffect(() => { const t = setTimeout(() => setSim(createSim()), 50); return () => clearTimeout(t); }, []);
   useEffect(() => { loadArt().catch(() => {}); }, []);
 
   const counts = useMemo(() => {
-    const c = { live: 0, registered: 0, idle: 0, mine: 0 };
+    const c = { live: 0, registered: 0, idle: 0, unminted: 0, mine: 0 };
     book.forEach((b) => { c[b.status]++; if (b.mine) c.mine++; });
     return c;
   }, [book]);
@@ -69,7 +92,7 @@ export function Collection() {
   }, [book, filter, palette, q]);
 
   const FILTERS: [Filter, string, number][] = [
-    ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Awake", counts.registered], ["idle", "Dormant · 0.01 claimable", counts.idle],
+    ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Awake", counts.registered], ["idle", "Dormant · 0.01 claimable", counts.idle], ["unminted", "Not minted yet", counts.unminted],
   ];
   if (address) FILTERS.push(["mine", "Yours", counts.mine]);
 
@@ -82,12 +105,13 @@ export function Collection() {
         <div>
           <p className="eyebrow">Collection</p>
           <h1>2,000 agents</h1>
-          <p className="coll-lede">Every Trencher, in colour once its agent is awake. Grey ones are dormant: their 0.01 ETH starter balance is still waiting to be claimed. The NFT's own metadata follows the same state on OpenSea. Select any of them for its owner, funding, strategy and traits.</p>
+          <p className="coll-lede">Every Trencher, live from Robinhood Chain: in colour once its agent is awake, grey while it&apos;s dormant (its 0.01 ETH starter balance still waiting to be claimed), faded until it&apos;s minted. The NFT&apos;s own metadata follows the same state on OpenSea. Select any of them for its owner, agent wallet, strategy and traits.</p>
         </div>
         <dl className="coll-stats">
           <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{counts.live}</dd></div>
           <div><dt className="mono">Awake</dt><dd><i className="lg-reg" />{counts.registered}</dd></div>
           <div><dt className="mono">Dormant</dt><dd><i className="lg-idle" />{counts.idle}</dd></div>
+          <div><dt className="mono">Minted</dt><dd>{supply === null ? "…" : supply.toLocaleString("en-US")} <small>/ 2,000</small></dd></div>
           <div><dt className="mono">Price</dt><dd>{LIST_PRICE_ETH} <small>ETH</small></dd></div>
         </dl>
       </header>
@@ -124,7 +148,7 @@ export function Collection() {
 
       {sel !== null && book.get(sel) && (
         <Popup onClose={() => setSel(null)} onPrev={() => go(-1)} onNext={() => go(1)} label={`Trencher #${sel}`}>
-          <Detail id={sel} b={book.get(sel)!} sim={sim} />
+          <Detail id={sel} b={book.get(sel)!} of={[...book.values()].filter((x) => x.agent).length} />
         </Popup>
       )}
     </div>
@@ -135,7 +159,7 @@ const TILE: Record<Size, number> = { s: 40, m: 68, l: 112 };
 const GAP: Record<Size, number> = { s: 3, m: 5, l: 8 };
 
 /** The tile wall: only the rows on screen are drawn, each tile as crisp vector art. */
-function Wall({ ids, book, size, onPick }: { ids: number[]; book: Map<number, Sample & { mine: boolean }>; size: Size; onPick: (id: number) => void }) {
+function Wall({ ids, book, size, onPick }: { ids: number[]; book: Map<number, Entry>; size: Size; onPick: (id: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [view, setView] = useState({ top: 0, h: 900 });
@@ -204,19 +228,27 @@ function Popup({ children, onClose, onPrev, onNext, label }: { children: React.R
   );
 }
 
-function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim: Sim | null }) {
-  const agent = b.status === "live" && !b.mine ? sim?.agents.find((a) => a.id === id) : undefined;
+function Detail({ id, b, of }: { id: number; b: Entry; of: number }) {
   const house = id <= 5;
-  const strategy = agent ? (agent.rule ? "Custom, guided by holder" : `${agent.strategy} (template)`) : b.strategy === "Custom" ? "Custom, guided by holder" : b.strategy ? `${b.strategy} (template)` : null;
-  const owner = agent?.owner ?? b.owner;
-  const wallet = agent?.wallet ?? b.wallet;
-  const coin = agent ? agent.token : b.coin;
-  const coinAddress = agent ? agent.tokenAddress : b.coinAddress;
-  const ret = agent ? pct(agent) : null;
+  const [owner, setOwner] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<{ address: string; bal: bigint; deployed: boolean } | null>(null);
+  useEffect(() => {
+    setOwner(null); setWallet(null);
+    if (!DEPLOYMENT || b.status === "unminted") return;
+    const d = DEPLOYMENT, c = reader();
+    c.readContract({ address: d.nft, abi: ABI.nft, functionName: "ownerOf", args: [BigInt(id)] }).then(setOwner).catch(() => {});
+    if (b.status === "idle") return;
+    c.readContract({ address: d.fund, abi: ABI.fund, functionName: "agentWallet", args: [BigInt(id)] }).then(async (w) => {
+      const [code, bal] = await Promise.all([c.getCode({ address: w }), c.getBalance({ address: w })]);
+      setWallet({ address: w, bal, deployed: !!code && code !== "0x" });
+    }).catch(() => {});
+  }, [id, b.status]);
+  const a = b.agent;
+  const ret = a?.pnlPct ?? null;
   return (
     <div className="cd">
       <div className="cd-art-col">
-        <ArtCanvas id={id} size={440} className="cd-art" />
+        <ArtCanvas id={id} size={440} className={`cd-art${b.status === "idle" || b.status === "unminted" ? " is-dormant" : ""}`} />
         <div className="cd-traits">
           <h3 className="mono">Traits</h3>
           <dl>
@@ -234,44 +266,40 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
           </div>
         </div>
 
-      <dl className="cd-facts">
-        <div><dt>Starter ETH</dt><dd className="mono">{id <= 5 ? <span className="cd-muted">House agent</span> : b.status === "idle" ? <span className="up">0.01 ETH claimable</span> : <span className="cd-muted">Claimed</span>}</dd></div>
-        <div><dt>Owner</dt><dd className="mono">{b.mine ? `You · ${short(owner)}` : owner.startsWith("0x") ? short(owner) : owner}</dd></div>
-        {b.status !== "idle" && (
-          <div><dt>Funding</dt><dd className="mono">{coin && coinAddress
-            ? <a className="fund-coin" href={gmgnToken(coinAddress)} target="_blank" rel="noreferrer">Coin ${coin} ↗</a>
-            : <span className="fund-self">Self-funded</span>}</dd></div>
-        )}
-        <div><dt>Strategy</dt><dd>{strategy ?? <span className="cd-muted">{b.status === "idle" ? "None, dormant" : "Not set yet"}</span>}</dd></div>
-        {wallet && <div><dt>Agent wallet</dt><dd className="mono">{short(wallet)}</dd></div>}
-        {b.identity && <div><dt>Identity</dt><dd className="mono">ERC-8004 #{b.identity}</dd></div>}
-        {agent ? (<>
-          <div><dt>Agent value</dt><dd className="mono">{agent.nav.toFixed(3)} ETH</dd></div>
-          <div><dt>This week</dt><dd className={`mono ${ret! >= 0 ? "up" : "down"}`}>{ret! >= 0 ? "+" : ""}{ret!.toFixed(1)}%</dd></div>
-          <div><dt>Arena rank</dt><dd className="mono">#{agent.rank + 1} of {sim!.agents.length}</dd></div>
-          <div><dt>Self-funded</dt><dd className="mono">{(agent.tokenFees + agent.shareFees).toFixed(4)} ETH</dd></div>
-          <div><dt>Win rate</dt><dd className="mono">{agent.closed ? Math.round((agent.wins / agent.closed) * 100) : 0}% · {agent.trades.length} trades</dd></div>
-        </>) : b.balance !== null ? (
-          <div><dt>Balance</dt><dd className="mono">{b.balance.toFixed(3)} ETH</dd></div>
-        ) : (
-          <div><dt>Market</dt><dd>{b.listed ? "Listed for resale on OpenSea" : "Held, not listed"}</dd></div>
-        )}
-      </dl>
+      {b.status === "unminted" ? (
+        <dl className="cd-facts">
+          <div><dt>Status</dt><dd>Not minted yet</dd></div>
+          <div><dt>Mint price</dt><dd className="mono">{LIST_PRICE_ETH} ETH, with 0.01 ETH for its agent</dd></div>
+        </dl>
+      ) : (
+        <dl className="cd-facts">
+          <div><dt>Starter ETH</dt><dd className="mono">{house ? <span className="cd-muted">House agent, none</span> : b.status === "idle" ? <span className="up">0.01 ETH claimable</span> : <span className="cd-muted">Claimed</span>}</dd></div>
+          <div><dt>Owner</dt><dd className="mono">{owner ? (b.mine ? `You · ${short(owner)}` : short(owner)) : "…"}</dd></div>
+          <div><dt>Strategy</dt><dd>{a?.rule ?? <span className="cd-muted">{b.status === "idle" ? "None, dormant" : "Not set yet"}</span>}</dd></div>
+          {wallet?.deployed && <div><dt>Agent wallet</dt><dd className="mono">{short(wallet.address)}</dd></div>}
+          {wallet?.deployed && <div><dt>Balance</dt><dd className="mono">{Number(formatEther(wallet.bal)).toFixed(4)} ETH</dd></div>}
+          {a && ret !== null && (<>
+            <div><dt>This week</dt><dd className={`mono ${ret >= 0 ? "up" : "down"}`}>{ret >= 0 ? "+" : ""}{ret.toFixed(1)}%</dd></div>
+            <div><dt>Arena rank</dt><dd className="mono">#{a.rank} of {of}</dd></div>
+            <div><dt>Trades</dt><dd className="mono">{a.trades} · {a.closed ? Math.round((a.wins / a.closed) * 100) : 0}% won</dd></div>
+          </>)}
+        </dl>
+      )}
 
-      {wallet && (
+      {wallet?.deployed && (
         <div className="cd-verify">
           <span className="mono">Verify trading activity</span>
-          <AgentLinks wallet={wallet} />
+          <AgentLinks wallet={wallet.address} />
         </div>
       )}
 
       <div className="cd-actions">
-        {b.status === "live" && <TextButton href={`${ROUTES.arena}#agent-${id}`}>View in the Arena</TextButton>}
+        {b.status === "unminted" && <TextButton href={ROUTES.home}>Mint a Trencher</TextButton>}
+        {a && <TextButton href={`${ROUTES.arena}#agent-${id}`}>View in the Arena</TextButton>}
         {b.mine && <TextButton href={ROUTES.agents}>Manage agent</TextButton>}
-        {OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}
+        {b.status !== "unminted" && <TextButton href={openseaItem(id)} external>OpenSea</TextButton>}
+        {b.status === "unminted" && OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}
       </div>
-
-      <p className="cd-note">Sample data until the contracts are live.</p>
       </div>
     </div>
   );

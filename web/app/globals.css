@@ -553,6 +553,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .lg-live, .s-live i { background: var(--green); box-shadow: 0 0 10px var(--green); }
 .lg-reg, .s-registered i { background: var(--fog); }
 .lg-idle, .s-idle i { background: #3A423E; }
+.s-unminted i { background: #1F2523; border: 1px solid #3A423E; }
+.cd-status.s-unminted { color: var(--quiet); }
 
 .coll-bar { position: sticky; top: 70px; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(18,21,20,.92); backdrop-filter: blur(8px); }
 .coll-filters, .coll-tools, .coll-size { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
@@ -570,6 +572,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   transition: filter .25s ease, box-shadow .15s ease, z-index 0s; will-change: transform; }
 .tile canvas { display: block; width: 100% !important; height: 100% !important; }
 .tile.t-idle { filter: grayscale(1) contrast(.75) brightness(.4); }
+.tile.t-unminted { filter: grayscale(1) contrast(.6) brightness(.22); }
+.cd-art.is-dormant { filter: grayscale(1) brightness(.72); }
 .tile:hover { filter: none; z-index: 2; box-shadow: 0 0 0 2px var(--green), 0 10px 26px rgba(0,0,0,.6); }
 .tile:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; z-index: 2; }
 .tile.t-live::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 8px var(--green); }

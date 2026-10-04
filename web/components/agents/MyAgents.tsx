@@ -23,6 +23,17 @@ export function MyAgents() {
   const w = useWallet();
   // A real wallet on a network with live contracts manages its real Trenchers; the demo wallet keeps the walkthrough.
   if (w.ready && w.address && w.kind === "wallet" && DEPLOYMENT) return <LiveAgents />;
+  // On mainnet there's no walkthrough: connect a real wallet to see real Trenchers.
+  if (DEPLOYMENT && !chain.testnet && w.ready) {
+    return (
+      <div className="connect-gate">
+        <p className="eyebrow">NFT / Agent Profile</p>
+        <h1>Connect to see your Trenchers</h1>
+        <p className="lede">Connect the wallet that holds your Trenchers to awaken them, fund them, guide their trading and track how they do.</p>
+        <TextButton large onClick={w.openModal}>{w.address ? "Connect a different wallet" : "Connect wallet"}</TextButton>
+      </div>
+    );
+  }
   return <DemoAgents />;
 }
 

@@ -169,6 +169,7 @@ export class Engine {
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
       if (nftMoves.length && this.telegram) this.telegram.onTransfers(nftMoves).catch(() => {});
       this.cursor = to;
+      if (!live) this.log(`History read up to block ${to} of ${head} (${launches.length} launches, ${buys.length + sells.length} curve trades in this window)`);
     }
   }
 
