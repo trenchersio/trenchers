@@ -1539,3 +1539,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .mintp-note a { color: var(--fog); }
 .mintp-btn { white-space: nowrap; font-size: 13px; }
 .tn-oldw { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.tn-safety { border-color: rgba(57,255,136,.35); }
+.tn-safe-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; }
+.tn-safe-row > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.tn-buckets { list-style: none; margin: 0; padding: 0 0 0 4px; display: grid; gap: 6px; font-size: 12.5px; }
+.tn-buckets li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }

@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./TimelockedRescue.sol";
 
 /// @dev The parts of Pons V2 the adapter uses (github.com/ponsdotdev/pons-labs, contractsV2).
 interface IPonsV2Factory {
@@ -42,10 +43,12 @@ interface IAgentCoin {
 ///         The adapter never holds funds between calls and refuses the agent's own coin.
 /// @dev    Bonding-curve phase only (ETH-paired launches). Graduated coins trade on Uniswap V4 and
 ///         need a separate route; the curve reverts with CurveGraduated for them.
-contract PonsAdapter is ReentrancyGuard {
+contract PonsAdapter is ReentrancyGuard, InstantRescue {
     using SafeERC20 for IERC20;
 
     IPonsV2Factory public immutable factory;
+    /// @notice Can sweep anything left in the adapter by mistake (it never holds funds between calls).
+    address public immutable owner;
 
     event Bought(address indexed agent, address indexed token, uint256 ethIn, uint256 tokensOut, uint256 refund);
     event Sold(address indexed agent, address indexed token, uint256 tokensIn, uint256 ethOut);
@@ -56,9 +59,12 @@ contract PonsAdapter is ReentrancyGuard {
     error ZeroAmount();
     error TransferFailed();
 
-    constructor(IPonsV2Factory factory_) {
+    constructor(IPonsV2Factory factory_, address owner_) {
         factory = factory_;
+        owner = owner_;
     }
+
+    function _rescueOwner() internal view override returns (address) { return owner; }
 
     /// @notice Buys `token` with all ETH sent; tokens and any refund go to the caller (the agent wallet).
     function buy(address token, uint256 minTokensOut) external payable nonReentrant returns (uint256 tokensOut) {

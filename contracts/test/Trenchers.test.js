@@ -178,7 +178,7 @@ describe("AgentStarterFund", () => {
     const ctx = await deploy();
     const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
     const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
-      ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01")
+      ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"), 48 * 3600
     );
     await fund.connect(ctx.safe).setAccount(ctx.bob.address /* any non-zero implementation */, ethers.ZeroHash);
     await mintAs(ctx.nft, ctx.treasury, 20); // ids 6..25
@@ -262,7 +262,7 @@ describe("Dormant / awake metadata", () => {
   it("serves dormant metadata until the starter balance is claimed, then awake, and signals a refresh", async () => {
     const { nft, safe, treasury, alice, deployer } = await deploy();
     const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
-    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"));
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"), 48 * 3600);
     await fund.connect(safe).setAccount(alice.address, ethers.ZeroHash);
     await mintAs(nft, treasury, 5);
     await nft.connect(treasury).transferFrom(treasury.address, alice.address, 6);

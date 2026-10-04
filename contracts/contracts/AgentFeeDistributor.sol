@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./TimelockedRescue.sol";
 
 interface IERC6551RegistryView {
     function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId)
@@ -17,7 +18,7 @@ interface IERC6551RegistryView {
 ///         Enrolment: once a Trencher's agent wallet exists, anyone can call enroll(tokenId). The agent
 ///         earns from the next epoch on. Each epoch's pot is split by the number of agents enrolled
 ///         before it began, and that amount is reserved until paid, so late payments are always covered.
-contract AgentFeeDistributor is Ownable, ReentrancyGuard {
+contract AgentFeeDistributor is ReentrancyGuard, TimelockedRescue {
     uint256 public constant EPOCH = 7 days;
     uint256 public constant MAX_ID = 2000;
 
@@ -53,7 +54,7 @@ contract AgentFeeDistributor is Ownable, ReentrancyGuard {
     error AlreadyPaid();
     error TransferFailed();
 
-    constructor(address owner_, IERC6551RegistryView registry_, address nft_) {
+    constructor(address owner_, IERC6551RegistryView registry_, address nft_, uint256 rescueDelay_) TimelockedRescue(rescueDelay_) {
         if (owner_ == address(0) || address(registry_) == address(0) || nft_ == address(0)) revert ZeroAddress();
         _transferOwnership(owner_);
         registry = registry_;
@@ -79,7 +80,7 @@ contract AgentFeeDistributor is Ownable, ReentrancyGuard {
     }
 
     /// @notice Registers a Trencher whose agent wallet exists. It earns from the next epoch.
-    function enroll(uint256 tokenId) external {
+    function enroll(uint256 tokenId) external notShutdown {
         if (tokenId == 0 || tokenId > MAX_ID) revert BadToken();
         if (enrolledFrom[tokenId] != 0) revert AlreadyEnrolled();
         if (agentWallet(tokenId).code.length == 0) revert NotRegistered();
@@ -89,7 +90,7 @@ contract AgentFeeDistributor is Ownable, ReentrancyGuard {
     }
 
     /// @notice Closes the current epoch once it has run for EPOCH. Callable by anyone.
-    function closeEpoch() external {
+    function closeEpoch() external notShutdown {
         if (block.timestamp < epochStart + EPOCH) revert TooEarly();
         uint256 pot = address(this).balance - reserved;
         uint256 per = activeAgents == 0 ? 0 : pot / activeAgents;
@@ -103,7 +104,7 @@ contract AgentFeeDistributor is Ownable, ReentrancyGuard {
     }
 
     /// @notice Pays a closed epoch's share into each listed agent's wallet. Callable by anyone.
-    function pay(uint256 closedEpoch, uint256[] calldata tokenIds) external nonReentrant {
+    function pay(uint256 closedEpoch, uint256[] calldata tokenIds) external nonReentrant notShutdown {
         if (closedEpoch >= epoch) revert TooEarly();
         uint256 per = sharePerAgent[closedEpoch];
         for (uint256 i; i < tokenIds.length; ++i) {

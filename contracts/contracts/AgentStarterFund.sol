@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "./TimelockedRescue.sol";
 
 interface INFTNotify {
     function notifyAwake(uint256 tokenId) external;
@@ -35,7 +36,7 @@ interface IERC6551Registry {
 /// @dev    Solvency: the fund always keeps CLAIM for every Trencher not yet claimed. Only ETH above
 ///         that reserve (e.g. what remains once marketplace fees are covered) can be released, and
 ///         only to the excess destination (the buyback vault).
-contract AgentStarterFund is Ownable, ReentrancyGuard {
+contract AgentStarterFund is ReentrancyGuard, TimelockedRescue {
     /// @notice ETH paid into each agent wallet: half the list price. 0.01 ETH on mainnet (set at deploy, then fixed).
     uint256 public immutable CLAIM;
     uint256 public constant FIRST_ID = 6;      // #1-#5 are house agents
@@ -71,7 +72,7 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     error TransferFailed();
     error ZeroAmount();
 
-    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, uint256 claim_) {
+    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, uint256 claim_, uint256 rescueDelay_) TimelockedRescue(rescueDelay_) {
         if (claim_ == 0) revert ZeroAmount();
         CLAIM = claim_;
         if (owner_ == address(0) || address(nft_) == address(0) || address(registry_) == address(0)) revert ZeroAddress();
@@ -106,7 +107,7 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     }
 
     /// @notice Pays the starter balance (CLAIM) into the Trencher's agent wallet, creating the wallet if needed.
-    function claim(uint256 tokenId) external nonReentrant {
+    function claim(uint256 tokenId) external nonReentrant notShutdown {
         if (tokenId < FIRST_ID || tokenId > LAST_ID) revert NotEligible();
         if (claimed[tokenId]) revert AlreadyClaimed();
         if (nft.ownerOf(tokenId) != msg.sender) revert NotHolder();
@@ -141,7 +142,7 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     }
 
     /// @notice Sends ETH above the reserve to the buyback vault. Callable by anyone.
-    function releaseExcess() external nonReentrant {
+    function releaseExcess() external nonReentrant notShutdown {
         address payable to = excessTo;
         if (to == address(0)) revert ZeroAddress();
         uint256 amount = excess();

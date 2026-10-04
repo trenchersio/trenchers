@@ -14,6 +14,10 @@ const NICK_FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
 // Robinhood Chain mainnet (4663) addresses from public sources; checked for code before use.
 const ERC8004_IDENTITY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
 const PONS_ROUTER = "0xe33e9e479df8802cb0866d5d05258bec4cf62948";
+const PONS_FACTORY = "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e";
+// Safety net: the Safe can move pooled ETH out of the starter fund / fee distributor only after this
+// public delay (see TimelockedRescue). 48 hours on mainnet.
+const RESCUE_DELAY = Number(process.env.RESCUE_DELAY || 48 * 3600);
 
 function need(name) {
   const v = process.env[name];
@@ -59,7 +63,7 @@ async function main() {
   console.log(`  transfer validator: ${await nft.getTransferValidator()}`);
 
   const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
-    safe, await nft.getAddress(), ERC6551_REGISTRY, mintPrice / 2n
+    safe, await nft.getAddress(), ERC6551_REGISTRY, mintPrice / 2n, RESCUE_DELAY
   );
   await fund.waitForDeployment();
   console.log(`AgentStarterFund ${await fund.getAddress()}`);
@@ -70,7 +74,7 @@ async function main() {
   await config.waitForDeployment();
   const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
   await impl.waitForDeployment();
-  const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(deployer.address, ERC6551_REGISTRY, await nft.getAddress());
+  const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(deployer.address, ERC6551_REGISTRY, await nft.getAddress(), RESCUE_DELAY);
   await dist.waitForDeployment();
   console.log(`AgentConfig      ${await config.getAddress()}`);
   console.log(`AgentAccount impl ${await impl.getAddress()}`);
@@ -79,7 +83,13 @@ async function main() {
   // Metadata follows each Trencher: dormant (grey, 0.01 ETH claimable) until claimed, then awake.
   await (await nft.setStarterFund(await fund.getAddress())).wait();
   if (process.env.ENGINE) await (await config.propose(0, process.env.ENGINE)).wait();
-  if (process.env.SWAP_ADAPTER) await (await config.propose(1, process.env.SWAP_ADAPTER)).wait();
+  // Agents trade Pons coins through the PonsAdapter (only genuine Pons launches, never their own coin).
+  if (await hasCode(PONS_FACTORY)) {
+    const adapter = await (await ethers.getContractFactory("PonsAdapter")).deploy(PONS_FACTORY, safe);
+    await adapter.waitForDeployment();
+    console.log(`PonsAdapter      ${await adapter.getAddress()}`);
+    await (await config.propose(1, await adapter.getAddress())).wait();
+  } else console.warn("  Pons V2 factory not found on this chain: no PonsAdapter deployed");
   if (await hasCode(PONS_ROUTER)) await (await config.propose(2, PONS_ROUTER)).wait();
   await (await dist.setAccount(await impl.getAddress(), ethers.ZeroHash)).wait();
 

@@ -23,7 +23,7 @@ async function setup() {
   const router = await (await ethers.getContractFactory("MockRouter")).deploy();
   const launcher = await (await ethers.getContractFactory("MockRouter")).deploy();
   const config = await (await ethers.getContractFactory("AgentConfig")).deploy(safe.address);
-  const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"));
+  const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"), 48 * 3600);
   await config.connect(safe).propose(0, engine.address);
   await config.connect(safe).propose(1, await router.getAddress());
   await config.connect(safe).propose(2, await launcher.getAddress());
@@ -146,7 +146,7 @@ describe("TrenchersAgentAccount", () => {
 describe("AgentFeeDistributor", () => {
   async function dsetup() {
     const ctx = await setup();
-    const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(ctx.safe.address, await ctx.registry.getAddress(), await ctx.nft.getAddress());
+    const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(ctx.safe.address, await ctx.registry.getAddress(), await ctx.nft.getAddress(), 48 * 3600);
     await dist.connect(ctx.safe).setAccount(await ctx.impl.getAddress(), SALT);
     return { ...ctx, dist };
   }

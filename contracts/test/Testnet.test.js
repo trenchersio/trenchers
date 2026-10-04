@@ -11,7 +11,7 @@ describe("Testnet setup flow (public mint)", () => {
     const registry = await (await ethers.getContractFactory("MockERC6551Registry")).deploy();
     const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(owner.address, owner.address, Math.floor(Date.now() / 1000));
     const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), owner.address, "", "", E("0.002"));
-    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.001"));
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.001"), 48 * 3600);
     const config = await (await ethers.getContractFactory("AgentConfig")).deploy(owner.address);
     const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
     await config.propose(3, await fund.getAddress());
@@ -53,7 +53,7 @@ describe("Mint gas safety", () => {
     const registry = await (await ethers.getContractFactory("MockERC6551Registry")).deploy();
     const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(owner.address, owner.address, Math.floor(Date.now() / 1000));
     const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), owner.address, "", "", E("0.0002"));
-    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.0001"));
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.0001"), 48 * 3600);
     await splitter.setPrimarySeller(await nft.getAddress());
     await splitter.proposeDestination(3, await fund.getAddress());
     await nft.setMintOpen(true);

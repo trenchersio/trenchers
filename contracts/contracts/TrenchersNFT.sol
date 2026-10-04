@@ -5,6 +5,7 @@ import "@limitbreak/creator-token-standards/src/erc721c/ERC721C.sol";
 import "@limitbreak/creator-token-standards/src/access/OwnableBasic.sol";
 import "@limitbreak/creator-token-standards/src/programmable-royalties/BasicRoyalties.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "./TimelockedRescue.sol";
 
 interface IStarterFundView {
     function claimed(uint256 tokenId) external view returns (bool);
@@ -21,7 +22,7 @@ interface IRevenueSplitterRelease {
 ///         trenchers.io at a fixed price; every mint's ETH goes straight to the RevenueSplitter as a
 ///         primary sale, and the agent's half moves on to the Agent Starter Fund in the same transaction.
 ///         Resales happen on OpenSea. ERC721-C (Limit Break) so OpenSea can enforce creator earnings.
-contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
+contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, InstantRescue {
     using Strings for uint256;
 
     /// @notice The first collection: 2,000 Trenchers.
@@ -153,6 +154,9 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     }
 
     // ------------------------------------------------------------------ admin
+
+    /// @dev The NFT never keeps ETH (mints forward it); the owner can sweep anything sent here by mistake.
+    function _rescueOwner() internal view override returns (address) { return owner(); }
 
     /// @notice Raises the supply cap for a later round. Can only go up.
     function raiseMaxSupply(uint256 newMax) external onlyOwner {

@@ -25,6 +25,8 @@ const EXPLORER = chain.blockExplorers.default.url;
 const PRICE = parseEther("0.0002");
 const CLAIM = parseEther("0.0001");
 const eth = (v: bigint) => Number(formatEther(v)).toString();
+/** Testnet safety-net delay: 10 minutes so a full rescue can be tried today (48 hours on mainnet). */
+const RESCUE_DELAY = 600;
 const CANONICAL_REGISTRY = "0x000000006551c19487814612e58FE06813775758" as Address;
 const PONS_ROUTER = "0xe33e9e479df8802cb0866d5d05258bec4cf62948" as Address;
 const META = "https://trenchers.io/testnet-meta/";
@@ -37,8 +39,8 @@ type Dep = {
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
 const WALLET_KEY = "trenchers-wallet-rdns";
-/** Bumped when the contracts change in a way the page relies on (4 = public mint, instant withdrawals, rule text, any holder can awaken). */
-const CONTRACTS_VERSION = 4;
+/** Bumped when the contracts change in a way the page relies on (5 = adds the safety net: timelocked rescue, sweeps). */
+const CONTRACTS_VERSION = 5;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string };
@@ -243,10 +245,10 @@ export function TestnetSetup() {
     } },
     { key: "splitter", label: "Revenue splitter", run: async (_d, me) => ({ splitter: await deploy("Revenue splitter", "RevenueSplitter", [me, me, BigInt(Math.floor(Date.now() / 1000))]) }) },
     { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
-    { key: "fund", label: "Agent Starter Fund", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund", "AgentStarterFund", [me, d.nft, d.registry, CLAIM]) }) },
+    { key: "fund", label: "Agent Starter Fund", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund", "AgentStarterFund", [me, d.nft, d.registry, CLAIM, BigInt(RESCUE_DELAY)]) }) },
     { key: "config", label: "Agent settings", run: async (_d, me) => ({ config: await deploy("Agent settings", "AgentConfig", [me]) }) },
     { key: "impl", label: "Agent wallet", run: async (d) => ({ impl: await deploy("Agent wallet", "TrenchersAgentAccount", [d.config]) }) },
-    { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft]) }) },
+    { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft, BigInt(RESCUE_DELAY)]) }) },
     { key: "cfgFund", label: "Link settings to the starter fund", run: async (d) => { await write("Link settings to the starter fund", d.config!, "AgentConfig", "propose", [3, d.fund]); return {}; } },
     { key: "nftFund", label: "Link NFT to the starter fund (grey / colour)", run: async (d) => { await write("Link NFT to the starter fund (grey / colour)", d.nft!, "TrenchersNFT", "setStarterFund", [d.fund]); return {}; } },
     { key: "fundAcct", label: "Open awakening", run: async (d) => { await write("Open awakening", d.fund!, "AgentStarterFund", "setAccount", [d.impl, zeroHash]); return {}; } },
@@ -459,6 +461,7 @@ export function TestnetSetup() {
         </div>
       )}
 
+      {account && chainOk && ready && isOwner && <SafetyNet dep={dep} account={account} read={read} write={write} getBalance={(a) => clients().pub.getBalance({ address: a })} chainTime={async () => Number((await clients().pub.getBlock()).timestamp)} tick={tick} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} />}
       {account && chainOk && <Rescue account={account} clients={clients} sendTx={sendTx} setError={setError} />}
 
       {(logs.length > 0 || error) && (
@@ -698,6 +701,88 @@ function Rescue({ account, clients, sendTx, setError }: {
           </div>
         );
       })}
+    </section>
+  );
+}
+
+/** The team wallet's view of every contract that holds money, with the ways to get it out. */
+function SafetyNet({ dep, account, read, write, getBalance, chainTime, tick, onDone, setError, busy, setBusy }: {
+  dep: Dep; account: Address; read: ReadFn; write: WriteFn; getBalance: (a: Address) => Promise<bigint>; chainTime: () => Promise<number>; tick: number;
+  onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void;
+}) {
+  type S = { fund: bigint; fundTo: Address; fundEta: number; fundDelay: number; fundShut: boolean; split: bigint; owed: bigint[]; dest: Address[]; unacc: bigint; nft: bigint; dist: bigint };
+  const [s, setS] = useState<S | null>(null);
+  const [clock, setClock] = useState(Date.now());
+  const [skew, setSkew] = useState(0); // chain time minus this computer's clock
+  useEffect(() => { const t = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [fund, fundTo, fundEta, fundDelay, fundShut, split, nft, dist] = await Promise.all([
+          getBalance(dep.fund!), read<Address>(dep.fund!, "AgentStarterFund", "rescueTo"), read<bigint>(dep.fund!, "AgentStarterFund", "rescueEta"),
+          read<bigint>(dep.fund!, "AgentStarterFund", "rescueDelay"), read<boolean>(dep.fund!, "AgentStarterFund", "shutdown"),
+          getBalance(dep.splitter!), getBalance(dep.nft!), dep.dist ? getBalance(dep.dist) : Promise.resolve(0n),
+        ]);
+        const owed = await Promise.all([0, 1, 2, 3].map((b) => read<bigint>(dep.splitter!, "RevenueSplitter", "owed", [b])));
+        const destAddrs = await Promise.all([0, 1, 2, 3].map((b) => read<Address>(dep.splitter!, "RevenueSplitter", "destination", [b])));
+        const unacc = await read<bigint>(dep.splitter!, "RevenueSplitter", "unaccounted").catch(() => 0n);
+        const ct = await chainTime().catch(() => Date.now() / 1000);
+        setSkew(ct * 1000 - Date.now());
+        setS({ fund, fundTo, fundEta: Number(fundEta) * 1000, fundDelay: Number(fundDelay), fundShut, split, owed, dest: destAddrs, unacc, nft, dist });
+      } catch { setS(null); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, dep.fund]);
+  if (!s) return null;
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn(); } catch (e) { setError(reason(e)); } setBusy(false); onDone(); };
+  const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+  const pending = s.fundTo && s.fundTo !== ZERO_ADDR;
+  const wait = Math.max(0, Math.ceil((s.fundEta - (clock + skew)) / 1000));
+  const BUCKETS = ["Buybacks", "Development", "Prize pool", "Starter fund (in transit)"];
+  const f = (v: bigint) => `${Number(formatEther(v))} ETH`;
+  const delayText = s.fundDelay >= 3600 ? `${s.fundDelay / 3600} hours` : `${s.fundDelay / 60} minutes`;
+
+  return (
+    <section className="tn-card tn-safety">
+      <h2>Safety net <small className="mono">team wallet only</small></h2>
+      <p>Every contract that can hold money, and how you get it out. Pooled money (the starter fund) can only move after a public, on-chain delay of <b>{delayText}</b> ({"48 hours"} on mainnet), so nobody can drain it silently. Agent wallets belong to whoever holds the NFT: they withdraw themselves, and for the house agents that is your team wallet.</p>
+
+      <div className="tn-safe-row">
+        <div><b>Agent Starter Fund</b><span className="mono tn-small">{f(s.fund)}{s.fundShut ? " · shut down" : ""}</span></div>
+        {s.fundShut ? <span className="tn-hint">Rescued and shut down.</span> : !pending ? (
+          <button type="button" className="tn-btn" onClick={() => act(() => write("Proposing a rescue of the starter fund to your wallet", dep.fund!, "AgentStarterFund", "proposeRescue", [account]))} disabled={busy}>Rescue to my wallet…</button>
+        ) : (
+          <div className="tn-row">
+            <button type="button" className="tn-btn tn-primary" onClick={() => act(() => write("Rescuing the starter fund", dep.fund!, "AgentStarterFund", "executeRescue", [[]]))} disabled={busy || wait > 0}>{wait > 0 ? `Rescue possible in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, "0")}` : `Rescue ${f(s.fund)} now`}</button>
+            <button type="button" className="tn-btn" onClick={() => act(() => write("Cancelling the rescue", dep.fund!, "AgentStarterFund", "cancelRescue"))} disabled={busy}>Cancel</button>
+          </div>
+        )}
+      </div>
+      {pending && !s.fundShut && <p className="tn-hint">Rescue announced to {short(s.fundTo)}. Executing it moves all the fund&apos;s ETH there and permanently stops new awakenings.</p>}
+
+      <div className="tn-safe-row">
+        <div><b>Revenue splitter</b><span className="mono tn-small">{f(s.split)}</span></div>
+        {s.unacc > 0n && <button type="button" className="tn-btn" onClick={() => act(() => write("Sweeping stray ETH from the splitter", dep.splitter!, "RevenueSplitter", "rescueUnaccounted", [account]))} disabled={busy}>Sweep stray {f(s.unacc)}</button>}
+      </div>
+      <ul className="tn-buckets mono">
+        {BUCKETS.map((name, b) => (
+          <li key={name}>
+            <span>{name}: {f(s.owed[b])}</span>
+            <span className="tn-hint">{s.dest[b] === ZERO_ADDR ? "no destination yet" : `→ ${short(s.dest[b])}`}</span>
+            {s.owed[b] > 0n && (s.dest[b] === ZERO_ADDR ? (
+              <button type="button" className="tn-btn tn-ghost" onClick={() => act(() => write(`Sending ${name} to your wallet`, dep.splitter!, "RevenueSplitter", "proposeDestination", [b, account]))} disabled={busy}>Send to my wallet</button>
+            ) : (
+              <button type="button" className="tn-btn tn-ghost" onClick={() => act(() => write(`Releasing ${name}`, dep.splitter!, "RevenueSplitter", "release", [b]))} disabled={busy}>Release</button>
+            ))}
+          </li>
+        ))}
+      </ul>
+
+      <div className="tn-safe-row">
+        <div><b>NFT contract</b><span className="mono tn-small">{f(s.nft)} (should always be 0)</span></div>
+        {s.nft > 0n && <button type="button" className="tn-btn" onClick={() => act(() => write("Sweeping ETH from the NFT contract", dep.nft!, "TrenchersNFT", "sweep", ["0x0000000000000000000000000000000000000000", account]))} disabled={busy}>Sweep to my wallet</button>}
+      </div>
+      {dep.dist && <div className="tn-safe-row"><div><b>Fee distributor</b><span className="mono tn-small">{f(s.dist)}</span></div></div>}
     </section>
   );
 }

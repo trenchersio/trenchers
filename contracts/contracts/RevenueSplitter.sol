@@ -56,6 +56,7 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
     mapping(Bucket => Pending) public pendingDestination;
 
     event PrimarySellerSet(address seller);
+    event UnaccountedRescued(address to, uint256 amount);
     event PrimarySaleReceived(uint256 amount);
     event RoyaltyReceived(address indexed from, uint256 amount);
     event Released(Bucket indexed bucket, address indexed to, uint256 amount);
@@ -149,6 +150,24 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
         if (amount == 0) revert NothingOwed();
         token.safeTransfer(to, amount);
         emit TokenReleased(address(token), to, amount);
+    }
+
+    // ------------------------------------------------------------------ safety net
+
+    /// @notice ETH the splitter holds that belongs to no bucket (e.g. sent by mistake). Owner can sweep it.
+    function unaccounted() public view returns (uint256) {
+        uint256 accounted = owed[Bucket.Buyback] + owed[Bucket.Dev] + owed[Bucket.Prize] + owed[Bucket.Starter]
+            + (vestedTotal - vestedReleased);
+        return address(this).balance > accounted ? address(this).balance - accounted : 0;
+    }
+
+    function rescueUnaccounted(address payable to) external onlyOwner nonReentrant {
+        uint256 amount = unaccounted();
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert NothingOwed();
+        (bool ok, ) = to.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+        emit UnaccountedRescued(to, amount);
     }
 
     // ------------------------------------------------------------------ destinations

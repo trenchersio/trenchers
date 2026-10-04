@@ -18,3 +18,8 @@ contract MockRegistry {
         return w == address(0) ? address(uint160(uint256(keccak256(abi.encode(tokenId))))) : w;
     }
 }
+
+/// @dev Forces ETH into a contract without calling it (selfdestruct in the creating transaction).
+contract ForceSend {
+    constructor(address payable to) payable { selfdestruct(to); }
+}

@@ -13,7 +13,7 @@ async function setup() {
   await nft.connect(alice).mint(1, { value: E("0.02") }); // #6
   const registry = await (await ethers.getContractFactory("MockERC6551Registry")).deploy();
   const pons = await (await ethers.getContractFactory("MockPonsFactory")).deploy();
-  const adapter = await (await ethers.getContractFactory("PonsAdapter")).deploy(await pons.getAddress());
+  const adapter = await (await ethers.getContractFactory("PonsAdapter")).deploy(await pons.getAddress(), safe.address);
   const config = await (await ethers.getContractFactory("AgentConfig")).deploy(safe.address);
   await config.connect(safe).propose(0, engine.address);
   await config.connect(safe).propose(1, await adapter.getAddress());

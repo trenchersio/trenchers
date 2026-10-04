@@ -49,11 +49,11 @@ async function main() {
   const registry = await deploy("MockERC6551Registry");
   const splitter = await deploy("RevenueSplitter", [deployer.address, deployer.address, BigInt(Math.floor(Date.now() / 1000))]);
   const nft = await deploy("TrenchersNFT", [splitter, deployer.address, "", "", parseEther("0.02")]);
-  const fund = await deploy("AgentStarterFund", [deployer.address, nft, registry, parseEther("0.01")]);
+  const fund = await deploy("AgentStarterFund", [deployer.address, nft, registry, parseEther("0.01"), 600n]);
   const config = await deploy("AgentConfig", [deployer.address]);
   const impl = await deploy("TrenchersAgentAccount", [config]);
   const pons = await deploy("MockPonsFactory");
-  const adapter = await deploy("PonsAdapter", [pons]);
+  const adapter = await deploy("PonsAdapter", [pons, deployer.address]);
   await call(config, "AgentConfig", "propose", [0, engineAcct.address]);
   await call(config, "AgentConfig", "propose", [1, adapter]);
   await call(config, "AgentConfig", "propose", [3, fund]);
