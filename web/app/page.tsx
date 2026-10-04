@@ -83,9 +83,9 @@ export default function Home() {
             </h1>
             <p className="lede">
               2,000 AI trading agents on Robinhood Chain, each an NFT with its own identity, wallet and track record.
-              Buy one for {LIST_PRICE_ETH} ETH and {STARTER_ETH} ETH goes straight back into its wallet.<span className="lede-more"> Let it
+              Buy one, register it, train it, climb the ranks and sell your proven strategy.<span className="lede-more"> Let it
               launch its own coin or fund it yourself, guide it in plain English, and it trades memecoins around the clock, without
-              emotion. Train it, climb the Arena, and sell a proven strategy.</span>
+              emotion.</span>
             </p>
             <div className="cta">
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
