@@ -30,6 +30,9 @@ contract AgentConfig is Ownable {
     mapping(address => bool) public isAccountLogic;
     address[] public accountLogicHistory;
 
+    /// @notice Once sealed (at the end of deployment), even a key's first setting waits the 48-hour timelock.
+    bool public isSealed;
+
     /// @notice Emergency stop for all engine trading (see above).
     bool public paused;
     /// @notice Can pause (not unpause), e.g. a team member's hot wallet for fast reaction.
@@ -40,6 +43,8 @@ contract AgentConfig is Ownable {
     event Cancelled(Key indexed key);
     event Paused(address indexed by, bool paused);
     event GuardianSet(address guardian);
+    event Sealed();
+    event AccountLogicRevoked(address logic);
 
     error ZeroAddress();
     error NoPending();
@@ -60,7 +65,7 @@ contract AgentConfig is Ownable {
     function propose(Key key, address value) external onlyOwner {
         if (value == address(0)) revert ZeroAddress();
         if (key == Key.AccountLogic && value.code.length == 0) revert NotContract();
-        if (get[key] == address(0)) { _set(key, value); return; }
+        if (get[key] == address(0) && !isSealed) { _set(key, value); return; }
         uint64 eta = uint64(block.timestamp + TIMELOCK);
         pending[key] = Pending(value, eta);
         emit Proposed(key, value, eta);
@@ -75,6 +80,18 @@ contract AgentConfig is Ownable {
     }
 
     function cancel(Key key) external onlyOwner { delete pending[key]; emit Cancelled(key); }
+
+    /// @notice Ends the deployment phase: from now on every change, first settings included, takes 48 hours.
+    function seal() external onlyOwner { isSealed = true; emit Sealed(); }
+
+    /// @notice Withdraws an offered wallet version (e.g. found buggy) so no more holders can switch to it.
+    ///         Wallets already on it keep running it until their holder switches back. The original can't
+    ///         be revoked.
+    function revokeAccountLogic(address logic) external onlyOwner {
+        if (accountLogicHistory.length == 0 || logic == accountLogicHistory[0]) revert NotAllowed();
+        isAccountLogic[logic] = false;
+        emit AccountLogicRevoked(logic);
+    }
 
     function _set(Key key, address value) internal {
         get[key] = value;

@@ -188,7 +188,7 @@ Every Trencher is minted for 0.02 ETH through `TrenchersNFT.mint`. The mint send
 | House agents #1 to #5 have no starter balance; every other Trencher can be claimed by whoever holds it, team wallets included | Explicit check in `claim` |
 | A Trencher resold before its claim can still be claimed | The claim follows the token, not the first buyer |
 | The fund can always pay every unclaimed Trencher | Only ETH above `0.01 × unclaimed` can leave, and only to the buyback vault |
-| The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): it can pay for a coin launch or trades, but withdrawals are limited to the balance above it. After 180 days, what's left becomes withdrawable |
+| The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): the agent trades with it, but withdrawals are limited to the balance above it, a coin launch is paid from the free balance, and during the lock the wallet only sends plain ETH (no contract calls or signatures), so coins bought with the starter can only be sold through the engine. After 180 days, what's left becomes withdrawable |
 
 The lock matters: without it, someone could buy a Trencher, awaken it and pull the 0.01 ETH straight back out. The NFT would effectively cost 0.01 ETH and the starter fund would be a rebate, not trading capital. Six months is long enough to stop that, while owners still get any unused starter ETH back eventually.
 
@@ -440,7 +440,7 @@ Every flow runs through public contracts. Changing a payout destination requires
 - Spending limits are enforced by the agent wallet contract (`TrenchersAgentAccount`), not by the server.
 - **A sale pauses trading.** The policy remembers which holder set it; once the NFT changes hands, the engine is locked out until the new holder applies their own policy.
 - **Instant withdrawals, never of the starter.** The holder can withdraw anything above the locked starter balance at once. Only the current holder can withdraw, so after a sale the seller has no access. Buyers should know that a seller can withdraw their own deposits right up until the sale completes; the starter balance, the rule history and the record always stay with the agent.
-- **The starter balance stays in the agent.** ETH from the Agent Starter Fund can pay for the coin launch and trades, but can't be withdrawn or moved out for 180 days. Deposits above it stay withdrawable.
+- **The starter balance stays in the agent.** ETH from the Agent Starter Fund is for trading: it can't be withdrawn, spent on a coin launch or moved out for 180 days. Deposits above it stay withdrawable.
 - **Engine and router changes are timelocked.** Agent wallets read the engine, router, coin launcher and starter fund from `AgentConfig`, where any change waits 48 hours, so holders can pause first.
 - The engine trades through a swap adapter that always returns the output to the calling agent wallet (next to build), so it cannot redirect swap proceeds either.
 - The contracts will be independently audited before they hold real funds; deposits are capped during the beta.
@@ -467,7 +467,7 @@ wallets are *not* upgradeable by default: nobody, including the team, can change
 If a real bug is ever found in the wallet code, the team can offer a fixed version, and each holder
 chooses whether to upgrade (same address, balance and track record; switch back any time).
 
-The full table, and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md).
+The full table, and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md). The internal security review and what was fixed is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Built on Robinhood Chain
 
@@ -510,7 +510,7 @@ The health page (`/health`) shows the engine's status, the emergency stop, the T
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 59 tests, deploy script |
+| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 65 tests, deploy script |
 | [`web/`](web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](web/lib/strategies.ts) | The five house templates and the signals they need |

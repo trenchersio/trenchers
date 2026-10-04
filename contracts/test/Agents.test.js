@@ -28,7 +28,7 @@ async function setup() {
   await config.connect(safe).propose(1, await router.getAddress());
   await config.connect(safe).propose(2, await launcher.getAddress());
   await config.connect(safe).propose(3, await fund.getAddress());
-  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress(), await fund.getAddress());
   await config.connect(safe).propose(4, await logic.getAddress());
   const impl = await (await ethers.getContractFactory("TrenchersAgentWallet")).deploy(await config.getAddress());
   await fund.connect(safe).setAccount(await impl.getAddress(), SALT);
@@ -79,17 +79,53 @@ describe("TrenchersAgentAccount", () => {
     await expect(acct.connect(alice).execute(bob.address, E("0.01"), "0x", 0)).to.changeEtherBalance(bob, E("0.01"));
   });
 
-  it("launches the agent's coin from its wallet, paid from the starter balance, and remembers the coin", async () => {
+  it("launches the agent's coin once, paid from the free balance, never from the locked starter", async () => {
     const { register, fund, deployer, alice, launcher, bob } = await setup();
     await deployer.sendTransaction({ to: await fund.getAddress(), value: E("1") });
     const acct = await register(6);
     await fund.connect(alice).claim(6);
     const data = launcher.interface.encodeFunctionData("launch");
     await expect(acct.connect(bob).launchCoin(data, E("0.001"), bob.address)).to.be.revertedWithCustomError(acct, "NotHolder");
+    // only the starter is in the wallet: a launch can't spend it
+    await expect(acct.connect(alice).launchCoin(data, E("0.001"), bob.address)).to.be.revertedWithCustomError(acct, "StarterLocked");
+    await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.001") });
     await expect(acct.connect(alice).launchCoin(data, E("0.001"), bob.address)).to.emit(acct, "CoinLaunched").withArgs(bob.address);
     expect(await launcher.lastValue()).to.equal(E("0.001"));
-    expect(await acct.starterLocked()).to.equal(E("0.009"));
+    expect(await acct.starterLocked()).to.equal(E("0.01"));
     expect(await acct.coin()).to.equal(bob.address);
+    await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.001") });
+    await expect(acct.connect(alice).launchCoin(data, E("0.001"), alice.address)).to.be.revertedWithCustomError(acct, "NotAllowed"); // once
+  });
+
+  it("during the starter lock: no contract calls from the wallet, no signatures, and a used wallet can't be awakened", async () => {
+    const { register, fund, deployer, alice, bob, router } = await setup();
+    await deployer.sendTransaction({ to: await fund.getAddress(), value: E("1") });
+    // #7: the holder uses the wallet before awakening (e.g. to approve a token) -> claiming is refused
+    const pre = await register(7);
+    await pre.connect(alice).execute(bob.address, 0, "0x", 0);
+    await expect(fund.connect(alice).claim(7)).to.be.revertedWithCustomError(fund, "WalletUsed");
+    // #6: awakened normally
+    const acct = await register(6);
+    await fund.connect(alice).claim(6);
+    await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.5") });
+    const approve = router.interface.encodeFunctionData("swap");
+    await expect(acct.connect(alice).execute(await router.getAddress(), 0, approve, 0)).to.be.revertedWithCustomError(acct, "StarterLocked");
+    await acct.connect(alice).execute(bob.address, E("0.1"), "0x", 0); // plain ETH from the free balance is fine
+    const hash = ethers.hashMessage("permit");
+    const sig = await alice.signMessage("permit");
+    expect(await acct.isValidSignature(hash, sig)).to.equal("0x00000000");
+    await time.increase(180 * 86400 + 1);
+    expect(await acct.isValidSignature(hash, sig)).to.equal("0x1626ba7e");
+    await acct.connect(alice).execute(await router.getAddress(), 0, approve, 0);
+  });
+
+  it("with a per-trade limit of 0, the engine can't do anything", async () => {
+    const { register, alice, engine, swapData } = await setup();
+    const acct = await register(6);
+    await alice.sendTransaction({ to: await acct.getAddress(), value: E("1") });
+    await acct.connect(alice).setPolicy(0, E("1"), true, ethers.id("r"), "r");
+    await expect(acct.connect(engine).trade(0, swapData)).to.be.revertedWithCustomError(acct, "Paused");
+    await expect(acct.connect(engine).approveRouter(await acct.getAddress(), 1)).to.be.revertedWithCustomError(acct, "Paused");
   });
 
   it("lets the engine trade only through the router, within the holder's caps, while live", async () => {

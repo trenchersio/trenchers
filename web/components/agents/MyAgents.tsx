@@ -266,7 +266,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             <TextButton onClick={claimStarter} disabled={!!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
           </>) : (<>
             <p>One transaction does it all: it creates your Trencher&apos;s own wallet, claims the <b>{STARTER_ETH} ETH</b> set aside from your mint straight into it, and gives it an on-chain identity. The art turns from grey to full colour on OpenSea and its traits change from Dormant to Awake.</p>
-            <p className="muted-note">The starter balance is locked in the agent for 6 months: it can pay for a coin launch or trades, but can&apos;t be withdrawn until then. Anything you deposit yourself stays withdrawable at any time.</p>
+            <p className="muted-note">The starter balance is locked in the agent for 6 months: the agent trades with it, but it canit can pay for a coin launch or trades, but can&apos;t be withdrawn until thenapos;t be withdrawn until then. Anything you deposit yourself stays withdrawable at any time.</p>
             <TextButton onClick={awaken} disabled={!!busy}>{`Awaken · claim ${STARTER_ETH} ETH`}</TextButton>
           </>)}
         </Step>

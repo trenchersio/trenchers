@@ -17,7 +17,7 @@ async function setup() {
   const config = await (await ethers.getContractFactory("AgentConfig")).deploy(safe.address);
   await config.connect(safe).propose(0, engine.address);
   await config.connect(safe).propose(3, await fund.getAddress());
-  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress(), await fund.getAddress());
   await config.connect(safe).propose(4, await logic.getAddress());
   const impl = await (await ethers.getContractFactory("TrenchersAgentWallet")).deploy(await config.getAddress());
   await fund.connect(safe).setAccount(await impl.getAddress(), SALT);

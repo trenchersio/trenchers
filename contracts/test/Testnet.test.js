@@ -13,7 +13,7 @@ describe("Testnet setup flow (public mint)", () => {
     const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), owner.address, "", "", E("0.002"));
     const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.001"), 48 * 3600);
     const config = await (await ethers.getContractFactory("AgentConfig")).deploy(owner.address);
-    const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+    const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress(), await fund.getAddress());
     await config.propose(3, await fund.getAddress());
     await nft.setStarterFund(await fund.getAddress());
     await fund.setAccount(await impl.getAddress(), ethers.ZeroHash);

@@ -15,7 +15,7 @@ async function agent() {
   await fund.connect(alice).claim(6);
   await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.5") });
   await acct.connect(alice).setPolicy(E("0.02"), E("0.1"), true, ethers.id("rule v1"), "Buy every new launch, sell after 15 seconds.");
-  const v2 = await (await ethers.getContractFactory("AgentAccountV2Mock")).deploy(await config.getAddress());
+  const v2 = await (await ethers.getContractFactory("AgentAccountV2Mock")).deploy(await config.getAddress(), await ctx.fund.getAddress());
   const asV2 = await ethers.getContractAt("AgentAccountV2Mock", await acct.getAddress());
   const w = await ethers.getContractAt("TrenchersAgentWallet", await acct.getAddress());
   return { ...ctx, acct, v2, asV2, w };
@@ -94,6 +94,44 @@ describe("Agent wallets: fixed by default, holder opt-in fixes", () => {
     await expect(config.connect(safe).execute(4)).to.be.revertedWithCustomError(config, "NoPending");
     expect(await config.isAccountLogic(await v2.getAddress())).to.equal(false);
     await expect(config.connect(safe).propose(4, bob.address)).to.be.revertedWithCustomError(config, "NotContract");
+  });
+});
+
+describe("Settings after deployment", () => {
+  it("once sealed, even a first setting (e.g. the coin launcher) waits the 48-hour timelock", async () => {
+    const { safe, bob } = await agent();
+    const config = await (await ethers.getContractFactory("AgentConfig")).deploy(safe.address);
+    await config.connect(safe).propose(0, bob.address); // before sealing: immediate
+    expect(await config.engine()).to.equal(bob.address);
+    await config.connect(safe).seal();
+    await config.connect(safe).propose(2, bob.address);
+    expect(await config.launcher()).to.equal(ethers.ZeroAddress);
+    await time.increase(DELAY + 1);
+    await config.connect(safe).execute(2);
+    expect(await config.launcher()).to.equal(bob.address);
+  });
+
+  it("an offered wallet version can be withdrawn; holders on it can still switch back", async () => {
+    const ctx = await agent();
+    const { config, safe, alice, w, v2, logic } = ctx;
+    await offer(ctx);
+    await w.connect(alice).setAgentVersion(await v2.getAddress());
+    await expect(config.connect(safe).revokeAccountLogic(await logic.getAddress())).to.be.revertedWithCustomError(config, "NotAllowed");
+    await config.connect(safe).revokeAccountLogic(await v2.getAddress());
+    expect(await config.isAccountLogic(await v2.getAddress())).to.equal(false);
+    await w.connect(alice).setAgentVersion(ethers.ZeroAddress);
+    await expect(w.connect(alice).setAgentVersion(await v2.getAddress())).to.be.revertedWithCustomError(w, "UnknownVersion");
+  });
+
+  it("only ETH from the starter fund fixed at deployment is ever locked", async () => {
+    const { acct, config, safe, bob, alice } = await agent();
+    await config.connect(safe).propose(3, bob.address); // even if the setting changes
+    await time.increase(DELAY + 1); await config.connect(safe).execute(3);
+    const locked = await acct.starterLocked();
+    await bob.sendTransaction({ to: await acct.getAddress(), value: E("0.3") });
+    expect(await acct.starterLocked()).to.equal(locked);
+    expect(await acct.withdrawable()).to.equal(E("0.8"));
+    await acct.connect(alice).withdraw(E("0.8"));
   });
 });
 

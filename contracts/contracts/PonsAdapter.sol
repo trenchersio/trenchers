@@ -169,6 +169,7 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
         uint256 out = got > 0 ? uint256(uint128(got)) : 0;
         if (out < j.minOut) revert Slippage();
         if (j.ethIn) {
+            pm.sync(address(0));
             pm.settle{value: owed}();                                // unspent ETH stays here and is refunded by buy()
             pm.take(j.key.currency1, j.recipient, out);
         } else {

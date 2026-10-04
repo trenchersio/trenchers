@@ -36,6 +36,8 @@ interface IERC6551Registry {
 /// @dev    Solvency: the fund always keeps CLAIM for every Trencher not yet claimed. Only ETH above
 ///         that reserve (e.g. what remains once marketplace fees are covered) can be released, and
 ///         only to the excess destination (the buyback vault).
+interface IAgentState { function state() external view returns (uint256); }
+
 contract AgentStarterFund is ReentrancyGuard, TimelockedRescue {
     /// @notice ETH paid into each agent wallet: half the list price. 0.01 ETH on mainnet (set at deploy, then fixed).
     uint256 public immutable CLAIM;
@@ -60,6 +62,7 @@ contract AgentStarterFund is ReentrancyGuard, TimelockedRescue {
     event ExcessToSet(address to);
     event ExcessReleased(address to, uint256 amount);
 
+    error WalletUsed();
     error NotEligible();
     error AlreadyClaimed();
     error NotHolder();
@@ -118,6 +121,11 @@ contract AgentStarterFund is ReentrancyGuard, TimelockedRescue {
             wallet = agentWallet(tokenId);
         }
         if (wallet.code.length == 0) revert NotRegistered();
+        // A wallet created earlier must be untouched (no calls made from it yet): otherwise approvals set up
+        // before the lock started could move coins bought with the starter balance out early.
+        else {
+            try IAgentState(wallet).state() returns (uint256 st) { if (st != 0) revert WalletUsed(); } catch {}
+        }
         if (address(this).balance < CLAIM) revert Underfunded();
 
         claimed[tokenId] = true;

@@ -140,7 +140,7 @@ Every Trencher is minted for 0.02 ETH through `TrenchersNFT.mint`. The mint send
 | House agents #1 to #5 have no starter balance; every other Trencher can be claimed by whoever holds it, team wallets included | Explicit check in `claim` |
 | A Trencher resold before its claim can still be claimed | The claim follows the token, not the first buyer |
 | The fund can always pay every unclaimed Trencher | Only ETH above `0.01 × unclaimed` can leave, and only to the buyback vault |
-| The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): it can pay for a coin launch or trades, but withdrawals are limited to the balance above it. After 180 days, what's left becomes withdrawable |
+| The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): the agent trades with it, but withdrawals are limited to the balance above it, a coin launch is paid from the free balance, and during the lock the wallet only sends plain ETH (no contract calls or signatures), so coins bought with the starter can only be sold through the engine. After 180 days, what's left becomes withdrawable |
 
 The lock matters: without it, someone could buy a Trencher, awaken it and pull the 0.01 ETH straight back out. The NFT would effectively cost 0.01 ETH and the starter fund would be a rebate, not trading capital. Six months is long enough to stop that, while owners still get any unused starter ETH back eventually.
 
@@ -384,7 +384,7 @@ Every flow runs through public contracts. Changing a payout destination requires
 - Spending limits are enforced by the agent wallet contract (`TrenchersAgentAccount`), not by the server.
 - **A sale pauses trading.** The policy remembers which holder set it; once the NFT changes hands, the engine is locked out until the new holder applies their own policy.
 - **Instant withdrawals, never of the starter.** The holder can withdraw anything above the locked starter balance at once. Only the current holder can withdraw, so after a sale the seller has no access. Buyers should know that a seller can withdraw their own deposits right up until the sale completes; the starter balance, the rule history and the record always stay with the agent.
-- **The starter balance stays in the agent.** ETH from the Agent Starter Fund can pay for the coin launch and trades, but can't be withdrawn or moved out for 180 days. Deposits above it stay withdrawable.
+- **The starter balance stays in the agent.** ETH from the Agent Starter Fund is for trading: it can't be withdrawn, spent on a coin launch or moved out for 180 days. Deposits above it stay withdrawable.
 - **Engine and router changes are timelocked.** Agent wallets read the engine, router, coin launcher and starter fund from `AgentConfig`, where any change waits 48 hours, so holders can pause first.
 - The engine trades through a swap adapter that always returns the output to the calling agent wallet (next to build), so it cannot redirect swap proceeds either.
 - The contracts will be independently audited before they hold real funds; deposits are capped during the beta.

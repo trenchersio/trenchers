@@ -248,7 +248,7 @@ export function TestnetSetup() {
     { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
     { key: "fund", label: "Agent Starter Fund", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund", "AgentStarterFund", [me, d.nft, d.registry, CLAIM, BigInt(RESCUE_DELAY)]) }) },
     { key: "config", label: "Agent settings", run: async (_d, me) => ({ config: await deploy("Agent settings", "AgentConfig", [me]) }) },
-    { key: "logic", label: "Agent wallet code", run: async (d) => ({ logic: await deploy("Agent wallet code", "TrenchersAgentAccount", [d.config]) }) },
+    { key: "logic", label: "Agent wallet code", run: async (d) => ({ logic: await deploy("Agent wallet code", "TrenchersAgentAccount", [d.config, d.fund]) }) },
     { key: "cfgLogic", label: "Record the original agent wallet code", run: async (d) => { await write("Record the original agent wallet code", d.config!, "AgentConfig", "propose", [4, d.logic]); return {}; } },
     { key: "impl", label: "Agent wallet (fixed to the original code)", run: async (d) => ({ impl: await deploy("Agent wallet (fixed to the original code)", "TrenchersAgentWallet", [d.config]) }) },
     { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft, BigInt(RESCUE_DELAY)]) }) },
@@ -666,7 +666,7 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
                 <button type="button" className="tn-btn" onClick={withdraw} disabled={busy || !wdAmt || !s.free}>Withdraw</button>
               </div>
               {(s.locked ?? 0n) > 0n && (
-                <p className="tn-lock">🔒 <b>{fmt(s.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still use it for trades and its coin launch. Everything else in this wallet (your deposits and any profits) can be withdrawn instantly.</p>
+                <p className="tn-lock">🔒 <b>{fmt(s.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still trade with it. Everything else in this wallet (your deposits and any profits) can be withdrawn instantly.</p>
               )}
             </div>
 

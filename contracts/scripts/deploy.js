@@ -48,7 +48,11 @@ async function main() {
     "Pons router": await hasCode(PONS_ROUTER),
   };
   for (const [k, v] of Object.entries(checks)) console.log(`  ${v ? "present" : "MISSING"}: ${k}`);
-  if (!(await hasCode(safe))) console.warn("  WARNING: SAFE has no code on this chain. Is it a deployed Safe?");
+  // The Safe owns everything from the end of this script; a wrong address would lock the project out for good.
+  if (!(await hasCode(safe))) {
+    if (Number(chainId) === 4663) throw new Error(`SAFE ${safe} has no code on Robinhood Chain mainnet: deploy the Safe first`);
+    console.warn("  WARNING: SAFE has no code on this chain. Is it a deployed Safe?");
+  }
 
   const vestStart = Number(process.env.VEST_START || Math.floor(Date.now() / 1000));
   const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(deployer.address, devSafe, vestStart);
@@ -74,7 +78,7 @@ async function main() {
   await config.waitForDeployment();
   // Agent wallets run the original wallet code forever, unless a holder opts in to a fixed version
   // the team offers later (see TrenchersAgentWallet). The original is recorded first, then fixed in the wallet.
-  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress(), await fund.getAddress());
   await logic.waitForDeployment();
   await (await config.propose(4 /* AccountLogic */, await logic.getAddress())).wait();
   const impl = await (await ethers.getContractFactory("TrenchersAgentWallet")).deploy(await config.getAddress());
@@ -98,16 +102,23 @@ async function main() {
     console.log(`PonsAdapter      ${await adapter.getAddress()}`);
     await (await config.propose(1, await adapter.getAddress())).wait();
   } else console.warn("  Pons V2 factory not found on this chain: no PonsAdapter deployed");
-  if (await hasCode(PONS_ROUTER)) await (await config.propose(2, PONS_ROUTER)).wait();
+  // The coin launcher (agent coins) is left unset: it can be added later, behind the 48-hour timelock.
   await (await dist.setAccount(await impl.getAddress(), ethers.ZeroHash)).wait();
 
   await (await splitter.setPrimarySeller(await nft.getAddress())).wait(); // mint proceeds count as primary sales
   await (await splitter.proposeDestination(3 /* Starter */, await fund.getAddress())).wait();
+  // End of the deployment phase: from here on every AgentConfig change takes 48 hours, first settings included.
+  await (await config.seal()).wait();
   await (await splitter.transferOwnership(safe)).wait();
   await (await nft.transferOwnership(safe)).wait();
   await (await config.transferOwnership(safe)).wait();
   await (await dist.transferOwnership(safe)).wait();
-  console.log(`Ownership of all contracts transferred to ${safe}`);
+  // Read every owner back: nothing may be left with the deployer.
+  for (const [name, c] of [["RevenueSplitter", splitter], ["TrenchersNFT", nft], ["AgentConfig", config], ["AgentFeeDistributor", dist], ["AgentStarterFund", fund]]) {
+    const o = await c.owner();
+    if (o.toLowerCase() !== safe.toLowerCase()) throw new Error(`${name} is owned by ${o}, not the Safe`);
+  }
+  console.log(`Ownership of all contracts transferred to ${safe} (checked)`);
   console.log("Next: the Safe calls TrenchersNFT.setMintOpen(true) to open the mint on trenchers.io.");
   console.log(`To open starter claims, the Safe calls AgentStarterFund.setAccount(${await impl.getAddress()}, 0x00…00).`);
 }

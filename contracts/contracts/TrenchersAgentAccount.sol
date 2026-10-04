@@ -57,6 +57,8 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     uint256 public constant VERSION = 1;
 
     IAgentConfig public immutable config;
+    /// @notice The Agent Starter Fund. Fixed at deployment: only ETH from this fund is ever locked.
+    address public immutable starterFund;
 
     uint256 private _state;
 
@@ -100,12 +102,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     error CallFailed(bytes reason);
     error TradingPaused();
 
-    constructor(IAgentConfig config_) { config = config_; }
+    constructor(IAgentConfig config_, address starterFund_) { config = config_; starterFund = starterFund_; }
 
     // ------------------------------------------------------------------ ERC-6551
 
     receive() external payable {
-        if (msg.sender == config.starterFund() && msg.value > 0) {
+        if (msg.sender == starterFund && msg.value > 0) {
             starterLocked += msg.value;
             if (starterLockedAt == 0) starterLockedAt = block.timestamp;
             emit StarterReceived(msg.value);
@@ -130,7 +132,10 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         return signer == owner() ? IERC6551Account.isValidSigner.selector : bytes4(0);
     }
 
+    /// @dev No signatures on the wallet's behalf during the starter lock (they could approve token
+    ///      transfers without going through execute).
     function isValidSignature(bytes32 hash, bytes memory signature) external view returns (bytes4) {
+        if (inStarterLock()) return bytes4(0);
         return SignatureChecker.isValidSignatureNow(owner(), hash, signature) ? IERC1271.isValidSignature.selector : bytes4(0);
     }
 
@@ -188,18 +193,19 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
 
     function pause() external onlyHolder { policy.live = false; _state++; emit PolicySet(msg.sender, policy.perTrade, policy.dailyCap, false); }
 
-    /// @notice Launches the agent's coin through the configured launcher (e.g. the Pons router).
-    ///         It may be paid from the starter balance: the lock goes down only by the ETH that actually
-    ///         left the wallet. Records the coin (once) so the engine never trades it.
+    /// @notice Launches the agent's coin (once) through the configured launcher (e.g. the Pons router),
+    ///         paid from the free balance: the locked starter balance is for trading only, so a launch
+    ///         can never be used to take it out early. Records the coin so the engine never trades it.
     function launchCoin(bytes calldata data, uint256 value, address coin_) external onlyHolder nonReentrant returns (bytes memory result) {
         address launcher = config.launcher();
-        if (launcher == address(0)) revert NotAllowed();
+        if (launcher == address(0) || coin != address(0)) revert NotAllowed();
+        uint256 free = withdrawable();
         _state++;
         uint256 before = address(this).balance;
         result = _call(launcher, value, data);
         uint256 spent = before > address(this).balance ? before - address(this).balance : 0;
-        if (starterLocked > 0) starterLocked = spent >= starterLocked ? 0 : starterLocked - spent;
-        if (coin_ != address(0) && coin == address(0)) { coin = coin_; emit CoinLaunched(coin_); }
+        if (spent > free) revert StarterLocked();
+        if (coin_ != address(0)) { coin = coin_; emit CoinLaunched(coin_); }
     }
 
     /// @notice Instant withdrawal to the holder of anything above the locked starter balance.
@@ -213,14 +219,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     }
 
     /// @notice ERC-6551 execute. Unrestricted for the holder after the starter lock period; during it,
-    ///         the holder can still make calls that send no ETH above the free balance, don't touch the
-    ///         router (trading goes through the engine and its caps) and don't move tokens out.
+    ///         only plain ETH sends from the free balance (withdraw does the same).
     function execute(address to, uint256 value, bytes calldata data, uint8 operation) external payable onlyHolder nonReentrant returns (bytes memory) {
         if (operation != 0) revert NotAllowed();
-        if (inStarterLock()) {
-            if (to == config.router() || value > withdrawable()) revert StarterLocked();
-            if (_isTokenTransfer(data)) revert StarterLocked();
-        }
+        // During the starter lock, only plain ETH sends from the free balance: no contract calls, so
+        // coins bought with the starter can't be moved, approved or sold outside the engine's limits.
+        if (inStarterLock() && (data.length != 0 || value > withdrawable())) revert StarterLocked();
         _state++;
         return _call(to, value, data);
     }
@@ -233,7 +237,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         if (config.paused()) revert TradingPaused();
         Policy memory p = policy;
         if (p.setBy != owner() || policyTransfers != _transfers()) revert PolicyStale();
-        if (!p.live) revert Paused();
+        if (!p.live || p.perTrade == 0) revert Paused();
         address router = config.router();
         if (router == address(0)) revert NotAllowed();
         if (value > p.perTrade) revert OverPerTrade();
@@ -253,7 +257,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         if (config.paused()) revert TradingPaused();
         if (address(tokenToSell) == coin) revert NotAllowed();
         if (policy.setBy != owner() || policyTransfers != _transfers()) revert PolicyStale();
-        if (!policy.live) revert Paused();
+        if (!policy.live || policy.perTrade == 0) revert Paused();
         address r = config.router();
         tokenToSell.safeApprove(r, 0);
         if (amount > 0) tokenToSell.safeApprove(r, amount);
@@ -265,13 +269,5 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         bool ok;
         (ok, result) = to.call{value: value}(data);
         if (!ok) revert CallFailed(result);
-    }
-
-    /// @dev ERC-20/721 transfer, transferFrom, approve, setApprovalForAll, safeTransferFrom.
-    function _isTokenTransfer(bytes calldata data) internal pure returns (bool) {
-        if (data.length < 4) return false;
-        bytes4 s = bytes4(data[:4]);
-        return s == IERC20.transfer.selector || s == IERC20.transferFrom.selector || s == IERC20.approve.selector
-            || s == 0xa22cb465 /* setApprovalForAll */ || s == 0x42842e0e || s == 0xb88d4fde /* safeTransferFrom */;
     }
 }

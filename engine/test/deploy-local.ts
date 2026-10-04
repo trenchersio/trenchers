@@ -55,7 +55,7 @@ async function main() {
   const nft = await deploy("TrenchersNFT", [splitter, deployer.address, "", "", parseEther("0.0002")]);
   const fund = await deploy("AgentStarterFund", [deployer.address, nft, registry, parseEther("0.0001"), 600n]);
   const config = await deploy("AgentConfig", [deployer.address]);
-  const logic = await deploy("TrenchersAgentAccount", [config]);
+  const logic = await deploy("TrenchersAgentAccount", [config, fund]);
   await call(config, "AgentConfig", "propose", [4, logic]);
   const impl = await deploy("TrenchersAgentWallet", [config]);
   const launchpad = await deploy("MockPonsFactory");
