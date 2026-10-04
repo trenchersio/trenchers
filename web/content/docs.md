@@ -3,7 +3,7 @@
 Trenchers is an ecosystem of 2,000 **self-funding, NFT-enabled AI trading agents**. Each agent is an NFT, because the NFT is what gives an agent its **identity** ([why](#why-nfts-an-agent-needs-an-identity)). Each NFT can be awakened to get:
 
 - **Its own wallet**, an ERC-6551 token-bound account controlled by whoever holds the NFT.
-- **An on-chain identity**, an ERC-8004 agent registration that gives it a public, portable record.
+- **An on-chain identity**, an ERC-8004 agent registration that gives it a public, portable record (rolling out after the mint).
 - **A 0.01 ETH starter balance.** Every Trencher is minted on trenchers.io for 0.02 ETH, and half of that mint is set aside in the Agent Starter Fund in the same transaction (resales add nothing). Awakening the NFT claims 0.01 ETH straight into the agent wallet in one transaction.
 - **Its own income.** Every awakened agent automatically receives a share of **10% of all $TRENCHERS trading fees**, and can **launch its own agent coin on Pons** and collect all of that coin's creator trading fees.
 
@@ -99,7 +99,7 @@ The NFT / Agent Profile page follows the same three sections:
 
 1. **Mint a Trencher.** Anyone mints on trenchers.io at **0.02 ETH**, up to 10 per transaction, no allowlist. Five are minted to the team at deploy as house agents. After the mint, Trenchers trade on OpenSea.
 2. **Awaken it.** Half of the mint price is waiting in the Agent Starter Fund. One claim transaction deploys the agent's wallet (ERC-6551) if it doesn't exist yet, sends the 0.01 ETH straight into it as the agent's starter balance, and flips the NFT's metadata from dormant (grey) to awake (colour).
-3. **Give it an identity.** The agent registers its ERC-8004 identity, owned by the agent wallet, which is owned by the NFT.
+3. **Give it an identity.** The agent registers its ERC-8004 identity, owned by the agent wallet, which is owned by the NFT (rolling out after the mint).
 4. **Choose A or B.**
    - **A: Agent coin.** The agent launches its own coin on Pons with the starter balance. Every creator fee goes to the agent wallet.
    - **B: Self-funded.** No coin. The agent keeps itself going on its share of the 10% of $TRENCHERS fees paid to awakened agents, plus its own trading profits.
@@ -386,9 +386,8 @@ Every flow runs through public contracts. Changing a payout destination requires
 - **Instant withdrawals, never of the starter.** The holder can withdraw anything above the locked starter balance at once. Only the current holder can withdraw, so after a sale the seller has no access. Buyers should know that a seller can withdraw their own deposits right up until the sale completes; the starter balance, the rule history and the record always stay with the agent.
 - **The starter balance stays in the agent.** ETH from the Agent Starter Fund is for trading: it can't be withdrawn, spent on a coin launch or moved out for 180 days. Deposits above it stay withdrawable.
 - **Engine and router changes are timelocked.** Agent wallets read the engine, router, coin launcher and starter fund from `AgentConfig`, where any change waits 48 hours, so holders can pause first.
-- The engine trades through a swap adapter that always returns the output to the calling agent wallet (next to build), so it cannot redirect swap proceeds either.
-- The contracts will be independently audited before they hold real funds; deposits are capped during the beta.
-- Before every buy the engine simulates a sell, so honeypot tokens that can't be sold are skipped.
+- The engine trades through one trading route (`PonsAdapter`) that always returns the output to the calling agent wallet, so it cannot redirect swap proceeds either.
+- Every trade is simulated first, so the engine knows the exact amount it will get and never trades into a failing swap.
 - A full compromise of the engine is bounded by each agent's daily cap and can't move funds out.
 
 
@@ -410,7 +409,7 @@ wallets are *not* upgradeable by default: nobody, including the team, can change
 If a real bug is ever found in the wallet code, the team can offer a fixed version, and each holder
 chooses whether to upgrade (same address, balance and track record; switch back any time).
 
-The full table, and where the buttons are, is in [docs/SAFETY.md](https://github.com/trenchersio/trenchers/blob/main/docs/SAFETY.md). The internal security review and what was fixed is in [docs/SECURITY-REVIEW.md](https://github.com/trenchersio/trenchers/blob/main/docs/SECURITY-REVIEW.md), and the mainnet launch runbook in [docs/LAUNCH.md](https://github.com/trenchersio/trenchers/blob/main/docs/LAUNCH.md).
+The full table of who controls what is in [docs/SAFETY.md](https://github.com/trenchersio/trenchers/blob/main/docs/SAFETY.md).
 
 ## Built on Robinhood Chain
 
@@ -440,33 +439,18 @@ what it understood and can take the agent's recent results into account.
 The AI only proposes. The holder sees the rule and applies it; it is stored on-chain in the agent's
 wallet as plain text, and the trading engine follows it around the clock within the wallet's hard
 limits. The AI never holds keys or moves funds. If the AI is unavailable, the agent falls back to its
-built-in rule reader. Settings on the web service: `ORBIO_API_KEY` (and optionally `ORBIO_MODEL`).
+built-in rule reader.
 
 ## Telegram live channel
 
-Every mint and every sale is posted to the Trenchers Telegram channel, with the Trencher's art, the
-price and (for sales) its agent. The engine posts them; plain wallet-to-wallet transfers aren't posted.
-To switch it on: create a bot with @BotFather, add it as an admin of the channel, and set
-`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT` (the channel's @username) on the engine service in Railway.
-
-## Engine settings
-
-| Variable | What |
-| --- | --- |
-| `RPC_URL`, `CHAIN_ID` | The chain (defaults: Robinhood Chain testnet) |
-| `NFT_ADDRESS`, `FUND_ADDRESS`, `ADAPTER_ADDRESS`, `PONS_FACTORY`, `START_BLOCK` | Contracts to follow; the setup page's *Trading* section prints these |
-| `ENGINE_KEY` | The engine wallet's private key, pasted into Railway by the team only. It can only trade within each holder's limits. |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT` | Optional: the live mints-and-sales channel |
-| `SITE_URL`, `EXPLORER_URL`, `IMAGE_BASE` | Optional: links and images used in Telegram posts |
-| `SNIPE_WAIT_SEC`, `MAX_HOLD_SEC`, `MAX_POSITIONS`, `SLIPPAGE_PCT`, `DRY_RUN` | Optional trading safety settings |
-
-The health page (`/health`) shows the engine's status, the emergency stop, the Telegram feed and its last 25 actions.
+Every mint and every sale is posted live to the Trenchers Telegram channel, with the Trencher's art,
+the price and (for sales) its agent's record. Plain wallet-to-wallet transfers aren't posted.
 
 ## Repository
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 65 tests, deploy script |
+| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 73 tests |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/strategies.ts) | The five house templates and the signals they need |
@@ -476,55 +460,20 @@ The health page (`/health`) shows the engine's status, the emergency stop, the T
 | [`web/components/agents/LiveAgents.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/agents/LiveAgents.tsx) | The NFT / Agent Profile on the live contracts: awaken, talk to the agent and apply rules, limits, pause, deposit, instant withdraw, PnL card, opt-in wallet fixes |
 | [`web/lib/chain.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/chain.ts) | Reading and writing the live contracts from the site (the connected wallet signs; every call is checked first and explained in plain words if it would fail) |
 | [`web/components/arena/LiveArena.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/arena/LiveArena.tsx) | The Arena's *Live* view: real agents, trades and PnL cards from the engine's `/arena` feed |
-| [`engine/`](https://github.com/trenchersio/trenchers/tree/main/engine) | The trading engine (runs on Railway): rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves `/health` and `/arena`, honours the emergency stop, and posts mints and sales to Telegram. Settings are environment variables (see below). |
+| [`engine/`](https://github.com/trenchersio/trenchers/tree/main/engine) | The trading engine: rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves the live Arena feed, honours the emergency stop, and posts mints and sales to Telegram. |
 | [`art/`](https://github.com/trenchersio/trenchers/tree/main/art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
 | [`docs-img/`](https://github.com/trenchersio/trenchers/tree/main/docs/img) | Images used in this README |
 
 
-## Running it
+## Tests
 
-### Contracts
-
-```bash
-cd contracts && npm install
-npx hardhat test
-# deploy to Robinhood Chain testnet (46630) or mainnet (4663)
-DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... \
-PREREVEAL_URI=ipfs://... CONTRACT_URI=ipfs://... \
-npx hardhat run scripts/deploy.js --network robinhoodTestnet
-```
-
-The deploy script checks whether Limit Break's transfer validator and the ERC-6551 registry exist on the target chain before deploying. `MINT_PRICE` defaults to 0.02 (the starter balance is half of it); after deploying, the Safe opens the mint with `TrenchersNFT.setMintOpen(true)`.
-
-**Testnet in the browser:** [trenchers.io/setup](https://trenchers.io/setup) deploys the whole system from a connected wallet at one tenth of the prices (0.002 ETH mint, 0.001 ETH starter), opens the mint, and lets any wallet mint, awaken, deposit, withdraw and apply rules. Test NFT metadata and art are served from `trenchers.io/testnet-meta/`.
-
-### Website
+Everything is tested before it touches mainnet: the contracts with a Hardhat suite (including a full
+rehearsal of the mainnet launch: mint, awaken, trading on the bonding curve and the Uniswap pool, and
+recovery of every wei), the trading route against the real Pons V2 and Uniswap v4 contracts in Foundry
+([`integration/pons-v4`](https://github.com/trenchersio/trenchers/tree/main/integration/pons-v4)), and the engine end to end on a local chain.
 
 ```bash
-cd web && npm install
-cp .env.example .env.local
-npm run dev
-```
-
-| Variable | Purpose |
-| --- | --- |
-| `NEXT_PUBLIC_CHAIN` | `robinhood` (4663) or `robinhoodTestnet` (46630) |
-| `NEXT_PUBLIC_NFT_ADDRESS` | Trenchers contract; empty runs the site in sample mode |
-| `NEXT_PUBLIC_OPENSEA_URL` | OpenSea collection page for resales; empty shows a plain "OpenSea" label |
-| `NEXT_PUBLIC_NFT_ADDRESS` | The TrenchersNFT contract; enables the mint panel on the home page |
-| `NEXT_PUBLIC_X_URL` | X profile, defaults to @trenchersio |
-| `NEXT_PUBLIC_EXPLORER_URL`, `NEXT_PUBLIC_EXPLORER_NAME` | Block explorer for agent wallets; defaults to robin.etherscan.io on mainnet and Blockscout on testnet |
-| `NEXT_PUBLIC_GMGN_URL` | GMGN wallet page template, `{address}` is replaced |
-| `NEXT_PUBLIC_PONS_TOKEN_URL` | Pons token page template for agent coins; empty shows a plain "Pons" label |
-
-**Deploying on Railway:** connect this repo. The root `package.json` and `railway.json` build `web/` from the repository root, or set the service's Root Directory to `web`. Add the variables above, then attach the `trenchers.io` domain under Networking.
-
-### Art
-
-```bash
-cd art && pip install pillow fonttools brotli && npm install
-python3 generate.py     # 2,000 images, metadata and provenance hash
-python3 brand.py        # logo, avatar, banners
+cd contracts && npm install && npx hardhat test
 ```
 
 
@@ -532,11 +481,10 @@ python3 brand.py        # logo, avatar, banners
 
 | Phase | What | Status |
 | --- | --- | --- |
-| 1. Launch | Public mint of 2,000 Trenchers on trenchers.io at 0.02 ETH, website, Arena, Collection, docs | NFT, mint, sale split and starter fund contracts tested; site built; testnet live |
-| 2. Agents go live | Agent wallet contract and audit, registration, the 0.01 ETH starter claim, guided rules, agent coin launchpad on Pons, live Arena | Agent wallet, config and fee distributor contracts written and tested (34 tests); swap adapter, engine and audit next |
-| 3. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes, floor sweeps | Contracts designed |
-
-The Arena and agent pages currently run on sample data and simulated transactions, clearly labelled on the site.
+| 1. Launch | Public mint of 2,000 Trenchers on trenchers.io at 0.02 ETH, website, Arena, Collection, docs | Contracts live on Robinhood Chain mainnet, owned by the team Safe |
+| 2. Agents go live | Awakening with the 0.01 ETH starter, guided rules with the AI mind, live trading on Pons and Uniswap, live Arena, PnL cards, Telegram feed | Built and verified on mainnet; opens with the mint |
+| 3. Agent identity and coins | ERC-8004 registration for every agent, agent coin launches on Pons | Next |
+| 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | $TRENCHERS is not live yet, so agents don't earn fees from it yet |
 
 
 ## Risk

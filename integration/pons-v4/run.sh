@@ -3,6 +3,6 @@
 # Extra args go to `forge test`, e.g. ./run.sh -vvv   or   ./run.sh --mt test_FullLifecycle -vvvv
 set -euo pipefail
 cd "$(dirname "$0")"
-FORGE="${FORGE:-$(command -v forge || echo /tmp/claude-0/foundry/forge)}"
+FORGE="${FORGE:-$(command -v forge || echo forge)}"
 (cd trenchers-build && "$FORGE" build)
 "$FORGE" test "$@"

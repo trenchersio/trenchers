@@ -13,8 +13,7 @@ on the trading path.
 
 `./run.sh` is `(cd trenchers-build && forge build) && forge test "$@"`. Once `trenchers-build/out`
 exists, plain `forge test -vvv` works too, and so do filters (`--mt`, `--mc`).
-`FORGE=/path/to/forge ./run.sh` picks the forge binary (default: the one on PATH, otherwise
-`/tmp/claude-0/foundry/forge`). The config is `offline = true`, so forge never tries to download a compiler.
+`FORGE=/path/to/forge ./run.sh` picks the forge binary (default: the one on PATH). The config is `offline = true`, so forge never tries to download a compiler.
 
 ### Against the live chain (Robinhood Chain 4663, fork)
 
@@ -43,11 +42,11 @@ built this project, because the chain RPC and the block explorers were blocked t
 | ERC-6551 registry, at `0x000000006551c194…5758` | the reference registry (`lib/erc6551`) | 0.8.17 |
 | Pons V2: factory, curve and token (via the launch deployer), meme hook, locker, buyback vault, graduation executor, graduation guard | `src/pons` (pons-labs `contractsV2/src/v2`, see below) with Pons's own vendored OZ 5.5 (`lib/oz5-pons`) | 0.8.26, via-IR |
 | `PonsV2FeeEscrow` | **not published by Pons**; `test/helpers/PonsV2FeeEscrowLite.sol` implements `IPonsV2FeeEscrow` | 0.8.26 |
-| Trenchers: RevenueSplitter, TrenchersNFT (ERC721-C), AgentStarterFund, AgentConfig, TrenchersAgentAccount, TrenchersAgentWallet, PonsAdapter | `trenchers-build/src`, byte-identical copies of `/home/claude/trenchers/contracts/contracts` | 0.8.24, 500 runs, no IR, OZ 4.8.3 |
+| Trenchers: RevenueSplitter, TrenchersNFT (ERC721-C), AgentStarterFund, AgentConfig, TrenchersAgentAccount, TrenchersAgentWallet, PonsAdapter | `trenchers-build/src`, byte-identical copies of `contracts/contracts` | 0.8.24, 500 runs, no IR, OZ 4.8.3 |
 
 The meme hook is deployed at the **live hook address** `0xE5e7…E044`. Its low 14 bits (`0x2044`:
 beforeInitialize, afterSwap, afterSwapReturnDelta) match `getHookPermissions()`, so v4 accepts it
-there. The deployed Trenchers bytecode matches the Hardhat artifacts in `/home/claude/trenchers` once
+there. The deployed Trenchers bytecode matches the Hardhat artifacts in this repository once
 the metadata hash is stripped. Everything is wired the way `scripts/deploy.js` and the Pons
 constructors/setters require: `setGraduationExecutor`, `setLaunchDeployer`, `hook.setFactory`,
 `hook.setBuybackVault`, `vault.setFactory`, `locker.setFactory`, and the `AgentConfig` keys, after

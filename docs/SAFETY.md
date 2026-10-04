@@ -11,7 +11,7 @@ Contracts and agent wallets have no private keys at all: they are controlled by 
 | Address | Holds | Controlled by | Getting ETH out if something breaks |
 | --- | --- | --- | --- |
 | **Team wallets** (deployer, team / house agents, dev payouts) | Team ETH, house-agent NFTs #1 to #5 | The team's own keys (in the team's wallet app / Safe) | Normal transfers. |
-| **Engine wallet** | Only gas for the engine's transactions | The team's key, pasted into Railway by the team | Normal transfer. It can't take anyone's ETH: on agent wallets it can only trade within each holder's caps. |
+| **Engine wallet** | Only gas for the engine's transactions | The team's key, held only by the team | Normal transfer. It can't take anyone's ETH: on agent wallets it can only trade within each holder's caps. |
 | **TrenchersNFT** | Nothing (every mint forwards its ETH at once) | Owner (Safe) | `sweep(token, to)`: owner moves out anything sent there by mistake, immediately. |
 | **RevenueSplitter** | Mint money waiting per bucket (buybacks, dev, prizes, starter in transit) | Owner (Safe) | `release(bucket)` sends a bucket to its destination (anyone can call). Empty destinations are set once, immediately; changing one takes a public 48-hour timelock. `rescueUnaccounted(to)` sweeps stray ETH at once. |
 | **AgentStarterFund** | 0.01 ETH reserved for every Trencher not yet awakened | Owner (Safe), behind a delay | Emergency: `proposeRescue(to)` → wait the public **48-hour** delay → `executeRescue([])` sends everything to `to` and permanently stops claims. Cancel any time with `cancelRescue()`. |
@@ -38,7 +38,7 @@ can see a rescue coming and nobody can drain it silently. The delay is fixed in 
 
 | Where a bug could be | How it's fixed | Holders need to do |
 | --- | --- | --- |
-| Reading rules, deciding trades, timing, signals (the engine) | Push a fixed engine; Railway redeploys in minutes. Rules are stored on-chain as text, so the fixed engine re-reads every agent's rule. | Nothing |
+| Reading rules, deciding trades, timing, signals (the engine) | Ship a fixed engine; it's live in minutes. Rules are stored on-chain as text, so the fixed engine re-reads every agent's rule. | Nothing |
 | How trades reach Pons / Uniswap (the trading route, `PonsAdapter`) | Deploy a fixed route and switch `AgentConfig` to it (public 48-hour timelock; pause meanwhile). | Nothing |
 | The agent wallet code itself (limits, lock, withdrawals) | **Holder opt-in.** Wallets are not upgradeable by default: every agent wallet runs the original code, fixed in `TrenchersAgentWallet` (`ORIGINAL_VERSION`), and nobody can change that. If a real bug is found, the Safe offers a fixed version through `AgentConfig.propose(4, fixedCode)` (public 48-hour timelock). | Only if they want the fix: *Upgrade my agent wallet* on the site (`setAgentVersion`). Same address, balance, rules and track record; they can switch back any time. The option only appears once a fixed version has been offered. |
 
