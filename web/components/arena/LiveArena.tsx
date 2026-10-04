@@ -8,6 +8,7 @@ import { ENGINE_URL, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
 import { STRATEGIES } from "@/lib/strategies";
+import { Loader } from "@/components/Loader";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
@@ -31,8 +32,11 @@ const ethTxt = (v: number) => (Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toFixed(6)
 const ago = (s: number) => (s < 60 ? `${Math.max(0, Math.floor(s))}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`);
 const sym = (t: { symbol?: string; token: string }) => `$${t.symbol ?? t.token.slice(2, 8)}`;
 
+const FEED_KEY = `trenchers:arena:${ENGINE_URL}`;
 function useFeed() {
+  // The last feed seen in this browser shows instantly; the live one replaces it within seconds.
   const [feed, setFeed] = useState<Feed | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem(FEED_KEY); if (v) setFeed((f) => f ?? JSON.parse(v)); } catch { /* none */ } }, []);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -41,7 +45,7 @@ function useFeed() {
         const r = await fetch(`${ENGINE_URL}/arena`, { cache: "no-store" });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error ?? "The engine isn't ready yet");
-        if (alive) { setFeed(j); setError(null); }
+        if (alive) { setFeed(j); setError(null); try { localStorage.setItem(FEED_KEY, JSON.stringify(j)); } catch { /* private mode */ } }
       } catch (e) { if (alive) setError((e as Error).message); }
     };
     load();
@@ -67,7 +71,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
 
-  if (!full) return <div className="arena-loading mono">{error ? `Live Arena unavailable: ${error}` : "Connecting to the trading engine…"}</div>;
+  if (!full) return <Loader label={error ? "The trading engine is starting up" : "Connecting to the Arena"} sub={error ? "It's catching up on the chain. This page updates by itself in a moment." : "Reading live agents and trades from Robinhood Chain"} />;
   const mine = only ? new Set(only) : null;
   const feed = mine ? { ...full, agents: full.agents.filter((a) => mine.has(a.id)), feed: full.feed.filter((t) => mine.has(t.agent)) } : full;
   const of = full.agents.length;

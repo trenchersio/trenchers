@@ -39,6 +39,7 @@ export const AGENT_ABI = parseAbi([
   "error NotPonsToken()", "error NotEthPaired()", "error OwnCoin()", "error ZeroAmount()", "error TransferFailed()",
 ]);
 export const RULE_APPLIED = parseAbiItem("event RuleApplied(uint32 indexed version, bytes32 ruleHash, string ruleUri)");
+export const POLICY_SET = parseAbiItem("event PolicySet(address indexed holder, uint128 perTrade, uint128 dailyCap, bool live)");
 
 export const ADAPTER_ABI = parseAbi([
   "function buy(address token, uint256 minTokensOut) payable returns (uint256)",

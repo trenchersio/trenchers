@@ -11,6 +11,7 @@ import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall,
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
 import { createPortal } from "react-dom";
 import { MintPanel } from "@/components/MintPanel";
+import { Loader } from "@/components/Loader";
 import { LiveArena } from "@/components/arena/LiveArena";
 import { describe, parse, type CustomRule } from "@/lib/custom-strategy";
 import { STRATEGIES } from "@/lib/strategies";
@@ -140,7 +141,7 @@ export function LiveAgents() {
     } catch (e) { setTask({ label, phase: "error", note: reason(e) }); return false; }
   };
 
-  if (ids === null) return <div className="arena-loading mono">Finding your Trenchers on {chain.name}…</div>;
+  if (ids === null) return <Loader label="Finding your Trenchers" sub={`Reading ${short(me)} on ${chain.name}`} />;
 
   const sel = selected ? agents[selected] : null;
   const busy = !!task && task.phase !== "done" && task.phase !== "error";

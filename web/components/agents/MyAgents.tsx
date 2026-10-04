@@ -2,6 +2,7 @@
 import { AgentLinks } from "@/components/AgentLinks";
 import { PnlCardButton } from "@/components/PnlCard";
 import { LiveAgents } from "./LiveAgents";
+import { Loader } from "@/components/Loader";
 import { GuideFlow } from "./GuideFlow";
 import { DEPLOYMENT } from "@/lib/chain";
 import { useEffect, useState } from "react";
@@ -49,7 +50,7 @@ function DemoAgents() {
     setSelected((s) => (s && list.some((a) => a.id === s) ? s : list[0]?.id ?? null));
   }, [w.address]);
 
-  if (!w.ready) return <div className="arena-loading mono">Loading…</div>;
+  if (!w.ready) return <Loader label="Connecting your wallet" />;
 
   if (!w.address) {
     return (

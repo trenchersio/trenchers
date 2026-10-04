@@ -7,7 +7,7 @@ import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, FUND_ABI, SOLD, TOKEN_LAUNCHED,
+  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -181,7 +181,7 @@ export class Engine {
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: LAUNCH_SWEPT, fromBlock: from, toBlock: to }),
       ]);
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
-      const rules = wallets.length ? await this.pub.getLogs({ address: wallets, event: RULE_APPLIED, fromBlock: from, toBlock: to }) : [];
+      const rules = wallets.length ? await this.pub.getLogs({ address: wallets, events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to }) : [];
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
@@ -231,6 +231,11 @@ export class Engine {
         const w = lc(a.agentWallet);
         if (live) { this.lastAgentRefresh = 0; this.log(`Agent #${Number(a.tokenId)} awakened (wallet ${w})`); }
         if (!this.agents.has(w)) this.agents.set(w, { id: Number(a.tokenId), wallet: w, live: false, perTrade: 0n, dailyCap: 0n, ruleVersion: 0, ruleText: null, rule: null, balance: 0n, spentDay: 0n, spentToday: 0n });
+        break;
+      }
+      case "PolicySet": {
+        // Start / pause / new limits: read the agent again straight away instead of on the next 15 s refresh.
+        if (live) this.lastAgentRefresh = 0;
         break;
       }
       case "RuleApplied": {
