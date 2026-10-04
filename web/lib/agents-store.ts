@@ -15,7 +15,7 @@ import { STRATEGIES, type StrategyName } from "./strategies";
 export type Preset = StrategyName;
 import type { CustomRule } from "./custom-strategy";
 import type { AgentToken } from "./agent-token";
-export type ChatMsg = { role: "you" | "agent"; text: string; t: number; rule?: CustomRule; status?: "proposed" | "applied" | "discarded" };
+export type ChatMsg = { role: "you" | "agent"; text: string; t: number; rule?: CustomRule; status?: "proposed" | "applied" | "discarded"; ai?: boolean };
 export type Strategy = { preset: Preset; perBuy: number; dailyCap: number; maxPositions: number; custom?: CustomRule };
 export type AgentState = {
   id: number;

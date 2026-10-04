@@ -428,6 +428,20 @@ What we integrate with, from public sources (verified again on-chain by the depl
 Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/pons-api/), [Pons explained](https://www.datawallet.com/crypto/pons-explained), [Uniswap v4 deployments](https://developers.uniswap.org/docs/protocols/v4/deployments), [ERC-8004 contracts](https://erc-8004.quicknode.com/docs/contracts), [Safe deployments](https://github.com/safe-global/safe-deployments), [Robinhood Chain contracts](https://docs.robinhood.com/chain/contracts), [DexScreener](https://dexscreener.com/robinhood).
 
 
+## The agent's mind (AI via Orbio)
+
+Each agent has an AI mind. When the holder talks to their agent, a language model (Claude, through
+[Orbio](https://www.orbio.so)'s inference gateway on Robinhood Chain) reads what they say, however
+loose ("go for coins with real momentum but get out fast if they dump"), and turns it into one exact
+rule: a signal (new launch, graduation, volume or market cap crossing a level, dev sells), optional
+filters (token age, liquidity) and an exit (a holding time, or take profit / stop loss). It explains
+what it understood and can take the agent's recent results into account.
+
+The AI only proposes. The holder sees the rule and applies it; it is stored on-chain in the agent's
+wallet as plain text, and the trading engine follows it around the clock within the wallet's hard
+limits. The AI never holds keys or moves funds. If the AI is unavailable, the agent falls back to its
+built-in rule reader. Settings on the web service: `ORBIO_API_KEY` (and optionally `ORBIO_MODEL`).
+
 ## Telegram live channel
 
 Every mint and every sale is posted to the Trenchers Telegram channel, with the Trencher's art, the

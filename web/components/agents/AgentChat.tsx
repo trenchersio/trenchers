@@ -17,8 +17,8 @@ const HELP = "I understand signals (new launches, graduations, volume or market-
  * Talk to your agent. Each message is read into a typed rule (deterministic, no language model in
  * the trading path). The agent proposes the new rule; nothing changes until the holder applies it.
  */
-export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
-  id: number; rule: CustomRule | null; chat: ChatMsg[];
+export function AgentChat({ id, rule, chat, onChat, onApply, disabled, context }: {
+  id: number; rule: CustomRule | null; chat: ChatMsg[]; context?: string;
   onChat: (c: ChatMsg[]) => void; onApply: (rule: CustomRule, c: ChatMsg[]) => void; disabled?: boolean;
 }) {
   const [text, setText] = useState("");
@@ -30,11 +30,27 @@ export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
   const pending = [...msgs].reverse().find((m) => m.status === "proposed");
   const current = pending?.rule ?? rule ?? DEFAULT_RULE;
 
-  function send(raw: string) {
+  const [thinking, setThinking] = useState(false);
+
+  async function send(raw: string) {
     const said = raw.trim();
-    if (!said) return;
+    if (!said || thinking) return;
     const base = msgs.map((m) => ({ ...m, status: m.status === "proposed" ? "discarded" as const : m.status }));
     const you: ChatMsg = { role: "you", text: said, t: Date.now() };
+    setText("");
+    // The agent's mind: an AI model reads the message and proposes a rule (falls back to the plain reader).
+    setThinking(true);
+    onChat([...(chat.length ? base : [intro]), you]);
+    const ai = await fetch("/api/agent-mind", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: said, rule: rule ?? (pending?.rule ?? null), context }) })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null) as { reply: string; rule: CustomRule | null; understood: string[] } | null;
+    setThinking(false);
+    if (ai) {
+      const reply: ChatMsg = ai.rule
+        ? { role: "agent", t: Date.now() + 1, text: ai.reply, rule: ai.rule, status: "proposed", ai: true }
+        : { role: "agent", t: Date.now() + 1, text: ai.reply, ai: true };
+      onChat([...(chat.length ? base : [intro]), you, reply]);
+      return;
+    }
     const { rule: next, understood, missed } = parse(said, current);
     let reply: ChatMsg;
     if (missed) {
@@ -46,7 +62,6 @@ export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
         : { role: "agent", t: Date.now() + 1, text: `Got it: ${understood.join(", ")}. Here's the rule I'd trade:`, rule: next, status: "proposed" };
     }
     onChat([...(chat.length ? base : [intro]), you, reply]);
-    setText("");
   }
 
   function apply(m: ChatMsg) {
@@ -65,6 +80,7 @@ export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
           <div key={`${m.t}-${i}`} className={`msg msg-${m.role}`}>
             {m.role === "agent" && <ArtCanvas id={id} size={28} className="msg-av" label="" />}
             <div className="msg-body">
+              {m.ai && <span className="msg-ai mono">AI</span>}
               <p>{m.text}</p>
               {m.rule && (
                 <div className={`msg-rule msg-${m.status}`}>
@@ -87,6 +103,7 @@ export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
           {EXAMPLES.map((e) => <button key={e} type="button" className="chat-chip" onClick={() => send(e)} disabled={disabled}>{e}</button>)}
         </div>
       )}
+      {thinking && <div className="msg msg-agent msg-thinking"><div className="msg-body"><p className="mono">Thinking<span className="dots" /></p></div></div>}
       <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(text); }}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Tell your agent how to trade…" disabled={disabled} aria-label="Message your agent" />
         <TextButton onClick={() => send(text)} disabled={disabled || !text.trim()}>Send</TextButton>

@@ -1,7 +1,9 @@
 /**
  * Custom strategies: a buy signal with an optional threshold, an exit rule and optional filters.
- * The plain-English parser is a deterministic keyword reader (no AI in the trading path): it only
- * fills the form, and the holder reviews and saves the result.
+ * Talking to the agent goes through its AI mind first (lib/agent-mind.ts, a model via Orbio), which
+ * proposes a rule in this exact schema; this deterministic reader is the fallback, and it is also how
+ * the engine reads every rule back from the chain. The holder reviews and applies every rule; trading
+ * itself is rule-based and capped by the wallet.
  */
 export type CustomTrigger = "launch" | "graduation" | "volume" | "devsell" | "dexupdate" | "mcap";
 export type CustomRule = {

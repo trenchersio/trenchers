@@ -1737,3 +1737,10 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .launch-safe { display: flex; flex-direction: column; gap: 12px; padding-left: 18px; }
 .launch-safe li { display: flex; flex-direction: column; gap: 4px; }
 .launch-safe .mono { font-size: 12px; color: var(--quiet); overflow-wrap: anywhere; }
+
+/* The agent's AI mind in the chat */
+.msg-ai { display: inline-block; font-size: 9px; letter-spacing: .1em; color: var(--green); border: 1px solid rgba(57,255,136,.45); border-radius: 3px; padding: 0 4px; margin-bottom: 4px; }
+.msg-thinking p { color: var(--quiet); }
+.msg-thinking .dots::after { content: "…"; animation: thinkdots 1.2s steps(3, end) infinite; display: inline-block; width: 1.2em; overflow: hidden; vertical-align: bottom; }
+@keyframes thinkdots { from { width: 0; } to { width: 1.2em; } }
+.msg-body .msg-ai { align-self: flex-start; width: fit-content; }

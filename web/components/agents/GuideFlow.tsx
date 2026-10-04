@@ -17,7 +17,7 @@ export function GuideFlow(p: {
   locked?: string | null;                 // why the flow can't be used yet (e.g. not awakened)
   rule: { label: string; text: string } | null;
   warning?: string | null;
-  chat: { rule: CustomRule | null; msgs: ChatMsg[]; onChat: (c: ChatMsg[]) => void; onApply: (r: CustomRule, c: ChatMsg[]) => void };
+  chat: { rule: CustomRule | null; msgs: ChatMsg[]; onChat: (c: ChatMsg[]) => void; onApply: (r: CustomRule, c: ChatMsg[]) => void; context?: string };
   chatExtra?: ReactNode;
   templates: GuideTemplate[];
   activeTemplate?: string;
@@ -58,7 +58,7 @@ export function GuideFlow(p: {
             )}
             <div className="gf-grid">
               <div className="gf-chat">
-                <AgentChat id={p.id} rule={p.chat.rule} chat={p.chat.msgs} onChat={p.chat.onChat} onApply={p.chat.onApply} disabled={off} />
+                <AgentChat id={p.id} rule={p.chat.rule} chat={p.chat.msgs} onChat={p.chat.onChat} onApply={p.chat.onApply} disabled={off} context={p.chat.context} />
                 {p.chatExtra}
               </div>
               <div className="gf-tpls" role="list" aria-label="House templates">
