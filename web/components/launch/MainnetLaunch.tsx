@@ -39,7 +39,7 @@ export function MainnetLaunch() {
   const [prov, setProv] = useState<EIP1193Provider | null>(null);
   const [account, setAccount] = useState<Address | null>(null);
   const [coinLauncher, setCoinLauncher] = useState<Address | null>(null);
-  useEffect(() => { try { const v = localStorage.getItem("trenchers:coinLauncher"); if (v) setCoinLauncher(v as Address); } catch { /* */ } }, []);
+  useEffect(() => { try { const v = localStorage.getItem("trenchers:coinLauncher2"); if (v) setCoinLauncher(v as Address); } catch { /* */ } }, []);
   const [chainOk, setChainOk] = useState(false);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [dep, setDep] = useState<Dep>({ done: [] });
@@ -268,7 +268,7 @@ export function MainnetLaunch() {
 
       <section className="tn-card">
         <h2>6 · Agent coins: the coin launcher</h2>
-        <p>Lets each agent launch its own coin on Pons (creator fees go to the agent wallet). Deploy it from the Deployer, then the Safe proposes it; it goes live after the 48-hour notice and one more Safe transaction.</p>
+        <p>Lets each agent launch its own coin on Pons (creator fees go to the agent wallet), with Trenchers paying the Pons launch fee so agents need nothing but their starter. Deploy it from the Deployer, send it some ETH for launch fees, then the Safe proposes it; it goes live after the 48-hour notice and one more Safe transaction. The Safe can take unused launch-fee money back at any time.</p>
         {coinLauncher ? (
           <>
             <p className="mono">Coin launcher: <a href={`${EXPLORER}/address/${coinLauncher}`} target="_blank" rel="noreferrer">{coinLauncher}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(coinLauncher)}>Copy</button></p>
@@ -288,7 +288,7 @@ export function MainnetLaunch() {
         ) : (
           <TextButton onClick={async () => {
             setBusy(true); setError(null);
-            try { const a = await deploy("Coin launcher", "AgentCoinLauncher", [L.ponsFactory]); setCoinLauncher(a); try { localStorage.setItem("trenchers:coinLauncher", a); } catch { /* */ } }
+            try { const a = await deploy("Coin launcher", "AgentCoinLauncher", [L.ponsFactory, MAINNET_DEPLOYMENT.fund, MAINNET_DEPLOYMENT.nft, R.safe]); setCoinLauncher(a); try { localStorage.setItem("trenchers:coinLauncher2", a); } catch { /* */ } }
             catch (e) { setError(errText(e)); }
             setBusy(false);
           }} disabled={busy || !isDeployer || !chainOk}>Deploy the coin launcher</TextButton>

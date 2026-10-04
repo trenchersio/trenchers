@@ -7,6 +7,7 @@ import { AgentLinks } from "@/components/AgentLinks";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { CoinLaunch } from "./CoinLaunch";
+import { Fold } from "@/components/Fold";
 import { cardFromLive } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
@@ -200,14 +201,9 @@ export function LiveAgents() {
       {sel && <Profile key={sel.id} a={sel} me={me} claim={claim} live={live} engineCount={engine?.agents.length ?? 0} busy={busy} run={run} />}
 
       {ids.length > 0 && (
-        <section className="ap-track" aria-label="Your agents' trading">
-          <header className="ap-track-head">
-            <span className="mono ap-kick">Track your agents</span>
-            <h2>Their trading, live</h2>
-            <p className="ap-sub">What each of your agents holds and trades, its value over time and its rank in this week&apos;s Arena.</p>
-          </header>
+        <Fold id="track" title="Track your agents" sub="Their trading, live: value, positions, trades and rank">
           <LiveArena only={ids} />
-        </section>
+        </Fold>
       )}
     </div>
   );
@@ -347,6 +343,37 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           </section>
         )}
 
+
+
+
+
+        <Fold id="funding" title="Funding" sub="Its balance, deposits and withdrawals, and its own coin">
+          <div className="fold-stack">
+            <section className="panel-card">
+              <h3>Balance</h3>
+              <div className="live-funds">
+                <div>
+                  <span className="mono live-lbl">Deposit</span>
+                  <div className="live-row-in">
+                    <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} disabled={busy} aria-label="Deposit amount (ETH)" /><em className="mono">ETH</em></span>
+                    <button type="button" className="gf-btn go" onClick={deposit} disabled={busy || !dep}>Deposit</button>
+                  </div>
+                </div>
+                <div>
+                  <span className="mono live-lbl">Withdraw · instant · {fmt(a.free)} ETH available</span>
+                  <div className="live-row-in">
+                    <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={wd} placeholder="0.0" onChange={(e) => setWd(e.target.value)} disabled={busy} aria-label="Withdraw amount (ETH)" /><button type="button" className="live-max mono" onClick={() => setWd(formatEther(a.free ?? 0n))} disabled={busy || !a.free}>Max</button></span>
+                    <button type="button" className="gf-btn ghost" onClick={withdraw} disabled={busy || !wd || !a.free}>Withdraw</button>
+                  </div>
+                </div>
+              </div>
+              {(a.locked ?? 0n) > 0n && <p className="live-lock">🔒 <b>{fmt(a.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still trade with it. Your own deposits and any profits can be withdrawn instantly.</p>}
+            </section>
+            <CoinLaunch id={a.id} wallet={a.wallet!} me={me} free={a.free ?? 0n} busy={busy} run={run} />
+          </div>
+        </Fold>
+
+        <Fold id="guide" title="Guide your agent" sub="Strategy, limits, start or pause">
         <GuideFlow
           id={a.id} busy={busy}
           rule={a.ruleVersion ? { label: `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}`, text: a.ruleText ?? "Rule applied." } : null}
@@ -366,30 +393,9 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           onPause={() => setTrading(false)}
           arenaHref="/arena#live"
         />
+        </Fold>
 
-        <section className="panel-card">
-          <h3>Funds</h3>
-          <div className="live-funds">
-            <div>
-              <span className="mono live-lbl">Deposit</span>
-              <div className="live-row-in">
-                <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} disabled={busy} aria-label="Deposit amount (ETH)" /><em className="mono">ETH</em></span>
-                <button type="button" className="gf-btn go" onClick={deposit} disabled={busy || !dep}>Deposit</button>
-              </div>
-            </div>
-            <div>
-              <span className="mono live-lbl">Withdraw · instant · {fmt(a.free)} ETH available</span>
-              <div className="live-row-in">
-                <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={wd} placeholder="0.0" onChange={(e) => setWd(e.target.value)} disabled={busy} aria-label="Withdraw amount (ETH)" /><button type="button" className="live-max mono" onClick={() => setWd(formatEther(a.free ?? 0n))} disabled={busy || !a.free}>Max</button></span>
-                <button type="button" className="gf-btn ghost" onClick={withdraw} disabled={busy || !wd || !a.free}>Withdraw</button>
-              </div>
-            </div>
-          </div>
-          {(a.locked ?? 0n) > 0n && <p className="live-lock">🔒 <b>{fmt(a.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still trade with it. Your own deposits and any profits can be withdrawn instantly.</p>}
-        </section>
-
-        <CoinLaunch id={a.id} wallet={a.wallet!} me={me} free={a.free ?? 0n} busy={busy} run={run} />
-
+        <Fold id="trades" title="Trades" sub="Everything it bought and sold">
         <section className="panel-card">
           <h3>Trades</h3>
           {live?.recent.length ? (
@@ -406,6 +412,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
             </ol>
           ) : <p className="empty">No trades yet. Once it has a rule and trading is on, its trades show up here and in the <a href="/arena#live">live Arena</a>.</p>}
         </section>
+        </Fold>
 
         {onCustom && (
           <p className="muted-note live-version">This wallet runs a fixed version you opted in to. <button type="button" className="tbtn" onClick={() => setVersion(a.original!, `Switching #${a.id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button></p>

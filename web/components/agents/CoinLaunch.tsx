@@ -6,12 +6,14 @@ import { EXPLORER, gmgnToken } from "@/lib/constants";
 
 /**
  * "Launch its coin": the agent wallet launches its own Pons coin through the coin launcher set in AgentConfig.
- * The coin's creator fees go to the agent wallet, and the engine never trades it. Paid from the free balance.
+ * The coin's creator fees go to the agent wallet, and the engine never trades it. Trenchers pays the Pons launch
+ * fee (from the launcher's balance), so an agent can launch with nothing but its starter.
  */
 const LAUNCHER_ABI = parseAbi([
   "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }",
   "struct TokenParams { string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics; }",
   "function launch(TokenParams params, uint256 launchConfigId, address expected) payable returns (address coin)",
+  "function feeCovered() view returns (bool)",
 ]);
 const PONS = parseAbi(["function launchFee() view returns (uint256)"]);
 const ERC20 = parseAbi(["function symbol() view returns (string)", "function name() view returns (string)"]);
@@ -26,6 +28,7 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
   const [eta, setEta] = useState<number | null>(null);
   const [coin, setCoin] = useState<{ address: Address; symbol: string; name: string } | null>(null);
   const [fee, setFee] = useState<bigint | null>(null);
+  const [covered, setCovered] = useState<boolean | null>(null);
   const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain. Its creator fees fund the agent.`, x: "", telegram: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const [ver, setVer] = useState(0);
@@ -41,6 +44,8 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
         c.readContract({ address: PONS_FACTORY, abi: PONS, functionName: "launchFee" }).catch(() => null),
       ]);
       setLauncher(l === zeroAddress ? null : l);
+      const target = l !== zeroAddress ? l : p[0];
+      if (target !== zeroAddress) setCovered(await c.readContract({ address: target, abi: LAUNCHER_ABI, functionName: "feeCovered" }).catch(() => null));
       setEta(p[0] !== zeroAddress ? Number(p[1]) : null);
       setFee(lf);
       if (own !== zeroAddress) {
@@ -60,15 +65,17 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
   });
 
   const launch = () => run(`Launching $${f.symbol.trim().toUpperCase()} for Trencher #${id}`, async (ph) => {
-    if (!launcher || fee === null) throw new Error("Coin launches aren't switched on yet.");
-    if (free < fee) throw new Error(`Deposit at least ${fmt(fee - free)} ETH more first: the launch fee is paid from the free balance, not the starter.`);
+    if (!launcher) throw new Error("Coin launches aren't switched on yet.");
+    // Trenchers pays the launch fee; if that money ever runs out, the agent's own free balance covers it.
+    const own = covered === false && fee !== null ? fee : 0n;
+    if (own > free) throw new Error(`The launch-fee budget is empty right now. Deposit ${fmt(own - free)} ETH to pay the fee yourself, or try again later.`);
     // Pons gives each new coin the next address, so: work out the address right now, then launch exactly
     // there. If someone else's launch lands first, the launcher refuses (nothing spent) and we try again.
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const sim = await reader().simulateContract({ address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(zeroAddress), fee, zeroAddress], account: me });
+      const sim = await reader().simulateContract({ address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(zeroAddress), own, zeroAddress], account: me });
       const [expected] = decodeAbiParameters([{ type: "address" }], sim.result as Hex);
       try {
-        await sendCall(me, { address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(expected as Address), fee, expected] }, ph);
+        await sendCall(me, { address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(expected as Address), own, expected] }, ph);
         return;
       } catch (e) {
         if (attempt === 3 || !/WrongCoin|0x[0-9a-f]{8}/i.test(String((e as Error).message))) throw e;
@@ -96,22 +103,20 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
         </div>
       ) : launcher === undefined ? (
         <p className="muted-note">Checking…</p>
-      ) : !launcher ? (
-        <p className="muted-note">{opens ? `Agent coins open on ${opens.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}, after the public 48-hour notice.` : "Agent coin launches are coming soon."} Your agent will be able to launch its own coin on Pons once, with the creator fees going to its wallet.</p>
       ) : (
-        <>
-          <p className="muted-note">Launch your agent&apos;s own coin on Pons, once. Its creator fees go to the agent wallet, and its art becomes the coin&apos;s logo. The launch fee{fee !== null ? ` (${fmt(fee)} ETH)` : ""} comes from the free balance, not the locked starter.</p>
-          <div className="coin-form">
+        <div className={launcher ? "" : "coin-soon"}>
+          {!launcher && <p className="coin-soon-tag">{opens ? `Opens ${opens.toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : "Coming soon"}</p>}
+          <p className="muted-note">Launch your agent&apos;s own coin on Pons, once. Every trade in it pays creator fees into the agent&apos;s wallet, and its art becomes the coin&apos;s logo. <b>Trenchers pays the launch fee</b>, so it works with just the starter balance.</p>
+          <fieldset className="coin-form" disabled={!launcher || busy}>
             <label><span className="mono">Name</span><input value={f.name} maxLength={32} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
             <label><span className="mono">Ticker</span><input className="mono" value={f.symbol} maxLength={10} onChange={(e) => setF({ ...f, symbol: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() })} /></label>
             <label className="wide"><span className="mono">Description</span><textarea rows={3} maxLength={280} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></label>
             <label><span className="mono">X (optional)</span><input placeholder="https://x.com/…" value={f.x} onChange={(e) => setF({ ...f, x: e.target.value })} /></label>
             <label><span className="mono">Telegram (optional)</span><input placeholder="https://t.me/…" value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} /></label>
-          </div>
-          {fee !== null && free < fee && <p className="notice">Deposit at least {fmt(fee - free)} ETH first.</p>}
+          </fieldset>
           {msg && <p className="muted-note">{msg}</p>}
-          <button type="button" className="gf-btn go" onClick={launch} disabled={busy || !valid || fee === null || free < fee}>Launch ${f.symbol.trim().toUpperCase() || "…"}</button>
-        </>
+          <button type="button" className="gf-btn go" onClick={launch} disabled={!launcher || busy || !valid}>{launcher ? `Launch $${f.symbol.trim().toUpperCase() || "…"}` : `Launch $${f.symbol.trim().toUpperCase() || "…"} · ${opens ? "opens soon" : "coming soon"}`}</button>
+        </div>
       )}
     </section>
   );

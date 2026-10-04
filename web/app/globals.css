@@ -1894,7 +1894,7 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .mint-toast { animation: none; } }
 
 /* ------------------------------------------------------------------ agent coin */
-.coin-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.coin-form { border: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
 .coin-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .coin-form label.wide { grid-column: 1 / -1; }
 .coin-form span { font-size: 11px; color: var(--quiet); }
@@ -1903,3 +1903,23 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .coin-own p { margin: 0 0 6px; }
 .coin-own b { font-size: 20px; }
 @media (max-width: 600px) { .coin-form { grid-template-columns: minmax(0, 1fr); } }
+
+.coin-soon { position: relative; }
+.coin-soon .coin-form, .coin-soon .muted-note { opacity: .55; }
+.coin-soon-tag { display: inline-flex; margin: 0 0 10px; padding: 6px 12px; border-radius: 99px; font: 600 12px var(--mono); color: #FFB020; background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.45); }
+/* ------------------------------------------------------------------ folds */
+.fold { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); margin-top: 16px; overflow: hidden; }
+.fold-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; background: none; border: 0; color: var(--fog); cursor: pointer; text-align: left; font: inherit; }
+.fold-head:hover .fold-title { color: var(--green); }
+.fold-head:focus-visible { outline: 2px dashed var(--green); outline-offset: -4px; }
+.fold-titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fold-title { font: 700 20px var(--sans); letter-spacing: -.01em; transition: color .15s ease; }
+.fold-sub { font-size: 13px; color: var(--quiet); }
+.fold-chev { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); position: relative; transition: transform .2s ease, border-color .15s ease; }
+.fold-chev::before { content: ""; position: absolute; left: 50%; top: 45%; width: 8px; height: 8px; border-right: 2px solid var(--fog); border-bottom: 2px solid var(--fog); transform: translate(-50%, -50%) rotate(45deg); }
+.fold.open .fold-chev { transform: rotate(180deg); border-color: rgba(57,255,136,.5); }
+.fold-body { padding: 0 22px 22px; }
+.fold-body > .gf, .fold-body > .panel-card, .fold-stack > .panel-card { margin-top: 0; }
+.fold-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .fold-stack { grid-template-columns: minmax(0, 1fr); } .fold-head { padding: 16px; } .fold-body { padding: 0 14px 16px; } }
+@media (prefers-reduced-motion: reduce) { .fold-chev { transition: none; } }

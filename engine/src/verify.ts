@@ -110,7 +110,7 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   const launcherAddr = !same(pendingLauncher, zeroAddress) ? pendingLauncher : liveLauncher;
   if (!same(launcherAddr, zeroAddress)) {
     const onchain = await c.getCode({ address: launcherAddr });
-    const built = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.AgentCoinLauncher.abi, bytecode: ART.AgentCoinLauncher.bytecode, args: [L.ponsFactory] }) }).then((r) => r.data).catch(() => null);
+    const built = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.AgentCoinLauncher.abi, bytecode: ART.AgentCoinLauncher.bytecode, args: [L.ponsFactory, d.fund, d.nft, R.safe] }) }).then((r) => r.data).catch(() => null);
     checks.push({ what: "coin launcher: code is AgentCoinLauncher for the real Pons factory", ok: !!built && same(built, onchain), value: launcherAddr });
     if (!built || !same(built, onchain)) problems.push(`coin launcher ${launcherAddr} is not the expected AgentCoinLauncher`);
     checks.push({ what: same(pendingLauncher, zeroAddress) ? "coin launcher: live" : "coin launcher: proposed, can be switched on at", ok: true, value: same(pendingLauncher, zeroAddress) ? "yes" : new Date(Number(launcherEta) * 1000).toISOString() });
