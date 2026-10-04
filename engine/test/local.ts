@@ -9,14 +9,16 @@ import {
   createPublicClient, createWalletClient, defineChain, http, parseEther, keccak256, toHex, zeroHash, formatEther, parseEventLogs,
   type Abi, type Address, type Hex,
 } from "viem";
-import { mnemonicToAccount } from "viem/accounts";
+import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 
 const RPC = "http://127.0.0.1:8545";
 const chain = defineChain({ id: 31337, name: "local", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } });
 // Hardhat's default accounts (#0 deployer, #1 holder, #2 engine, #3 coin dev)
 const MNEMONIC = "test test test test test test test test test test test junk";
-const [deployer, alice, engineAcct, dev] = [0, 1, 2, 3].map((i) => mnemonicToAccount(MNEMONIC, { addressIndex: i }));
-const ENGINE_KEY = toHex(engineAcct.getHdKey().privateKey!);
+const [deployer, alice, dev] = [0, 1, 3].map((i) => mnemonicToAccount(MNEMONIC, { addressIndex: i }));
+// A fresh key the node doesn't know, like on a public RPC: the engine must sign its own transactions.
+const ENGINE_KEY = generatePrivateKey();
+const engineAcct = privateKeyToAccount(ENGINE_KEY);
 const pub = createPublicClient({ chain, transport: http(RPC) });
 const wal = (acct = deployer) => createWalletClient({ account: acct, chain, transport: http(RPC) });
 
@@ -55,6 +57,7 @@ async function main() {
   const pons = await deploy("MockPonsFactory");
   const adapter = await deploy("PonsAdapter", [pons, deployer.address]);
   await call(config, "AgentConfig", "propose", [0, engineAcct.address]);
+  await pub.waitForTransactionReceipt({ hash: await wal().sendTransaction({ to: engineAcct.address, value: parseEther("1"), account: deployer, chain }) });
   await call(config, "AgentConfig", "propose", [1, adapter]);
   await call(config, "AgentConfig", "propose", [3, fund]);
   await call(nft, "TrenchersNFT", "setStarterFund", [fund]);

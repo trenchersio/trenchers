@@ -363,7 +363,8 @@ export class Engine {
   private send(wallet: Address, fn: "trade" | "approveRouter", args: readonly unknown[]): Promise<Hash | null> {
     const job = this.queue.then(async () => {
       if (ENV.DRY_RUN || !this.wallet || !this.engineAddress) { this.log(`  (not sent: ${ENV.DRY_RUN ? "dry run" : "no ENGINE_KEY"})`); return null; }
-      const { request } = await this.pub.simulateContract({ address: wallet, abi: AGENT_ABI, functionName: fn, args: args as never, account: this.engineAddress });
+      const { request } = await this.pub.simulateContract({ address: wallet, abi: AGENT_ABI, functionName: fn, args: args as never, account: this.wallet.account! });
+      // Signed here with the engine key and sent raw: public RPCs don't hold keys (no eth_sendTransaction).
       const hash = await this.wallet.writeContract(request as never);
       const r = await this.pub.waitForTransactionReceipt({ hash });
       if (r.status !== "success") throw new Error(`${fn} reverted (${hash})`);
