@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prestart": "node scripts/sync-rules.mjs",
     "start": "tsx src/main.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/sync-rules.mjs && tsc --noEmit",
     "test:local": "tsx test/local.ts"
   },
   "dependencies": {

@@ -34,7 +34,7 @@ const STORE = "trenchers-testnet-deployment";
 
 type Dep = {
   chainId: number; version?: number; owner?: Address; registry?: Address; splitter?: Address; nft?: Address;
-  fund?: Address; config?: Address; impl?: Address; dist?: Address; done: string[];
+  fund?: Address; config?: Address; impl?: Address; dist?: Address; launchpad?: Address; adapter?: Address; startBlock?: string; done: string[];
 };
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
@@ -239,9 +239,10 @@ export function TestnetSetup() {
   // ---------------------------------------------------------------- deploy
   const STEPS: { key: string; label: string; run: (d: Dep, me: Address) => Promise<Partial<Dep>> }[] = [
     { key: "registry", label: "Agent wallet registry (ERC-6551)", run: async () => {
+      const startBlock = (await clients().pub.getBlockNumber()).toString();
       const code = await clients().pub.getCode({ address: CANONICAL_REGISTRY });
-      if (code && code !== "0x") { pushLog({ label: "Agent wallet registry: already on this network", state: "ok" }); return { registry: CANONICAL_REGISTRY }; }
-      return { registry: await deploy("Agent wallet registry (ERC-6551)", "MockERC6551Registry", []) };
+      if (code && code !== "0x") { pushLog({ label: "Agent wallet registry: already on this network", state: "ok" }); return { registry: CANONICAL_REGISTRY, startBlock }; }
+      return { registry: await deploy("Agent wallet registry (ERC-6551)", "MockERC6551Registry", []), startBlock };
     } },
     { key: "splitter", label: "Revenue splitter", run: async (_d, me) => ({ splitter: await deploy("Revenue splitter", "RevenueSplitter", [me, me, BigInt(Math.floor(Date.now() / 1000))]) }) },
     { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
@@ -257,6 +258,10 @@ export function TestnetSetup() {
     { key: "starterDest", label: "Send the 50% to the starter fund", run: async (d) => { await write("Send the 50% to the starter fund", d.splitter!, "RevenueSplitter", "proposeDestination", [3, d.fund]); return {}; } },
     { key: "baseUri", label: "Point the NFT at trenchers.io metadata", run: async (d) => { await write("Point the NFT at trenchers.io metadata", d.nft!, "TrenchersNFT", "setBaseURI", [META]); return {}; } },
     { key: "openMint", label: "Open the mint", run: async (d) => { await write("Open the mint", d.nft!, "TrenchersNFT", "setMintOpen", [true]); return {}; } },
+    // Trading: a test launchpad (Pons's testnet version isn't public) and the adapter agents trade through.
+    { key: "launchpad", label: "Test coin launchpad", run: async () => ({ launchpad: await deploy("Test coin launchpad", "MockPonsFactory", []) }) },
+    { key: "adapter", label: "Trading adapter", run: async (d, me) => ({ adapter: await deploy("Trading adapter", "PonsAdapter", [d.launchpad, me]) }) },
+    { key: "cfgRouter", label: "Let agents trade through the adapter", run: async (d) => { await write("Let agents trade through the adapter", d.config!, "AgentConfig", "propose", [1, d.adapter]); return {}; } },
   ];
   const deployed = dep.done.includes("all") || STEPS.every((s) => dep.done.includes(s.key)) || ((dep.version ?? 1) < CONTRACTS_VERSION && dep.done.length > 10);
   const ready = deployed && !!dep.nft && !!dep.fund && (dep.version ?? 1) >= CONTRACTS_VERSION;
@@ -338,7 +343,7 @@ export function TestnetSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chainOk, ready, account, tick, dep.nft, dep.fund]);
 
-  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, fund: dep.fund, config: dep.config, impl: dep.impl, dist: dep.dist });
+  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, fund: dep.fund, launchpad: dep.launchpad, adapter: dep.adapter, startBlock: dep.startBlock, config: dep.config, impl: dep.impl, dist: dep.dist });
   const isOwner = !!account && !!dep.owner && account.toLowerCase() === dep.owner.toLowerCase();
 
   const loadPasted = () => {
@@ -395,7 +400,7 @@ export function TestnetSetup() {
             <details className="tn-details"><summary className="mono">Deployment code (send this to the team)</summary>
               <textarea className="tn-code mono" readOnly value={code} onFocus={(e) => e.currentTarget.select()} />
               <ul className="tn-addrs mono">
-                {(["nft", "fund", "splitter", "config", "impl", "dist", "registry"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
+                {(["nft", "fund", "splitter", "config", "impl", "dist", "registry", "launchpad", "adapter"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
               </ul>
             </details>
           </>
@@ -461,6 +466,7 @@ export function TestnetSetup() {
         </div>
       )}
 
+      {account && chainOk && ready && dep.adapter && <Trading dep={dep} account={account} isOwner={isOwner} read={read} write={write} tick={tick} onDone={() => setTick((t) => t + 1)} setError={setError} busy={busy} setBusy={setBusy} />}
       {account && chainOk && ready && isOwner && <SafetyNet dep={dep} account={account} read={read} write={write} getBalance={(a) => clients().pub.getBalance({ address: a })} chainTime={async () => Number((await clients().pub.getBlock()).timestamp)} tick={tick} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} />}
       {account && chainOk && <Rescue account={account} clients={clients} sendTx={sendTx} setError={setError} />}
 
@@ -493,7 +499,7 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
   getBalance: (a: Address) => Promise<bigint>; getRule: (wallet: Address, version: number) => Promise<string | null>; claim: bigint;
   onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void; pons: boolean | null;
 }) {
-  type St = { awake: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: number; lockedAt?: bigint; ruleText?: string | null };
+  type St = { awake: boolean; deployed?: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: number; lockedAt?: bigint; ruleText?: string | null };
   const [s, setS] = useState<St | null>(null);
   const [depAmt, setDepAmt] = useState("0.0001");
   const [wdAmt, setWdAmt] = useState("");
@@ -508,14 +514,14 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
         if (!awake) { if (live) setS({ awake }); return; }
         const wallet = await read<Address>(dep.fund!, "AgentStarterFund", "agentWallet", [BigInt(id)]);
         const bal = await getBalance(wallet);
-        const next: St = { awake, wallet, bal, locked: 0n, free: bal, rules: 0, lockedAt: 0n };
+        const next: St = { awake, deployed: true, wallet, bal, locked: 0n, free: bal, rules: 0, lockedAt: 0n };
         try {
           next.locked = await read<bigint>(wallet, "TrenchersAgentAccount", "lockedNow");
           next.free = await read<bigint>(wallet, "TrenchersAgentAccount", "withdrawable");
           next.rules = Number(await read<number>(wallet, "TrenchersAgentAccount", "ruleVersion"));
           next.lockedAt = await read<bigint>(wallet, "TrenchersAgentAccount", "starterLockedAt");
           if (next.rules > 0) next.ruleText = await getRule(wallet, next.rules);
-        } catch { /* house agents have no wallet until awakened */ }
+        } catch { next.deployed = false; /* house agents get their wallet created on request */ }
         if (live) setS(next);
       } catch (e) { if (live) setError(reason(e)); }
     })();
@@ -565,7 +571,13 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
             <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={awaken} disabled={busy}>Awaken · claim {eth(claim)} ETH</button></div>
           </>
         )}
-        {s?.awake && s.wallet && (
+        {s?.awake && s.wallet && s.deployed === false && (
+          <>
+            <p>House agents have no starter balance, so they are never awakened. Create this agent&apos;s wallet to fund it and give it a strategy.</p>
+            <div className="tn-row"><button type="button" className="tn-btn tn-primary" disabled={busy} onClick={() => act(() => write(`Creating the agent wallet for #${id}`, dep.registry!, "MockERC6551Registry", "createAccount", [dep.impl, zeroHash, BigInt(chain.id), dep.nft, BigInt(id)]))}>Create agent wallet</button></div>
+          </>
+        )}
+        {s?.awake && s.wallet && s.deployed !== false && (
           <>
             <p className="mono tn-small">Agent wallet <a href={`${EXPLORER}/address/${s.wallet}`} target="_blank" rel="noreferrer">{short(s.wallet)} ↗</a></p>
             <dl className="tn-kv mono">
@@ -783,6 +795,66 @@ function SafetyNet({ dep, account, read, write, getBalance, chainTime, tick, onD
         {s.nft > 0n && <button type="button" className="tn-btn" onClick={() => act(() => write("Sweeping ETH from the NFT contract", dep.nft!, "TrenchersNFT", "sweep", ["0x0000000000000000000000000000000000000000", account]))} disabled={busy}>Sweep to my wallet</button>}
       </div>
       {dep.dist && <div className="tn-safe-row"><div><b>Fee distributor</b><span className="mono tn-small">{f(s.dist)}</span></div></div>}
+    </section>
+  );
+}
+
+/** Engine wallet, Railway settings and the test launchpad. */
+function Trading({ dep, account, isOwner, read, write, tick, onDone, setError, busy, setBusy }: {
+  dep: Dep; account: Address; isOwner: boolean; read: ReadFn; write: WriteFn; tick: number;
+  onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void;
+}) {
+  const [engine, setEngine] = useState<Address | null>(null);
+  const [engineIn, setEngineIn] = useState("");
+  const [coin, setCoin] = useState("TEST");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { read<Address>(dep.config!, "AgentConfig", "engine").then(setEngine).catch(() => setEngine(null)); }, [tick, dep.config, read]);
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn(); } catch (e) { setError(reason(e)); } setBusy(false); onDone(); };
+  const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+  const hasEngine = engine && engine !== ZERO_ADDR;
+  const env = [
+    "CHAIN_ID=46630",
+    `RPC_URL=${chain.rpcUrls.default.http[0]}`,
+    `NFT_ADDRESS=${dep.nft}`,
+    `FUND_ADDRESS=${dep.fund}`,
+    `ADAPTER_ADDRESS=${dep.adapter}`,
+    `PONS_FACTORY=${dep.launchpad}`,
+    ...(dep.startBlock ? [`START_BLOCK=${dep.startBlock}`] : []),
+    "ENGINE_KEY=paste the engine wallet's private key here, in Railway only",
+  ].join("\n");
+
+  return (
+    <section className="tn-card">
+      <h2><span className="tn-n mono">4</span>Trading engine</h2>
+      <p>The engine follows every awakened agent and trades its current rule. On testnet it trades coins from the test launchpad below (Pons&apos;s testnet version isn&apos;t public); on mainnet it trades real Pons coins.</p>
+
+      <div className="tn-safe-row">
+        <div><b>Engine wallet</b><span className="mono tn-small">{hasEngine ? short(engine!) : "not set yet"}</span></div>
+        {isOwner && !hasEngine && (
+          <div className="tn-row">
+            <input className="tn-in tn-wide mono" value={engineIn} onChange={(e) => setEngineIn(e.target.value)} placeholder="0x… address of your new engine wallet" />
+            <button type="button" className="tn-btn tn-primary" onClick={() => act(() => write("Setting the engine wallet", dep.config!, "AgentConfig", "propose", [0, engineIn.trim()]))} disabled={busy || !/^0x[0-9a-fA-F]{40}$/.test(engineIn.trim())}>Set engine wallet</button>
+          </div>
+        )}
+      </div>
+      {isOwner && !hasEngine && <p className="tn-hint">Make a new MetaMask account just for the engine and paste its address (not its key). It only pays gas and can only trade inside agent wallets, within each holder&apos;s limits.</p>}
+
+      {isOwner && hasEngine && (
+        <>
+          <p><b>Railway settings for the engine service</b>: copy these into the service&apos;s Variables (Raw Editor), then replace the last line with the engine wallet&apos;s private key yourself.</p>
+          <textarea className="tn-code mono" readOnly value={env} rows={7} onFocus={(e) => e.currentTarget.select()} />
+          <div className="tn-row"><button type="button" className="tn-btn" onClick={() => { navigator.clipboard?.writeText(env); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy settings"}</button></div>
+        </>
+      )}
+
+      <div className="tn-safe-row">
+        <div><b>Test coin launchpad</b><span className="mono tn-small">Launch a coin; agents with a matching rule trade it.</span></div>
+        <div className="tn-row">
+          <input className="tn-in mono" value={coin} onChange={(e) => setCoin(e.target.value.toUpperCase().slice(0, 12))} />
+          <button type="button" className="tn-btn" onClick={() => act(() => write(`Launching $${coin}`, dep.launchpad!, "MockPonsFactory", "launch", [coin || "TEST", parseEther("1")]))} disabled={busy || !coin}>Launch test coin</button>
+        </div>
+      </div>
+      <p className="tn-hint">Tip: give an agent the rule &quot;Buy every new Pons launch, sell after 1 minute&quot;, launch a coin here, and watch the agent buy about 6 seconds later and sell a minute after that.</p>
     </section>
   );
 }

@@ -3,7 +3,7 @@ import {
   type Address, type Hash, type Log, type PublicClient, type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { parse, type CustomRule } from "../../web/lib/custom-strategy";
+import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
   ADAPTER_ABI, AGENT_ABI, BOUGHT, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
@@ -67,7 +67,8 @@ export class Engine {
 
   async start() {
     const head = await this.pub.getBlockNumber();
-    this.cursor = ENV.START_BLOCK > 0n ? ENV.START_BLOCK - 1n : 0n;
+    const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
+    this.cursor = start > 0n ? start - 1n : 0n;
     this.log(`Replaying history from block ${this.cursor + 1n} to ${head}${this.engineAddress ? ` · engine ${this.engineAddress}` : " · read-only (no ENGINE_KEY)"}${ENV.DRY_RUN ? " · DRY RUN" : ""}`);
     await this.sync(head, false);
     this.liveFrom = head;
@@ -83,6 +84,25 @@ export class Engine {
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
     await this.runEntries();
     await this.runExits();
+  }
+
+  /** The block where the starter fund was deployed (binary search on its code), so history is read from there. */
+  private async deploymentBlock(head: bigint) {
+    let lo = 0n, hi = head;
+    let historyOk = true;
+    const has = async (n: bigint) => {
+      try { const c = await this.pub.getCode({ address: ENV.FUND, blockNumber: n }); return !!c && c !== "0x"; }
+      catch { historyOk = false; return true; } // RPC can't read old state: don't skip anything
+    };
+    if (!(await has(head))) throw new Error(`No contract at FUND_ADDRESS ${ENV.FUND} on this chain`);
+    if (!(await has(0n)) && historyOk) { /* normal case: search below */ } else if (!historyOk) {
+      this.log("RPC can't read historical state; reading history from block 0 (set START_BLOCK to speed this up)");
+      return 0n;
+    }
+    while (lo < hi) { const mid = (lo + hi) / 2n; if (await has(mid)) hi = mid; else lo = mid + 1n; }
+    if (!historyOk) { this.log("RPC can't read historical state; reading history from block 0 (set START_BLOCK to speed this up)"); return 0n; }
+    this.log(`Contracts deployed at block ${lo}`);
+    return lo;
   }
 
   private async blockTime(n: bigint) {
