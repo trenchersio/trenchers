@@ -45,3 +45,30 @@ describe("Testnet setup flow (public mint)", () => {
       .to.emit(acct, "RuleApplied").withArgs(1, ethers.id("rule"), "Buys every launch that graduates on Pons. Sells after 5 minutes.");
   });
 });
+
+describe("Mint gas safety", () => {
+  it("a mint either releases the agent's half to the fund or reverts; it never silently skips it", async () => {
+    const [owner, buyer] = await ethers.getSigners();
+    const E = ethers.parseEther;
+    const registry = await (await ethers.getContractFactory("MockERC6551Registry")).deploy();
+    const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(owner.address, owner.address, Math.floor(Date.now() / 1000));
+    const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), owner.address, "", "", E("0.0002"));
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(owner.address, await nft.getAddress(), await registry.getAddress(), E("0.0001"));
+    await splitter.setPrimarySeller(await nft.getAddress());
+    await splitter.proposeDestination(3, await fund.getAddress());
+    await nft.setMintOpen(true);
+    // The gas estimate must cover the release: mint with exactly the estimated gas.
+    const est = await nft.connect(buyer).mint.estimateGas(1, { value: E("0.0002") });
+    await nft.connect(buyer).mint(1, { value: E("0.0002"), gasLimit: est });
+    expect(await ethers.provider.getBalance(await fund.getAddress())).to.equal(E("0.000102"));
+    // Starving the release reverts the whole mint instead of skipping it.
+    let reverted = false, fundBefore = await ethers.provider.getBalance(await fund.getAddress());
+    for (let g = est / 2n; g < est; g += 3000n) {
+      try { await nft.connect(buyer).mint(1, { value: E("0.0002"), gasLimit: g }); } catch { reverted = true; continue; }
+      // if a starved mint succeeds, the fund must still have received its share
+      const now = await ethers.provider.getBalance(await fund.getAddress());
+      expect(now - fundBefore).to.equal(E("0.000102")); fundBefore = now;
+    }
+    expect(reverted).to.equal(true);
+  });
+});

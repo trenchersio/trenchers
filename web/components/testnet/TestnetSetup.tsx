@@ -525,7 +525,15 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
     try { await fn(); } catch (e) { setError(reason(e)); }
     setBusy(false); onDone();
   };
-  const awaken = () => act(() => write(`Awakening Trencher #${id}`, dep.fund!, "AgentStarterFund", "claim", [BigInt(id)]));
+  const awaken = () => act(async () => {
+    // If the fund is short because a mint's starter share is still waiting in the splitter, move it first.
+    const fundBal = await getBalance(dep.fund!);
+    if (fundBal < claim && dep.splitter) {
+      const owed = await read<bigint>(dep.splitter, "RevenueSplitter", "owed", [3]);
+      if (owed > 0n) await write("Moving the starter share into the fund", dep.splitter, "RevenueSplitter", "release", [3]);
+    }
+    await write(`Awakening Trencher #${id}`, dep.fund!, "AgentStarterFund", "claim", [BigInt(id)]);
+  });
   const deposit = () => act(() => send(`Depositing ${depAmt} ETH into #${id}`, s!.wallet!, parseEther(depAmt || "0")));
   const withdraw = () => act(async () => {
     const v = parseEther(wdAmt || "0");

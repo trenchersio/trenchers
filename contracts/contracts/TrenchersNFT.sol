@@ -71,6 +71,7 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     error TooMany();
     error TransferFailed();
     error FirstRoundIsPublic();
+    error OutOfGas();
 
     constructor(
         address royaltyReceiver_,
@@ -121,8 +122,14 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
         emit Minted(msg.sender, supply + 1, quantity, msg.value);
         (bool ok, ) = splitter.call{value: msg.value}("");
         if (!ok) revert TransferFailed();
-        // Best effort: if the starter destination isn't set yet, the share waits in the splitter.
-        try IRevenueSplitterRelease(splitter).release(STARTER_BUCKET) {} catch {}
+        // Best effort: if the starter destination isn't set yet, the share waits in the splitter
+        // (anyone can release it later). The gas check makes sure a wallet's gas estimate leaves
+        // enough for the release: without it, an estimate that starves the inner call still
+        // "succeeds" and the agent's half would silently stay behind.
+        uint256 gasBefore = gasleft();
+        try IRevenueSplitterRelease(splitter).release(STARTER_BUCKET) {} catch {
+            if (gasleft() <= gasBefore / 63) revert OutOfGas();
+        }
     }
 
     /// @notice Opens or pauses the public mint.
