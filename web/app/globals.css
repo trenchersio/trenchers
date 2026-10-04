@@ -1117,6 +1117,17 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .ap-card:hover { border-color: #33403A; transform: translateY(-1px); }
 .ap-card.on { border-color: var(--green); background: radial-gradient(ellipse at top left, rgba(57,255,136,.1), transparent 70%), var(--panel); }
 .ap-card-art { border-radius: 8px; display: block; }
+.ap-card-buy { grid-template-columns: 56px auto; border-style: dashed; background: transparent; }
+.ap-card-buy:hover { border-color: var(--green); }
+.ap-buy-plus { width: 56px; height: 56px; border-radius: 8px; display: grid; place-items: center; font: 600 28px var(--mono); color: var(--green); background: rgba(57,255,136,.08); }
+.ap-buy-sub { color: var(--quiet); font-size: 11px; }
+.buy-modal { width: min(520px, 100%); padding: 0 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.buy-modal .modal-head { margin: 0 -18px; }
+.buy-modal .muted-note a { color: var(--green); }
+.ap-track { margin-top: 48px; display: flex; flex-direction: column; gap: 18px; }
+.ap-track-head h2 { margin: 6px 0 8px; font-size: 28px; }
+.ap-track .live-arena { margin: 0; }
+
 .ap-card-text { display: flex; flex-direction: column; gap: 5px; }
 .ap-card-text b { font-size: 15px; white-space: nowrap; }
 .ap-card-bal { font-size: 12px; color: var(--quiet); padding-left: 6px; }

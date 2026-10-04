@@ -53,13 +53,17 @@ export function cardFromLive(a: LiveAgent, of: number): PnlCardData {
   };
 }
 
-export function LiveArena() {
-  const { feed, error } = useFeed();
+/** `only`: show just these Trenchers (the holder's own agents on their profile). */
+export function LiveArena({ only }: { only?: number[] } = {}) {
+  const { feed: full, error } = useFeed();
   const [selected, setSelected] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
 
-  if (!feed) return <div className="arena-loading mono">{error ? `Live Arena unavailable: ${error}` : "Connecting to the trading engine…"}</div>;
+  if (!full) return <div className="arena-loading mono">{error ? `Live Arena unavailable: ${error}` : "Connecting to the trading engine…"}</div>;
+  const mine = only ? new Set(only) : null;
+  const feed = mine ? { ...full, agents: full.agents.filter((a) => mine.has(a.id)), feed: full.feed.filter((t) => mine.has(t.agent)) } : full;
+  const of = full.agents.length;
   const explorer = EXPLORERS[feed.chainId] ?? EXPLORERS[46630];
   const testnet = feed.chainId === 46630;
   const sel = feed.agents.find((a) => a.id === selected) ?? feed.agents[0] ?? null;
@@ -72,7 +76,7 @@ export function LiveArena() {
       {feed.paused && <p className="live-paused mono">Emergency stop is on: the team has paused all trading. Holders can still withdraw.</p>}
       <section className="arena-stats" aria-label="Arena totals">
         <div className="stat stat-main">
-          <span className="stat-label">Total value of all agents</span>
+          <span className="stat-label">{mine ? "Total value of your agents" : "Total value of all agents"}</span>
           <span className="stat-value mono">{ethTxt(total)} <small>ETH</small></span>
           <span className="mono stat-delta">{feed.agents.length} awakened · {trading} trading</span>
         </div>
@@ -84,10 +88,10 @@ export function LiveArena() {
       <div className="arena-grid">
         <section className="board" aria-label="Live leaderboard">
           <div className="board-head">
-            <div className="bh-title"><h1>Leaderboard</h1><span className="board-meta">{feed.agents.length} agents · ranked by weekly PnL</span></div>
+            <div className="bh-title">{mine ? <h3>In the Arena</h3> : <h1>Leaderboard</h1>}<span className="board-meta">{mine ? `${feed.agents.length} of yours trading or awake · rank out of ${of}` : `${feed.agents.length} agents · ranked by weekly PnL`}</span></div>
             <span className="sample live-badge">{testnet ? "Live · testnet" : "Live"}</span>
           </div>
-          {feed.agents.length === 0 && <p className="empty live-empty">No awakened agents yet. Mint a Trencher, awaken it and give it a rule, and it appears here.</p>}
+          {feed.agents.length === 0 && <p className="empty live-empty">{mine ? "None of your agents is in the Arena yet. Give one a rule and start trading, and its trades show up here." : "No awakened agents yet. Mint a Trencher, awaken it and give it a rule, and it appears here."}</p>}
           <ol className="live-rows">
             {feed.agents.map((a) => {
               const last = a.recent[0];
@@ -113,7 +117,7 @@ export function LiveArena() {
 
           {feed.feed.length > 0 && (
             <div className="panel-block live-feed">
-              <h3>Latest trades, all agents</h3>
+              <h3>{mine ? "Latest trades, your agents" : "Latest trades, all agents"}</h3>
               <ol className="trades mono">
                 {feed.feed.slice(0, 12).map((t) => (
                   <li key={`${t.tx}-${t.side}`}>
@@ -130,7 +134,7 @@ export function LiveArena() {
         </section>
 
         <section className="detail" aria-label="Agent details">
-          {sel && <LiveDetail a={sel} of={feed.agents.length} explorer={explorer} now={now} />}
+          {sel && <LiveDetail a={sel} of={of} explorer={explorer} now={now} />}
         </section>
       </div>
     </div>

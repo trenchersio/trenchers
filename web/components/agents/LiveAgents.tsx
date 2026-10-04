@@ -6,8 +6,11 @@ import { PnlCardButton } from "@/components/PnlCard";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { cardFromLive } from "@/components/arena/LiveArena";
-import { ABI, DEPLOYMENT, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
-import { ENGINE_URL, OPENSEA_URL, chain } from "@/lib/constants";
+import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
+import { ENGINE_URL, OPENSEA_URL, chain, openseaItem } from "@/lib/constants";
+import { createPortal } from "react-dom";
+import { MintPanel } from "@/components/MintPanel";
+import { LiveArena } from "@/components/arena/LiveArena";
 import { describe, parse, type CustomRule } from "@/lib/custom-strategy";
 import { STRATEGIES } from "@/lib/strategies";
 import { short, useWallet } from "@/lib/wallet";
@@ -51,11 +54,13 @@ async function loadAgent(id: number): Promise<Agent> {
   ]);
   const out: Agent = { id, awake, house, wallet, deployed: true, bal, locked, free, lockedAt, ruleVersion: Number(ruleVersion),
     perTrade: pol[0], dailyCap: pol[1], live: pol[2], setBy: pol[3], owner };
-  if (out.ruleVersion) {
-    const logs = await c.getContractEvents({ address: wallet, abi: ABI.agent, eventName: "RuleApplied", fromBlock: BigInt(d.startBlock) }).catch(() => []);
-    const hit = [...logs].reverse().find((l) => Number((l.args as { version?: number }).version) === out.ruleVersion);
-    out.ruleText = ((hit?.args as { ruleUri?: string } | undefined)?.ruleUri) || null;
-  }
+  const ruleText = out.ruleVersion
+    ? c.getContractEvents({ address: wallet, abi: ABI.agent, eventName: "RuleApplied", fromBlock: BigInt(d.startBlock) }).catch(() => []).then((logs) => {
+        const hit = [...logs].reverse().find((l) => Number((l.args as { version?: number }).version) === out.ruleVersion);
+        out.ruleText = ((hit?.args as { ruleUri?: string } | undefined)?.ruleUri) || null;
+      })
+    : Promise.resolve();
+  await ruleText;
   try {
     const [version, original, offered, offers] = await Promise.all([
       c.readContract({ ...a, functionName: "agentLogic" }), c.readContract({ ...a, functionName: "ORIGINAL_VERSION" }),
@@ -82,13 +87,22 @@ export function LiveAgents() {
       const list = only ? ids ?? [] : await ownedTrenchers(me);
       if (!only) { setIds(list); setSelected((s) => (s && list.includes(s) ? s : list[0] ?? null)); }
       const targets = only ? [only] : list;
-      const loaded = await Promise.all(targets.map(loadAgent));
-      setAgents((prev) => ({ ...prev, ...Object.fromEntries(loaded.map((a) => [a.id, a])) }));
+      // Each agent appears as soon as it's read, instead of waiting for all of them.
+      await Promise.all(targets.map((id) => loadAgent(id).then((a) => setAgents((prev) => ({ ...prev, [a.id]: a })))));
       setError(null);
     } catch (e) { setError(reason(e)); if (!only) setIds((x) => x ?? []); }
   }, [me, ids]);
 
-  useEffect(() => { setIds(null); setAgents({}); refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [me]);
+  useEffect(() => {
+    setAgents({});
+    // Show the Trenchers found last time straight away (and start reading them), then check the chain again.
+    const cached = cachedOwned(me);
+    setIds(cached);
+    if (cached?.length) { setSelected((s) => (s && cached.includes(s) ? s : cached[0])); cached.forEach((id) => loadAgent(id).then((a) => setAgents((prev) => ({ ...prev, [a.id]: a }))).catch(() => {})); }
+    refresh();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [me]);
+  const [buying, setBuying] = useState(false);
   useEffect(() => { reader().readContract({ address: DEPLOYMENT!.fund, abi: ABI.fund, functionName: "CLAIM" }).then(setClaim).catch(() => {}); }, []);
   useEffect(() => {
     let alive = true;
@@ -153,8 +167,13 @@ export function LiveAgents() {
               </button>
             );
           })}
+          <button type="button" className="ap-card ap-card-buy" onClick={() => setBuying(true)}>
+            <span className="ap-buy-plus" aria-hidden="true">+</span>
+            <span className="ap-card-text"><b>Get another</b><span className="mono ap-buy-sub">Mint or buy on OpenSea</span></span>
+          </button>
         </div>
       )}
+      {buying && <BuyModal onClose={() => { setBuying(false); refresh(); }} />}
 
       {task && (
         <div className={`txbox mono live-task live-task-${task.phase}`} role="status">
@@ -164,6 +183,17 @@ export function LiveAgents() {
       )}
 
       {sel && <Profile key={sel.id} a={sel} me={me} claim={claim} live={live} engineCount={engine?.agents.length ?? 0} busy={busy} run={run} />}
+
+      {ids.length > 0 && (
+        <section className="ap-track" aria-label="Your agents' trading">
+          <header className="ap-track-head">
+            <span className="mono ap-kick">Track your agents</span>
+            <h2>Their trading, live</h2>
+            <p className="ap-sub">What each of your agents holds and trades, its value over time and its rank in this week&apos;s Arena.</p>
+          </header>
+          <LiveArena only={ids} />
+        </section>
+      )}
     </div>
   );
 }
@@ -261,6 +291,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           ) : !a.awake ? (
             <p className="ap-wallet-line">Dormant: awaken it to give it its own wallet and its {fmt(claim)} ETH starter balance.</p>
           ) : null}
+          <p className="mono ap-wallet-line"><a href={openseaItem(a.id)} target="_blank" rel="noreferrer">View Trencher #{a.id} on OpenSea ↗</a></p>
           {a.deployed && <PnlCardButton data={card} />}
           {a.deployed && (
             <dl className="ap-kpis">
@@ -365,5 +396,24 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         )}
       </>)}
     </div>
+  );
+}
+
+/** Mint another Trencher right here, or buy one on OpenSea. */
+function BuyModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  return createPortal(
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal buy-modal" role="dialog" aria-modal="true" aria-label="Get another Trencher">
+        <div className="modal-head"><h2>Get another Trencher</h2><button type="button" className="tbtn" onClick={onClose}>Close</button></div>
+        <MintPanel />
+        <p className="muted-note">Or buy one that&apos;s already trading, with its record, on {OPENSEA_URL ? <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea ↗</a> : "OpenSea"}. New Trenchers show up in your agents after you close this.</p>
+      </div>
+    </div>,
+    document.body,
   );
 }

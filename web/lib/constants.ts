@@ -21,6 +21,8 @@ export const gmgnAddress = (a: string) => GMGN_URL.replace("{address}", a);
 
 /** OpenSea collection page. Empty until listed: the site then shows a plain, unclickable "OpenSea" label. */
 export const OPENSEA_URL = process.env.NEXT_PUBLIC_OPENSEA_URL || "";
+/** One Trencher on OpenSea: opensea.io/item/{chain}/{contract}/{id}. */
+export const openseaItem = (id: number) => `https://opensea.io/item/${MAINNET ? "robinhood" : "robinhood_testnet"}/${NFT_ADDRESS}/${id}`;
 export const GITHUB_URL = "https://github.com/trenchersio/trenchers";
 export const LIST_PRICE_ETH = "0.02";
 /** Half of every primary (first) sale: claimable once per Trencher into its agent wallet (AgentStarterFund). */

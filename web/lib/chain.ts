@@ -56,7 +56,8 @@ export const ABI = {
 };
 
 let pub: PublicClient | null = null;
-export const reader = () => (pub ??= createPublicClient({ chain, transport: http(process.env.NEXT_PUBLIC_RPC_URL || undefined) }) as PublicClient);
+// Reads are batched: contract reads go out together through Multicall3, other calls as one JSON-RPC batch.
+export const reader = () => (pub ??= createPublicClient({ chain, batch: { multicall: { wait: 10 } }, transport: http(process.env.NEXT_PUBLIC_RPC_URL || undefined, { batch: { wait: 10 } }) }) as PublicClient);
 
 /** The connected browser wallet's provider (the one chosen in the header's wallet picker). */
 export async function walletProvider(): Promise<EIP1193Provider> {
@@ -127,6 +128,12 @@ export async function sendEth(from: Address, to: Address, value: bigint, onPhase
   return hash;
 }
 
+const ownedKey = (holder: Address) => `trenchers:owned:${DEPLOYMENT?.nft}:${holder.toLowerCase()}`;
+/** The last list found for this holder (shown instantly while the chain is checked again). */
+export function cachedOwned(holder: Address): number[] | null {
+  try { const v = localStorage.getItem(ownedKey(holder)); return v ? (JSON.parse(v) as number[]) : null; } catch { return null; }
+}
+
 /** Trenchers this address holds now: every Trencher ever sent to it, still owned by it. */
 export async function ownedTrenchers(holder: Address): Promise<number[]> {
   if (!DEPLOYMENT) return [];
@@ -134,11 +141,12 @@ export async function ownedTrenchers(holder: Address): Promise<number[]> {
   const head = await c.getBlockNumber();
   const ids = new Set<number>();
   const STEP = 50_000n;
-  for (let from = BigInt(DEPLOYMENT.startBlock); from <= head; from += STEP) {
-    const to = from + STEP - 1n < head ? from + STEP - 1n : head;
-    const logs = await c.getLogs({ address: DEPLOYMENT.nft, event: ABI.nft[2], args: { to: holder }, fromBlock: from, toBlock: to });
-    for (const l of logs) ids.add(Number(l.args.tokenId));
-  }
-  const owners = await Promise.all([...ids].map((id) => c.readContract({ address: DEPLOYMENT.nft, abi: ABI.nft, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => null)));
-  return [...ids].filter((_, i) => owners[i]?.toLowerCase() === holder.toLowerCase()).sort((a, b) => a - b);
+  const ranges: [bigint, bigint][] = [];
+  for (let from = BigInt(DEPLOYMENT.startBlock); from <= head; from += STEP) ranges.push([from, from + STEP - 1n < head ? from + STEP - 1n : head]);
+  const all = await Promise.all(ranges.map(([from, to]) => c.getLogs({ address: DEPLOYMENT!.nft, event: ABI.nft[2], args: { to: holder }, fromBlock: from, toBlock: to })));
+  for (const logs of all) for (const l of logs) ids.add(Number(l.args.tokenId));
+  const owners = await Promise.all([...ids].map((id) => c.readContract({ address: DEPLOYMENT!.nft, abi: ABI.nft, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => null)));
+  const out = [...ids].filter((_, i) => owners[i]?.toLowerCase() === holder.toLowerCase()).sort((a, b) => a - b);
+  try { localStorage.setItem(ownedKey(holder), JSON.stringify(out)); } catch { /* private mode */ }
+  return out;
 }
