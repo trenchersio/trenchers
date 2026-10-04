@@ -1,7 +1,8 @@
-import { askMind } from "@/lib/agent-mind";
+import { askMind, lastMindError, orbioKey } from "@/lib/agent-mind";
 import type { CustomRule } from "@/lib/custom-strategy";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // read the key at request time, never at build time
 
 /** Talk to your agent: the AI reads the holder's message and proposes a rule (see lib/agent-mind.ts). */
 const hits = new Map<string, number[]>();
@@ -25,11 +26,12 @@ export async function POST(req: Request) {
 /** Status: is the AI mind configured, and does a test question get a valid rule back? (cached 5 min) */
 let lastCheck: { t: number; body: unknown } | null = null;
 export async function GET() {
-  const configured = !!process.env.ORBIO_API_KEY;
-  if (!lastCheck || Date.now() - lastCheck.t > 300_000) {
+  const configured = !!orbioKey();
+  const stale = !lastCheck || Date.now() - lastCheck.t > 300_000 || ((lastCheck.body as { working: boolean }).working === false && Date.now() - lastCheck.t > 30_000);
+  if (stale) {
     const t0 = Date.now();
     const out = configured ? await askMind("Buy every new launch and sell after 30 seconds.", null) : null;
-    lastCheck = { t: Date.now(), body: { configured, model: process.env.ORBIO_MODEL || "anthropic/claude-sonnet-5.5", gateway: (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1"), working: !!out?.rule, ms: Date.now() - t0, sample: out } };
+    lastCheck = { t: Date.now(), body: { configured, model: process.env.ORBIO_MODEL || "anthropic/claude-sonnet-5.5", gateway: (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1"), working: !!out?.rule, ms: Date.now() - t0, sample: out, error: configured ? (out?.rule ? null : lastMindError) : "ORBIO_API_KEY is not set on this service" } };
   }
-  return Response.json(lastCheck.body, { headers: { "Cache-Control": "no-store" } });
+  return Response.json(lastCheck!.body, { headers: { "Cache-Control": "no-store" } });
 }

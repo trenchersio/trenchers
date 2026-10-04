@@ -56,8 +56,11 @@ function clean(r: unknown): CustomRule | null {
 }
 
 /** Asks the model. Returns null when no key is configured or the model's answer can't be used. */
+/** The last thing that went wrong talking to the gateway (never contains the key), for the status page. */
+export let lastMindError: string | null = null;
+export const orbioKey = () => (process.env.ORBIO_API_KEY ?? "").trim().replace(/^["']|["']$/g, "").replace(/^Bearer\s+/i, "");
 export async function askMind(message: string, current: CustomRule | null, context?: string): Promise<MindReply | null> {
-  const key = process.env.ORBIO_API_KEY;
+  const key = orbioKey();
   if (!key) return null;
   const user = [
     current ? `The agent's current rule: ${describe(current)} (as JSON: ${JSON.stringify(current)})` : "The agent has no rule yet.",
@@ -76,19 +79,21 @@ export async function askMind(message: string, current: CustomRule | null, conte
         messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
       }),
     });
-    if (!r.ok) { console.error("agent-mind: gateway", r.status, (await r.text()).slice(0, 300)); return null; }
+    if (!r.ok) { const t = (await r.text()).slice(0, 300); lastMindError = `gateway answered ${r.status}: ${t}`; console.error("agent-mind:", lastMindError); return null; }
     const j = await r.json() as { choices?: { message?: { content?: string } }[] };
     const raw = j.choices?.[0]?.message?.content ?? "";
     const json = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { reply?: string; understood?: unknown; rule?: unknown };
     const rule = json.rule === null ? null : clean(json.rule);
-    if (json.rule !== null && !rule) return null; // unusable rule: let the plain reader handle it
+    if (json.rule !== null && !rule) { lastMindError = "model answered, but its rule didn't validate"; return null; } // let the plain reader handle it
+    lastMindError = null;
     return {
       reply: String(json.reply ?? "").slice(0, 600) || (rule ? "Here's the rule I'd trade." : "Could you tell me a bit more?"),
       understood: Array.isArray(json.understood) ? json.understood.map(String).slice(0, 6) : [],
       rule, source: "ai",
     };
   } catch (e) {
-    console.error("agent-mind:", (e as Error).message);
+    lastMindError = (e as Error).name === "AbortError" ? "gateway timed out (20s)" : (e as Error).message.slice(0, 300);
+    console.error("agent-mind:", lastMindError);
     return null;
   } finally { clearTimeout(timer); }
 }
