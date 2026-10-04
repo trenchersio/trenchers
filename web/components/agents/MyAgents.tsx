@@ -87,7 +87,7 @@ export function MyAgents() {
 
 function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange: (a: AgentState) => void }) {
   const [busy, setBusy] = useState<string[] | null>(null);
-  const [amount, setAmount] = useState("0.1");
+  const [amount, setAmount] = useState("0.02");
   const [draft, setDraft] = useState<Strategy>(a.strategy ?? { preset: "Custom", ...PRESETS["Custom"].defaults, custom: undefined });
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<"register" | "coin" | "strategy" | "activity">(
@@ -125,7 +125,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
 
   const deposit = () => {
     const v = Number(amount);
-    if (!Number.isFinite(v) || v < 0.01) { setNotice("Deposit at least 0.01 ETH."); return; }
+    if (!Number.isFinite(v) || v < 0.005) { setNotice("Deposit at least 0.005 ETH."); return; }
     run([`Sending ${v} ETH to the agent wallet…`], () => onChange(log({ ...a, balance: +(a.balance + v).toFixed(4) }, `Deposited ${v} ETH`)));
   };
 
@@ -197,7 +197,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           {a.agentWallet ? (
             <p className="mono ap-wallet-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} · {chain.name}</p>
           ) : (
-            <p className="ap-wallet-line">Dormant: awaken it below to give it a wallet, an identity and its 0.05 ETH.</p>
+            <p className="ap-wallet-line">Dormant: awaken it below to give it a wallet, an identity and its 0.01 ETH.</p>
           )}
           <AgentLinks wallet={a.agentWallet} />
           <dl className="ap-kpis">
@@ -277,7 +277,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
               <input id={`amt-${a.id}`} className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!a.registered || !!busy} />
             </label>
             <div className="chips">
-              {["0.05", "0.1", "0.25"].map((v) => <button key={v} type="button" className={`tbtn${amount === v ? " tbtn-on" : ""}`} onClick={() => setAmount(v)} disabled={!a.registered || !!busy}>{v}</button>)}
+              {["0.01", "0.02", "0.05"].map((v) => <button key={v} type="button" className={`tbtn${amount === v ? " tbtn-on" : ""}`} onClick={() => setAmount(v)} disabled={!a.registered || !!busy}>{v}</button>)}
             </div>
           </div>
           <div className="actions">

@@ -10,8 +10,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @notice Single receiving address for Trenchers primary-sale proceeds and secondary royalties.
 ///
 ///         Primary sales: all 1,995 public Trenchers are minted free to a treasury wallet and listed
-///         on OpenSea at 0.1 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
-///           51% to the Agent Starter Fund, which pays each buyer's agent a 0.05 ETH starter
+///         on OpenSea at 0.02 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
+///           51% to the Agent Starter Fund, which pays each buyer's agent a 0.01 ETH starter
 ///               balance (the extra 1% covers marketplace fees; the fund returns any surplus to
 ///               buybacks), and the rest to the ecosystem:
 ///           50% buybacks, 20% development (immediate), 20% development (vested linearly

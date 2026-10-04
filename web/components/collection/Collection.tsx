@@ -69,7 +69,7 @@ export function Collection() {
   }, [book, filter, palette, q]);
 
   const FILTERS: [Filter, string, number][] = [
-    ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Awake", counts.registered], ["idle", "Dormant · 0.05 claimable", counts.idle],
+    ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Awake", counts.registered], ["idle", "Dormant · 0.01 claimable", counts.idle],
   ];
   if (address) FILTERS.push(["mine", "Yours", counts.mine]);
 
@@ -82,7 +82,7 @@ export function Collection() {
         <div>
           <p className="eyebrow">Collection</p>
           <h1>2,000 agents</h1>
-          <p className="coll-lede">Every Trencher, in colour once its agent is awake. Grey ones are dormant: their 0.05 ETH starter balance is still waiting to be claimed. The NFT's own metadata follows the same state on OpenSea. Select any of them for its owner, funding, strategy and traits.</p>
+          <p className="coll-lede">Every Trencher, in colour once its agent is awake. Grey ones are dormant: their 0.01 ETH starter balance is still waiting to be claimed. The NFT's own metadata follows the same state on OpenSea. Select any of them for its owner, funding, strategy and traits.</p>
         </div>
         <dl className="coll-stats">
           <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{counts.live}</dd></div>
@@ -235,7 +235,7 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
         </div>
 
       <dl className="cd-facts">
-        <div><dt>Starter ETH</dt><dd className="mono">{id <= 5 ? <span className="cd-muted">House agent</span> : b.status === "idle" ? <span className="up">0.05 ETH claimable</span> : <span className="cd-muted">Claimed</span>}</dd></div>
+        <div><dt>Starter ETH</dt><dd className="mono">{id <= 5 ? <span className="cd-muted">House agent</span> : b.status === "idle" ? <span className="up">0.01 ETH claimable</span> : <span className="cd-muted">Claimed</span>}</dd></div>
         <div><dt>Owner</dt><dd className="mono">{b.mine ? `You · ${short(owner)}` : owner.startsWith("0x") ? short(owner) : owner}</dd></div>
         {b.status !== "idle" && (
           <div><dt>Funding</dt><dd className="mono">{coin && coinAddress

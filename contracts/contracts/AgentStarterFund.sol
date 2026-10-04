@@ -17,8 +17,9 @@ interface IERC6551Registry {
 }
 
 /// @title AgentStarterFund
-/// @notice Every Trencher sells for 0.1 ETH. Half of each primary sale is set aside here so the
-///         buyer can give their agent a 0.05 ETH starter balance: enough to launch its own coin
+/// @notice Every Trencher sells for 0.02 ETH. Half of each primary sale (the first sale only;
+///         resales on OpenSea pay royalties to buybacks, not to this fund) is set aside here so the
+///         buyer can give their agent a 0.01 ETH starter balance: enough to launch its own coin
 ///         on Pons and start trading.
 ///
 ///         The holder calls claim(tokenId) ("Awaken"): the fund deploys the Trencher's ERC-6551 agent
@@ -35,7 +36,7 @@ interface IERC6551Registry {
 ///         that reserve (e.g. what remains once marketplace fees are covered) can be released, and
 ///         only to the excess destination (the buyback vault).
 contract AgentStarterFund is Ownable, ReentrancyGuard {
-    uint256 public constant CLAIM = 0.05 ether;
+    uint256 public constant CLAIM = 0.01 ether;
     uint256 public constant FIRST_ID = 6;      // #1-#5 are house agents
     uint256 public constant LAST_ID = 2000;
     uint256 public constant ELIGIBLE = LAST_ID - FIRST_ID + 1; // 1,995

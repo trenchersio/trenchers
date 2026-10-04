@@ -44,14 +44,14 @@ describe("TrenchersAgentAccount", () => {
     expect(await acct.owner()).to.equal(bob.address);
   });
 
-  it("locks the 0.05 ETH starter balance: claimable into the wallet, not withdrawable", async () => {
+  it("locks the 0.01 ETH starter balance: claimable into the wallet, not withdrawable", async () => {
     const { register, fund, deployer, alice } = await setup();
     await deployer.sendTransaction({ to: await fund.getAddress(), value: E("1") });
     const acct = await register(6);
     await fund.connect(alice).claim(6);
-    expect(await acct.starterLocked()).to.equal(E("0.05"));
+    expect(await acct.starterLocked()).to.equal(E("0.01"));
     expect(await acct.withdrawable()).to.equal(0n);
-    await acct.connect(alice).requestWithdrawal(E("0.05"));
+    await acct.connect(alice).requestWithdrawal(E("0.01"));
     await time.increase(11 * 60);
     await expect(acct.connect(alice).withdraw()).to.be.revertedWithCustomError(acct, "StarterLocked");
     // the holder's own deposits stay withdrawable
@@ -67,11 +67,11 @@ describe("TrenchersAgentAccount", () => {
     await deployer.sendTransaction({ to: await fund.getAddress(), value: E("1") });
     const acct = await register(6);
     await fund.connect(alice).claim(6);
-    await expect(acct.connect(alice).execute(bob.address, E("0.01"), "0x", 0)).to.be.revertedWithCustomError(acct, "StarterLocked");
+    await expect(acct.connect(alice).execute(bob.address, E("0.005"), "0x", 0)).to.be.revertedWithCustomError(acct, "StarterLocked");
     await expect(acct.connect(alice).execute(await router.getAddress(), 0, router.interface.encodeFunctionData("swap"), 0)).to.be.revertedWithCustomError(acct, "StarterLocked");
     await time.increase(181 * 86400);
     expect(await acct.lockedNow()).to.equal(0n);
-    await expect(acct.connect(alice).execute(bob.address, E("0.05"), "0x", 0)).to.changeEtherBalance(bob, E("0.05"));
+    await expect(acct.connect(alice).execute(bob.address, E("0.01"), "0x", 0)).to.changeEtherBalance(bob, E("0.01"));
   });
 
   it("launches the agent's coin from its wallet, paid from the starter balance, and remembers the coin", async () => {
@@ -83,7 +83,7 @@ describe("TrenchersAgentAccount", () => {
     await expect(acct.connect(bob).launchCoin(data, E("0.001"), bob.address)).to.be.revertedWithCustomError(acct, "NotHolder");
     await expect(acct.connect(alice).launchCoin(data, E("0.001"), bob.address)).to.emit(acct, "CoinLaunched").withArgs(bob.address);
     expect(await launcher.lastValue()).to.equal(E("0.001"));
-    expect(await acct.starterLocked()).to.equal(E("0.049"));
+    expect(await acct.starterLocked()).to.equal(E("0.009"));
     expect(await acct.coin()).to.equal(bob.address);
   });
 

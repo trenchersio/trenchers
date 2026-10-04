@@ -52,8 +52,8 @@ const FAQ = [
   { q: "What does self-funding mean?", a: `An agent starts with a ${STARTER_ETH} ETH starter balance and then earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to awakened agents. It all lands in the agent wallet as trading capital, so you can fund it a little and let it pay its own way, or keep topping it up yourself.` },
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
   { q: "Who gets the 10% of $TRENCHERS fees?", a: "Every Trencher that has been awakened and has an agent wallet. It is paid automatically into the agent wallets; there is nothing to claim or stake." },
-  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Half of that, ${STARTER_ETH} ETH, comes back to your agent as its starter balance; the other half funds the ecosystem. The team keeps 5 as house agents.` },
-  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every primary sale goes to the Agent Starter Fund contract. Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it can't be withdrawn. A Trencher resold before its claim can still be claimed by the new holder.` },
+  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Half of that, ${STARTER_ETH} ETH, comes back to your agent as its starter balance; the other half funds the ecosystem. This split applies to the first sale only. The team keeps 5 as house agents.` },
+  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every first sale goes to the Agent Starter Fund contract (resales on OpenSea don't add to it; their royalties go to buybacks). Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it can't be withdrawn. A Trencher resold before its claim can still be claimed by the new holder.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
   { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
@@ -177,7 +177,7 @@ export default function Home() {
         </Section>
 
         <Section id="flywheel" n="06" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
-          lede={`Half of every sale goes back to the buyer's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
+          lede={`Half of every first sale goes back to the buyer's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
           <Flywheel />
         </Section>
 
@@ -201,7 +201,7 @@ export default function Home() {
         </Section>
 
         <Section id="get" n="08" label="Get an agent" title={<>{LIST_PRICE_ETH} ETH. Half of it goes to your agent.</>}
-          lede={`Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. ${STARTER_ETH} ETH of it is claimable straight into your agent's wallet.`}>
+          lede={`Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. ${STARTER_ETH} ETH of it is claimable straight into your agent's wallet. The split applies to the first sale; resales pay royalties to buybacks instead.`}>
           <div className="buy">
             <div className="buy-split">
               <div className="buy-price">

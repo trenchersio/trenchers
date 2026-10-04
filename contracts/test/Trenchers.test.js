@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-const LIST_PRICE = ethers.parseEther("0.1");
+const LIST_PRICE = ethers.parseEther("0.02");
 const Bucket = { Buyback: 0, Dev: 1, Prize: 2, Starter: 3 };
 
 async function deploy() {
@@ -173,16 +173,16 @@ describe("AgentStarterFund", () => {
   it("is the Starter bucket of the splitter: 51% of primary sales flow into it", async () => {
     const { splitter, safe, treasury, fund } = await setup({ fundEth: "0" });
     await splitter.connect(safe).proposeDestination(Bucket.Starter, await fund.getAddress());
-    await treasury.sendTransaction({ to: await splitter.getAddress(), value: ethers.parseEther("0.1") });
+    await treasury.sendTransaction({ to: await splitter.getAddress(), value: ethers.parseEther("0.02") });
     await splitter.release(Bucket.Starter);
-    expect(await ethers.provider.getBalance(await fund.getAddress())).to.equal(ethers.parseEther("0.051"));
+    expect(await ethers.provider.getBalance(await fund.getAddress())).to.equal(ethers.parseEther("0.0102"));
   });
 
-  it("pays 0.05 ETH into a registered Trencher's agent wallet, once, at the holder's request", async () => {
+  it("pays 0.01 ETH into a registered Trencher's agent wallet, once, at the holder's request", async () => {
     const { fund, alice, register } = await setup();
     const wallet = await register(6);
-    await expect(fund.connect(alice).claim(6)).to.emit(fund, "Claimed").withArgs(6, alice.address, wallet, ethers.parseEther("0.05"));
-    expect(await ethers.provider.getBalance(wallet)).to.equal(ethers.parseEther("0.05"));
+    await expect(fund.connect(alice).claim(6)).to.emit(fund, "Claimed").withArgs(6, alice.address, wallet, ethers.parseEther("0.01"));
+    expect(await ethers.provider.getBalance(wallet)).to.equal(ethers.parseEther("0.01"));
     await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "AlreadyClaimed");
     expect(await fund.claimedCount()).to.equal(1n);
   });
@@ -191,7 +191,7 @@ describe("AgentStarterFund", () => {
     const { fund, alice, registry } = await setup();
     await fund.connect(alice).claim(6);
     const w = await registry.wallets(6);
-    expect(await ethers.provider.getBalance(w)).to.equal(ethers.parseEther("0.05"));
+    expect(await ethers.provider.getBalance(w)).to.equal(ethers.parseEther("0.01"));
   });
 
   it("only the current holder can claim; the treasury and house agents never can", async () => {
@@ -207,16 +207,16 @@ describe("AgentStarterFund", () => {
   });
 
   it("reverts when the fund can't cover a claim", async () => {
-    const { fund, alice, register } = await setup({ fundEth: "0.01" });
+    const { fund, alice, register } = await setup({ fundEth: "0.005" });
     await register(6);
     await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "Underfunded");
   });
 
-  it("keeps 0.05 ETH reserved for every unclaimed Trencher and only releases ETH above that", async () => {
+  it("keeps 0.01 ETH reserved for every unclaimed Trencher and only releases ETH above that", async () => {
     const { fund, safe, alice, buyback, register, deployer } = await setup({ fundEth: "0" });
     await fund.connect(safe).setExcessTo(buyback.address);
-    expect(await fund.reserve()).to.equal(ethers.parseEther("0.05") * 1995n);
-    await deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther("100") });
+    expect(await fund.reserve()).to.equal(ethers.parseEther("0.01") * 1995n);
+    await deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther("20.2") });
     expect(await fund.excess()).to.equal(ethers.parseEther("0.25"));
     await register(6); await fund.connect(alice).claim(6);
     expect(await fund.excess()).to.equal(ethers.parseEther("0.25"));

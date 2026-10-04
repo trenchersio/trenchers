@@ -31,7 +31,7 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     bool public metadataFrozen;
 
     /// @notice The Agent Starter Fund. Once set, metadata follows each token's state:
-    ///         dormant (grey art, 0.05 ETH still claimable) until its starter balance is claimed,
+    ///         dormant (grey art, 0.01 ETH still claimable) until its starter balance is claimed,
     ///         then awake (full colour). House agents #1-#5 are always awake.
     address public starterFund;
 

@@ -1,6 +1,6 @@
 // Deploys RevenueSplitter + TrenchersNFT + AgentStarterFund, mints all 2,000 for free (5 to the team,
-// 1,995 to the treasury that lists them on OpenSea at 0.1 ETH), routes 51% of primary sales to the
-// starter fund (0.05 ETH claimable per agent), then hands ownership to the Safe.
+// 1,995 to the treasury that lists them on OpenSea at 0.02 ETH), routes 51% of primary sales to the
+// starter fund (0.01 ETH claimable per agent, funded by the first sale only), then hands ownership to the Safe.
 // Usage:
 //   DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... TREASURY=0x... \
 //   PREREVEAL_URI=ipfs://... CONTRACT_URI=ipfs://... \
@@ -74,7 +74,7 @@ async function main() {
   console.log(`AgentAccount impl ${await impl.getAddress()}`);
   console.log(`AgentFeeDistributor ${await dist.getAddress()}`);
   await (await config.propose(3 /* StarterFund */, await fund.getAddress())).wait();
-  // Metadata follows each Trencher: dormant (grey, 0.05 ETH claimable) until claimed, then awake.
+  // Metadata follows each Trencher: dormant (grey, 0.01 ETH claimable) until claimed, then awake.
   await (await nft.setStarterFund(await fund.getAddress())).wait();
   if (process.env.ENGINE) await (await config.propose(0, process.env.ENGINE)).wait();
   if (process.env.SWAP_ADAPTER) await (await config.propose(1, process.env.SWAP_ADAPTER)).wait();
@@ -95,7 +95,7 @@ async function main() {
   await (await config.transferOwnership(safe)).wait();
   await (await dist.transferOwnership(safe)).wait();
   console.log(`Ownership of all contracts transferred to ${safe}`);
-  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.1 ETH; forward sale proceeds to the splitter.");
+  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.02 ETH; forward sale proceeds to the splitter.");
   console.log(`To open starter claims, the Safe calls AgentStarterFund.setAccount(${await impl.getAddress()}, 0x00…00).`);
 }
 

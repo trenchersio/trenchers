@@ -153,7 +153,7 @@ function sell(sim: Sim, a: Agent, p: Position, why: string) {
 function buy(sim: Sim, a: Agent, t: Token, why: string) {
   const cfg = strategyByName(a.strategy);
   if (a.positions.has(t.sym) || a.positions.size >= cfg.defaults.maxPositions) return;
-  const size = cfg.defaults.perBuy * (0.6 + rnd() * 0.8) * (a.house ? 3 : 0.5 + a.deposited);
+  const size = cfg.defaults.perBuy * (0.6 + rnd() * 0.8) * (a.house ? 2.5 : 0.2 + a.deposited * 8);
   const eth = Math.min(size, a.cash - 0.005);
   if (eth <= 0.0005) return;
   a.positions.set(t.sym, { sym: t.sym, qty: eth / t.price, entry: t.price, cost: eth, opened: sim.tick });
@@ -224,9 +224,9 @@ export function step(sim: Sim, dtMs = 1000) {
     total += a.nav;
   }
   sim.totalHistory.push(total); if (sim.totalHistory.length > 240) sim.totalHistory.shift();
-  sim.prizePool += 0.0004 + rnd() * 0.0008;
+  sim.prizePool += 0.00008 + rnd() * 0.00016;
   // Self-funding income lands in the agent wallet. It counts like a deposit, not as trading return.
-  const share = (0.00006 + rnd() * 0.00004) / sim.agents.length * 40;
+  const share = (0.000012 + rnd() * 0.000008) / sim.agents.length * 40;
   for (const a of sim.agents) {
     const f = share + (a.token ? a.tokenRate * (0.5 + rnd()) : 0);
     a.cash += f; a.epochStart += f;
@@ -244,7 +244,7 @@ export function createSim(): Sim {
     // Most holders guide their agent themselves (Custom); some start from a house template.
     const def = house ? STRATEGIES.find((s) => s.houseAgent === id)! : strategyByName(rnd() < 0.7 ? "Custom" : pick(pool.filter((n) => n !== "Custom")));
     const g = def.name === "Custom" ? GUIDED[Math.floor(rnd() * GUIDED.length)] : null;
-    const deposited = house ? 2 + rnd() * 2 : +(0.1 + Math.pow(rnd(), 2) * 2.4).toFixed(2);
+    const deposited = house ? 0.4 + rnd() * 0.4 : +(0.01 + Math.pow(rnd(), 2) * 0.48).toFixed(3);
     return {
       id, house, owner: house ? "Trenchers team" : `0x${hex(40)}`, wallet: `0x${hex(40)}`,
       strategy: def.name, params: g ? [describe(g.rule), "Guided by its holder", `${def.defaults.perBuy} ETH per buy`] : [def.trigger, def.exit, `${def.defaults.perBuy} ETH per buy`],
@@ -254,17 +254,17 @@ export function createSim(): Sim {
       token: null, tokenAddress: null, tokenRate: 0, tokenFees: 0, shareFees: 0,
     };
   });
-  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 1.84, feed: [], events: [], agentFees: 0.92 };
+  const sim: Sim = { now: Date.now() - 600_000, tick: 0, agents, tokens: new Map(), launches: [], totalHistory: [], tradesToday: 0, prizePool: 0.37, feed: [], events: [], agentFees: 0.18 };
   // About a third of agents have launched their own token on Pons.
   const taken = new Set<string>();
   for (const a of agents) {
     if (!(a.house || rnd() < 0.34)) continue;
     let sym = ""; do { sym = pick(A) + pick(["", "AI", "BOT", "AGENT", "X", "MAXI"]); } while (taken.has(sym) || sym.length > 10);
     taken.add(sym);
-    a.token = sym; a.tokenAddress = `0x${hex(40)}`; a.tokenRate = 0.000004 + rnd() * 0.00002;
-    a.tokenFees = +(rnd() * 0.6).toFixed(4); a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);
+    a.token = sym; a.tokenAddress = `0x${hex(40)}`; a.tokenRate = 0.0000008 + rnd() * 0.000004;
+    a.tokenFees = +(rnd() * 0.12).toFixed(4); a.shareFees = +(0.002 + rnd() * 0.004).toFixed(4);
   }
-  for (const a of agents) if (!a.shareFees) a.shareFees = +(0.01 + rnd() * 0.02).toFixed(4);
+  for (const a of agents) if (!a.shareFees) a.shareFees = +(0.002 + rnd() * 0.004).toFixed(4);
   for (let i = 0; i < 12; i++) launch(sim);
   for (let i = 0; i < 600; i++) step(sim, 1000); // warm up: ten minutes of history
   sim.now = Date.now();

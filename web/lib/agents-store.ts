@@ -28,7 +28,7 @@ export type AgentState = {
   registeredAt?: number | null;
   starterClaimed?: boolean;
   fundingMode?: "coin" | "self";
-  chat?: ChatMsg[];            // the holder's conversation with the agent (custom guidance) // option A (agent coin) or B (self-funded from fee share + profits)    // the 0.05 ETH starter balance from the Agent Starter Fund
+  chat?: ChatMsg[];            // the holder's conversation with the agent (custom guidance) // option A (agent coin) or B (self-funded from fee share + profits)    // the 0.01 ETH starter balance from the Agent Starter Fund
   locked?: number;             // starter ETH still in the agent: spendable on launches and trades, not withdrawable
   token?: AgentToken | null;   // the agent's own Pons token, if launched
   log: { t: number; text: string }[];
@@ -87,6 +87,6 @@ export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function statusOf(a: AgentState) {
   if (a.live) return { label: "In the Arena", tone: "live" as const };
   if (a.starterClaimed) return { label: "Awake", tone: "ready" as const };
-  if (a.registered) return { label: "Registered · 0.05 to claim", tone: "ready" as const };
+  if (a.registered) return { label: "Registered · 0.01 to claim", tone: "ready" as const };
   return { label: "Dormant", tone: "idle" as const };
 }

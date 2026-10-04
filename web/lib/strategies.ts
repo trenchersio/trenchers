@@ -27,17 +27,17 @@ export const VOLUME_THRESHOLD_USD = 50_000;
 
 export const STRATEGIES: StrategyDef[] = [
   { name: "Launch Flipper", event: "launch", trigger: "Buys every new launch on Pons", exit: "Sells after 15 seconds", holdSec: 15, houseAgent: 1,
-    defaults: { perBuy: 0.002, dailyCap: 0.3, maxPositions: 10 } },
+    defaults: { perBuy: 0.0005, dailyCap: 0.05, maxPositions: 10 } },
   { name: "Graduation Rider", event: "graduation", trigger: "Buys every launch that graduates on Pons", exit: "Sells after 5 minutes", holdSec: 300, houseAgent: 2,
-    defaults: { perBuy: 0.02, dailyCap: 0.3, maxPositions: 5 } },
+    defaults: { perBuy: 0.004, dailyCap: 0.05, maxPositions: 5 } },
   { name: "Volume Breakout", event: "volume", trigger: "Buys a new Pons token when it crosses $50k lifetime volume", exit: "Sells after 1 minute", holdSec: 60, houseAgent: 3,
-    defaults: { perBuy: 0.01, dailyCap: 0.3, maxPositions: 6 } },
+    defaults: { perBuy: 0.002, dailyCap: 0.05, maxPositions: 6 } },
   { name: "Dev Dump Dip", event: "devsell", trigger: "Buys every time a token's dev sells", exit: "Sells after 10 seconds", holdSec: 10, houseAgent: 4,
-    defaults: { perBuy: 0.005, dailyCap: 0.25, maxPositions: 8 } },
+    defaults: { perBuy: 0.001, dailyCap: 0.04, maxPositions: 8 } },
   { name: "DexScreener Pulse", event: "dexupdate", trigger: "Buys every time a token's DexScreener page is updated", exit: "Sells after 1 minute", holdSec: 60, houseAgent: 5,
-    defaults: { perBuy: 0.01, dailyCap: 0.3, maxPositions: 6 } },
+    defaults: { perBuy: 0.002, dailyCap: 0.05, maxPositions: 6 } },
   { name: "Custom", event: "custom", trigger: "Your own limits; plain-English rules arrive in Phase 3", exit: "Take profit and stop loss", holdSec: null, houseAgent: null,
-    defaults: { perBuy: 0.005, dailyCap: 0.2, maxPositions: 6 } },
+    defaults: { perBuy: 0.001, dailyCap: 0.03, maxPositions: 6 } },
 ];
 
 export const strategyByName = (n: string) => STRATEGIES.find((s) => s.name === n) ?? STRATEGIES[STRATEGIES.length - 1];

@@ -1,6 +1,6 @@
 {
   "name": "Trenchers #1992",
-  "description": "Trenchers is an ecosystem of self-funding, NFT-enabled AI trading agents on Robinhood Chain. Register a Trencher as an agent with its own wallet, pick a memecoin trading strategy, compete in the Arena and launch its own agent coin on Pons. Agents earn their coin's creator fees plus a share of 10% of all $TRENCHERS fees. The agent, its wallet and its income move with the NFT.\n\nDormant: this Trencher's agent has not been awakened. Its 0.05 ETH starter balance is still claimable by the holder, straight into the agent wallet.",
+  "description": "Trenchers is an ecosystem of self-funding, NFT-enabled AI trading agents on Robinhood Chain. Register a Trencher as an agent with its own wallet, pick a memecoin trading strategy, compete in the Arena and launch its own agent coin on Pons. Agents earn their coin's creator fees plus a share of 10% of all $TRENCHERS fees. The agent, its wallet and its income move with the NFT.\n\nDormant: this Trencher's agent has not been awakened. Its 0.01 ETH starter balance is still claimable by the holder, straight into the agent wallet.",
   "image": "ipfs://IMAGES_CID/dormant/1992.png",
   "attributes": [
     {
@@ -9,7 +9,7 @@
     },
     {
       "trait_type": "Starter ETH",
-      "value": "0.05 ETH claimable"
+      "value": "0.01 ETH claimable"
     },
     {
       "trait_type": "Role",

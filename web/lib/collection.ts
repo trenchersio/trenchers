@@ -51,7 +51,7 @@ export function sample(id: number): Sample {
     wallet: reg ? `0x${hex(id, 41, 40)}` : null,
     identity: reg ? 1000 + id * 7 : null,
     strategy: status === "registered" && h32(id, 51) % 3 === 0 ? null : strat,
-    balance: reg ? +(0.05 + (h32(id, 61) % 1000) / 1000 * (house ? 3 : 1.2)).toFixed(3) : null,
+    balance: reg ? +(0.01 + (h32(id, 61) % 1000) / 1000 * (house ? 0.6 : 0.24)).toFixed(3) : null,
     coin: reg && h32(id, 71) % 100 < 38 ? COINS[h32(id, 81) % COINS.length] + (id % 7 === 0 ? "AI" : id % 5 === 0 ? "BOT" : "") : null,
     coinAddress: reg ? `0x${hex(id, 91, 40)}` : null,
   };

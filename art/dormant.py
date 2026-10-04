@@ -1,7 +1,7 @@
 """Dormant / awake metadata.
 
 Every Trencher has two states on-chain (TrenchersNFT.tokenURI):
-  dormant/  until its agent claims the 0.05 ETH starter balance: grey art, "0.05 ETH claimable"
+  dormant/  until its agent claims the 0.01 ETH starter balance: grey art, "0.01 ETH claimable"
   awake/    once claimed: full colour art
 This builds both image sets and both metadata sets from out/images and out/metadata:
   out/release/images/awake/{id}.png     (colour, the generator output)
@@ -39,8 +39,8 @@ def meta(tid):
         d = dict(m)
         d["image"] = f"ipfs://{IMAGES_CID}/{state}/{tid}.png"
         if state == "dormant":
-            d["description"] = m["description"] + "\n\nDormant: this Trencher's agent has not been awakened. Its 0.05 ETH starter balance is still claimable by the holder, straight into the agent wallet."
-            extra = [{"trait_type": "Status", "value": "Dormant"}, {"trait_type": "Starter ETH", "value": "0.05 ETH claimable"}]
+            d["description"] = m["description"] + "\n\nDormant: this Trencher's agent has not been awakened. Its 0.01 ETH starter balance is still claimable by the holder, straight into the agent wallet."
+            extra = [{"trait_type": "Status", "value": "Dormant"}, {"trait_type": "Starter ETH", "value": "0.01 ETH claimable"}]
         else:
             d["description"] = m["description"] + ("" if tid in HOUSE else "\n\nAwake: this agent has claimed its starter balance and is registered on-chain.")
             extra = [{"trait_type": "Status", "value": "House agent" if tid in HOUSE else "Awake"},
