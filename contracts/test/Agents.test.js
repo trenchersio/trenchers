@@ -150,41 +150,66 @@ describe("AgentFeeDistributor", () => {
     const ctx = await setup();
     const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(ctx.safe.address, await ctx.registry.getAddress(), await ctx.nft.getAddress(), 48 * 3600);
     await dist.connect(ctx.safe).setAccount(await ctx.impl.getAddress(), SALT);
-    return { ...ctx, dist };
+    await ctx.nft.setStarterFund(await ctx.fund.getAddress());
+    await ctx.deployer.sendTransaction({ to: await ctx.fund.getAddress(), value: E("1") });
+    /** Awakens a Trencher (claims its starter) so it can share the fees; house agents just need a wallet. */
+    const awake = async (id) => {
+      if (id <= 5) return ctx.register(id);
+      const holder = await ethers.getSigner(await ctx.nft.ownerOf(id));
+      await ctx.fund.connect(holder).claim(id);
+      return ethers.getContractAt("TrenchersAgentAccount", await ctx.fund.agentWallet(id));
+    };
+    return { ...ctx, dist, awake };
   }
 
-  it("only enrols Trenchers whose agent wallet exists, once", async () => {
-    const { dist, register } = await dsetup();
+  it("only enrols Trenchers that exist, are awake and have an agent wallet, once", async () => {
+    const { dist, register, awake } = await dsetup();
     await expect(dist.enroll(6)).to.be.revertedWithCustomError(dist, "NotRegistered");
-    await register(6);
+    await register(30); // never minted: anyone can create a wallet for it, but it can't share fees
+    await expect(dist.enroll(30)).to.be.reverted;
+    await register(8);  // minted but dormant (starter never claimed)
+    await expect(dist.enroll(8)).to.be.revertedWithCustomError(dist, "NotAwake");
+    await awake(6);
     await dist.enroll(6);
     await expect(dist.enroll(6)).to.be.revertedWithCustomError(dist, "AlreadyEnrolled");
     expect(await dist.enrolledFrom(6)).to.equal(2n);
   });
 
-  it("splits each epoch's fees equally across registered agents and pays into their wallets", async () => {
-    const { dist, register, deployer, keeper } = await dsetup();
-    const a6 = await register(6), a7 = await register(7), a1 = await register(1);
+  it("splits each epoch's fees equally across awake agents and pays into their wallets", async () => {
+    const { dist, awake, deployer, keeper } = await dsetup();
+    const a6 = await awake(6), a7 = await awake(7), a1 = await awake(1);
+    const before = await Promise.all([a6, a7, a1].map(async (a) => ethers.provider.getBalance(await a.getAddress())));
     await dist.enroll(6); await dist.enroll(7); await dist.enroll(1);
     await time.increase(7 * 86400); await dist.closeEpoch(); // epoch 1 had no earners
     await deployer.sendTransaction({ to: await dist.getAddress(), value: E("0.3") }); // 10% of $TRENCHERS fees
     await time.increase(7 * 86400); await dist.closeEpoch();
     expect(await dist.sharePerAgent(2)).to.equal(E("0.1"));
     await dist.connect(keeper).pay(2, [6, 7, 1]);
-    for (const a of [a6, a7, a1]) expect(await ethers.provider.getBalance(await a.getAddress())).to.equal(E("0.1"));
-    await expect(dist.pay(2, [6])).to.be.revertedWithCustomError(dist, "AlreadyPaid");
+    for (const [i, a] of [a6, a7, a1].entries()) expect((await ethers.provider.getBalance(await a.getAddress())) - before[i]).to.equal(E("0.1"));
     expect(await dist.reserved()).to.equal(0n);
   });
 
-  it("new agents earn from the next epoch; unpaid shares stay reserved", async () => {
-    const { dist, register, deployer } = await dsetup();
-    await register(6); await dist.enroll(6);
+  it("a batch skips ids that are already paid or not yet earning, so nobody can block it by front-running", async () => {
+    const { dist, awake, deployer, keeper } = await dsetup();
+    await awake(6); await awake(7); await dist.enroll(6);
     await time.increase(7 * 86400); await dist.closeEpoch();
-    await register(7); await dist.enroll(7);
+    await dist.enroll(7);
+    await deployer.sendTransaction({ to: await dist.getAddress(), value: E("0.2") });
+    await time.increase(7 * 86400); await dist.closeEpoch();
+    await dist.pay(2, [6]);                       // someone pays #6 first
+    await dist.connect(keeper).pay(2, [6, 7]);     // the keeper's batch still goes through
+    expect(await dist.reserved()).to.equal(0n);
+    expect(await dist.paid(2, 7)).to.equal(false); // #7 wasn't earning in epoch 2
+  });
+
+  it("new agents earn from the next epoch; unpaid shares stay reserved", async () => {
+    const { dist, awake, deployer } = await dsetup();
+    await awake(6); await dist.enroll(6);
+    await time.increase(7 * 86400); await dist.closeEpoch();
+    await awake(7); await dist.enroll(7);
     await deployer.sendTransaction({ to: await dist.getAddress(), value: E("0.2") });
     await time.increase(7 * 86400); await dist.closeEpoch();
     expect(await dist.sharePerAgent(2)).to.equal(E("0.2")); // only #6 was earning in epoch 2
-    await expect(dist.pay(2, [7])).to.be.revertedWithCustomError(dist, "NotEligible");
     expect(await dist.reserved()).to.equal(E("0.2"));
     await deployer.sendTransaction({ to: await dist.getAddress(), value: E("0.2") });
     await time.increase(7 * 86400); await dist.closeEpoch();

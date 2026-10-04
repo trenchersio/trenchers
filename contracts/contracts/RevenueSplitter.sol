@@ -9,8 +9,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// @title RevenueSplitter
 /// @notice Single receiving address for Trenchers primary-sale proceeds and secondary royalties.
 ///
-///         Primary sales: all 1,995 public Trenchers are minted free to a treasury wallet and listed
-///         on OpenSea at 0.02 ETH. ETH the treasury forwards here counts as primary-sale proceeds:
+///         Primary sales: the 1,995 public Trenchers are minted on trenchers.io at 0.02 ETH; the NFT
+///         contract (the "primary seller") forwards every mint's ETH here as primary-sale proceeds:
 ///           51% to the Agent Starter Fund, which pays each buyer's agent a 0.01 ETH starter
 ///               balance (the extra 1% covers marketplace fees; the fund returns any surplus to
 ///               buybacks), and the rest to the ecosystem:
@@ -38,7 +38,7 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
     uint256 public constant VEST_DURATION = 180 days;
     uint256 public constant TIMELOCK = 48 hours;
 
-    /// @notice The treasury wallet that lists the NFTs; ETH from it counts as primary-sale proceeds.
+    /// @notice The primary seller (the NFT contract); ETH from it counts as primary-sale proceeds.
     address public primarySeller;
     uint256 public immutable vestStart;
 
@@ -83,7 +83,7 @@ contract RevenueSplitter is Ownable, ReentrancyGuard {
         emit DestinationSet(Bucket.Dev, devSafe);
     }
 
-    /// @notice One-time setting of the treasury wallet whose ETH counts as primary-sale proceeds.
+    /// @notice One-time setting of the primary seller (the NFT contract) whose ETH counts as primary-sale proceeds.
     function setPrimarySeller(address seller) external onlyOwner {
         if (primarySeller != address(0)) revert AlreadySet();
         if (seller == address(0)) revert ZeroAddress();

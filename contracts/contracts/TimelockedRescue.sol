@@ -32,13 +32,19 @@ abstract contract TimelockedRescue is Ownable {
     event TokenRescued(address indexed token, address indexed to, uint256 amount);
 
     error RescueDelayTooLong();
+    error RescueDelayTooShort();
     error NoRescue();
     error RescueTooEarly();
     error IsShutdown();
     error RescueFailed();
 
+    /// @dev Robinhood Chain mainnet: the public delay can't be shorter than 48 hours.
+    uint256 internal constant MAINNET_CHAIN_ID = 4663;
+    uint256 public constant MAINNET_MIN_RESCUE_DELAY = 48 hours;
+
     constructor(uint256 rescueDelay_) {
         if (rescueDelay_ > MAX_RESCUE_DELAY) revert RescueDelayTooLong();
+        if (block.chainid == MAINNET_CHAIN_ID && rescueDelay_ < MAINNET_MIN_RESCUE_DELAY) revert RescueDelayTooShort();
         rescueDelay = rescueDelay_;
     }
 

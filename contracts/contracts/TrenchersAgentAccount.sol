@@ -20,6 +20,11 @@ interface IERC6551Executable {
     function execute(address to, uint256 value, bytes calldata data, uint8 operation) external payable returns (bytes memory);
 }
 
+/// @dev TrenchersNFT counts every transfer of each token; a policy is only live for the transfer it was set under.
+interface ITransferCount {
+    function transferCount(uint256 tokenId) external view returns (uint256);
+}
+
 interface IAgentConfig {
     function engine() external view returns (address);
     function router() external view returns (address);
@@ -41,7 +46,9 @@ interface IAgentConfig {
 ///                  caps, and approve that router for tokens it sells. Only while the holder's policy is
 ///                  live and was set by the current holder (a sale pauses trading automatically).
 ///         Starter: ETH received from the Agent Starter Fund is locked: it can pay for the coin launch
-///                  and trades, but the holder cannot withdraw it until STARTER_LOCK has passed.
+///                  and trades, but the holder cannot withdraw it until STARTER_LOCK has passed. During
+///                  the lock, withdrawals can't take the wallet below the starter amount, and the holder
+///                  can't move tokens out (so coins bought with the starter can't be cashed out early).
 contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Executable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -68,6 +75,9 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     uint256 public starterLocked;   // ETH from the starter fund not yet unlocked
     uint256 public starterLockedAt; // when the starter balance arrived
     address public coin;            // the agent's own coin, if launched (the engine must never trade it)
+    /// @notice The NFT's transfer count when the policy was set: if the Trencher has moved since (even
+    ///         back to the same holder), the policy is stale and trading stays paused until it is set again.
+    uint256 public policyTransfers;
 
 
     event PolicySet(address indexed holder, uint128 perTrade, uint128 dailyCap, bool live);
@@ -129,7 +139,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
             || id == type(IERC6551Executable).interfaceId || id == type(IERC1271).interfaceId;
     }
 
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) { return this.onERC721Received.selector; }
+    /// @dev Refuses its own Trencher: an NFT held by its own agent wallet could never be moved again.
+    function onERC721Received(address, address, uint256 tokenId, bytes calldata) external view returns (bytes4) {
+        (uint256 chainId, address tokenContract, uint256 ownId) = token();
+        if (msg.sender == tokenContract && tokenId == ownId && chainId == block.chainid) revert NotAllowed();
+        return this.onERC721Received.selector;
+    }
     function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) { return this.onERC1155Received.selector; }
 
     // ------------------------------------------------------------------ views
@@ -138,6 +153,17 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     function lockedNow() public view returns (uint256) {
         if (starterLocked == 0 || block.timestamp >= starterLockedAt + STARTER_LOCK) return 0;
         return starterLocked < address(this).balance ? starterLocked : address(this).balance;
+    }
+
+    /// @notice True during the 180 days after the starter balance arrived.
+    function inStarterLock() public view returns (bool) {
+        return starterLockedAt != 0 && block.timestamp < starterLockedAt + STARTER_LOCK;
+    }
+
+    /// @dev How many times this agent's Trencher has been transferred (0 if the NFT doesn't count).
+    function _transfers() internal view returns (uint256 n) {
+        (, address tokenContract, uint256 tokenId) = token();
+        try ITransferCount(tokenContract).transferCount(tokenId) returns (uint256 c) { n = c; } catch {}
     }
 
     /// @notice ETH the holder can withdraw right now: everything except the locked starter balance.
@@ -150,6 +176,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     /// @notice Applies a guided rule (by hash, the text lives at ruleUri) and the hard limits.
     function setPolicy(uint128 perTrade, uint128 dailyCap, bool live, bytes32 ruleHash_, string calldata ruleUri) external onlyHolder {
         policy = Policy(perTrade, dailyCap, live, msg.sender);
+        policyTransfers = _transfers();
         emit PolicySet(msg.sender, perTrade, dailyCap, live);
         if (ruleHash_ != bytes32(0) && ruleHash_ != ruleHash) {
             ruleHash = ruleHash_;
@@ -162,14 +189,17 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     function pause() external onlyHolder { policy.live = false; _state++; emit PolicySet(msg.sender, policy.perTrade, policy.dailyCap, false); }
 
     /// @notice Launches the agent's coin through the configured launcher (e.g. the Pons router).
-    ///         `value` may come from the starter balance. Records the coin so the engine never trades it.
+    ///         It may be paid from the starter balance: the lock goes down only by the ETH that actually
+    ///         left the wallet. Records the coin (once) so the engine never trades it.
     function launchCoin(bytes calldata data, uint256 value, address coin_) external onlyHolder nonReentrant returns (bytes memory result) {
         address launcher = config.launcher();
         if (launcher == address(0)) revert NotAllowed();
         _state++;
+        uint256 before = address(this).balance;
         result = _call(launcher, value, data);
-        if (starterLocked > 0) starterLocked = value >= starterLocked ? 0 : starterLocked - value;
-        if (coin_ != address(0)) { coin = coin_; emit CoinLaunched(coin_); }
+        uint256 spent = before > address(this).balance ? before - address(this).balance : 0;
+        if (starterLocked > 0) starterLocked = spent >= starterLocked ? 0 : starterLocked - spent;
+        if (coin_ != address(0) && coin == address(0)) { coin = coin_; emit CoinLaunched(coin_); }
     }
 
     /// @notice Instant withdrawal to the holder of anything above the locked starter balance.
@@ -182,12 +212,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         emit Withdrawn(msg.sender, amount);
     }
 
-    /// @notice ERC-6551 execute. Unrestricted for the holder once nothing is locked; while the starter
-    ///         balance is locked, the holder can still make calls that send no ETH above the free balance
-    ///         and don't touch the router (trading goes through the engine and its caps).
+    /// @notice ERC-6551 execute. Unrestricted for the holder after the starter lock period; during it,
+    ///         the holder can still make calls that send no ETH above the free balance, don't touch the
+    ///         router (trading goes through the engine and its caps) and don't move tokens out.
     function execute(address to, uint256 value, bytes calldata data, uint8 operation) external payable onlyHolder nonReentrant returns (bytes memory) {
         if (operation != 0) revert NotAllowed();
-        if (lockedNow() > 0) {
+        if (inStarterLock()) {
             if (to == config.router() || value > withdrawable()) revert StarterLocked();
             if (_isTokenTransfer(data)) revert StarterLocked();
         }
@@ -202,8 +232,10 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         if (msg.sender != config.engine()) revert NotEngine();
         if (config.paused()) revert TradingPaused();
         Policy memory p = policy;
-        if (p.setBy != owner()) revert PolicyStale();
+        if (p.setBy != owner() || policyTransfers != _transfers()) revert PolicyStale();
         if (!p.live) revert Paused();
+        address router = config.router();
+        if (router == address(0)) revert NotAllowed();
         if (value > p.perTrade) revert OverPerTrade();
         uint256 day = block.timestamp / 1 days;
         uint256 spent = day == spentDay ? spentToday : 0;
@@ -212,7 +244,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         spentToday = spent + value;
         _state++;
         emit Traded(value, bytes4(data[:4]));
-        return _call(config.router(), value, data);
+        return _call(router, value, data);
     }
 
     /// @notice Lets the router pull a token the agent is selling. Never the agent's own coin.
@@ -220,7 +252,8 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         if (msg.sender != config.engine()) revert NotEngine();
         if (config.paused()) revert TradingPaused();
         if (address(tokenToSell) == coin) revert NotAllowed();
-        if (policy.setBy != owner()) revert PolicyStale();
+        if (policy.setBy != owner() || policyTransfers != _transfers()) revert PolicyStale();
+        if (!policy.live) revert Paused();
         address r = config.router();
         tokenToSell.safeApprove(r, 0);
         if (amount > 0) tokenToSell.safeApprove(r, amount);

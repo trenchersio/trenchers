@@ -188,6 +188,15 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties, InstantRescue {
         emit MetadataUpdate(tokenId);
     }
 
+    /// @notice How many times each Trencher has changed hands (mint included). Agent wallets use it so a
+    ///         trading policy never comes back to life after the NFT moves away and back.
+    mapping(uint256 => uint256) public transferCount;
+
+    function _afterTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize) internal virtual override {
+        super._afterTokenTransfer(from, to, firstTokenId, batchSize);
+        for (uint256 i; i < batchSize; ++i) transferCount[firstTokenId + i] += 1;
+    }
+
     /// @notice True once the Trencher's agent has claimed its starter balance (house agents always).
     function isAwake(uint256 tokenId) public view returns (bool) {
         if (tokenId <= TEAM_RESERVE || tokenId > FIRST_ROUND) return true;

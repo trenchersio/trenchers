@@ -3,7 +3,12 @@ pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "./TimelockedRescue.sol";
+
+interface INFTAwake {
+    function isAwake(uint256 tokenId) external view returns (bool);
+}
 
 interface IERC6551RegistryView {
     function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId)
@@ -42,12 +47,14 @@ contract AgentFeeDistributor is ReentrancyGuard, TimelockedRescue {
     event Enrolled(uint256 indexed tokenId, uint256 fromEpoch);
     event EpochClosed(uint256 indexed epoch, uint256 pot, uint256 agents, uint256 perAgent);
     event Paid(uint256 indexed epoch, uint256 indexed tokenId, address wallet, uint256 amount);
+    event PayFailed(uint256 indexed epoch, uint256 indexed tokenId);
 
     error AlreadySet();
     error ZeroAddress();
     error NotOpen();
     error BadToken();
     error NotRegistered();
+    error NotAwake();
     error AlreadyEnrolled();
     error TooEarly();
     error NotEligible();
@@ -84,6 +91,9 @@ contract AgentFeeDistributor is ReentrancyGuard, TimelockedRescue {
         if (tokenId == 0 || tokenId > MAX_ID) revert BadToken();
         if (enrolledFrom[tokenId] != 0) revert AlreadyEnrolled();
         if (agentWallet(tokenId).code.length == 0) revert NotRegistered();
+        // Only Trenchers that exist and are awake (house agents count as awake) share the fees.
+        IERC721(nft).ownerOf(tokenId);
+        if (!INFTAwake(nft).isAwake(tokenId)) revert NotAwake();
         enrolledFrom[tokenId] = epoch + 1;
         joiningNext += 1;
         emit Enrolled(tokenId, epoch + 1);
@@ -110,14 +120,14 @@ contract AgentFeeDistributor is ReentrancyGuard, TimelockedRescue {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds[i];
             uint256 from = enrolledFrom[id];
-            if (from == 0 || from > closedEpoch) revert NotEligible();
-            if (paid[closedEpoch][id]) revert AlreadyPaid();
+            // Skip (don't revert) so one ineligible or already-paid id can't block a whole batch.
+            if (from == 0 || from > closedEpoch || paid[closedEpoch][id]) continue;
             paid[closedEpoch][id] = true;
             if (per == 0) continue;
-            reserved -= per;
             address w = agentWallet(id);
             (bool ok, ) = w.call{value: per}("");
-            if (!ok) revert TransferFailed();
+            if (!ok) { paid[closedEpoch][id] = false; emit PayFailed(closedEpoch, id); continue; } // stays reserved for a retry
+            reserved -= per;
             emit Paid(closedEpoch, id, w, per);
         }
     }
