@@ -324,6 +324,7 @@ flowchart LR
 - **Ranking metric:** weekly PnL: time-weighted return over the week (Monday 00:00 to Sunday 23:59 UTC). Deposits, withdrawals and fee income don't count as performance, and holdings are valued at sale value, so a thin token pumped by its holder doesn't inflate the score.
 ![An agent's PnL card](docs-img/pnl-card.png)
 
+- **Live view:** the Arena has a *Sample* view (what launch looks like) and a *Live* view with the real agents, read every 5 seconds from the trading engine.
 - **Prizes:** the top 10 eligible agents split the weekly pool (25 / 18 / 14 / 11 / 9 / 7 / 5 / 4 / 4 / 3 %), paid into the agent wallet so winnings stay with the agent. House agents are excluded from prizes.
 
 
@@ -398,8 +399,18 @@ belong to whoever holds the NFT and are withdrawn by them (instantly, above the 
 in the Agent Starter Fund and the fee distributor can be rescued by the Safe only after a public
 48-hour delay (`proposeRescue` → `executeRescue`), which also shuts the contract down. The NFT and the
 Pons adapter never hold funds; the Safe can sweep anything sent there by mistake. The revenue
-splitter's buckets are released to their destinations, and stray ETH can be swept. The full table,
-and where the buttons are, is in [docs/SAFETY.md](https://github.com/trenchersio/trenchers/blob/main/docs/SAFETY.md).
+splitter's buckets are released to their destinations, and stray ETH can be swept.
+
+**Pausing.** Any holder can pause their own agent at any time. The team also has an emergency stop
+that pauses all engine trading at once; it never moves anyone's ETH and holders can still withdraw.
+
+**Fixing bugs after launch.** The engine (how rules are read and trades decided) can be updated any
+time, and the trading route after a public 48-hour notice; holders don't need to do anything. Agent
+wallets are *not* upgradeable by default: nobody, including the team, can change an agent's wallet.
+If a real bug is ever found in the wallet code, the team can offer a fixed version, and each holder
+chooses whether to upgrade (same address, balance and track record; switch back any time).
+
+The full table, and where the buttons are, is in [docs/SAFETY.md](https://github.com/trenchersio/trenchers/blob/main/docs/SAFETY.md).
 
 ## Built on Robinhood Chain
 
@@ -417,17 +428,39 @@ What we integrate with, from public sources (verified again on-chain by the depl
 Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/pons-api/), [Pons explained](https://www.datawallet.com/crypto/pons-explained), [Uniswap v4 deployments](https://developers.uniswap.org/docs/protocols/v4/deployments), [ERC-8004 contracts](https://erc-8004.quicknode.com/docs/contracts), [Safe deployments](https://github.com/safe-global/safe-deployments), [Robinhood Chain contracts](https://docs.robinhood.com/chain/contracts), [DexScreener](https://dexscreener.com/robinhood).
 
 
+## Telegram live channel
+
+Every mint and every sale is posted to the Trenchers Telegram channel, with the Trencher's art, the
+price and (for sales) its agent. The engine posts them; plain wallet-to-wallet transfers aren't posted.
+To switch it on: create a bot with @BotFather, add it as an admin of the channel, and set
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT` (the channel's @username) on the engine service in Railway.
+
+## Engine settings
+
+| Variable | What |
+| --- | --- |
+| `RPC_URL`, `CHAIN_ID` | The chain (defaults: Robinhood Chain testnet) |
+| `NFT_ADDRESS`, `FUND_ADDRESS`, `ADAPTER_ADDRESS`, `PONS_FACTORY`, `START_BLOCK` | Contracts to follow; the setup page's *Trading* section prints these |
+| `ENGINE_KEY` | The engine wallet's private key, pasted into Railway by the team only. It can only trade within each holder's limits. |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT` | Optional: the live mints-and-sales channel |
+| `SITE_URL`, `EXPLORER_URL`, `IMAGE_BASE` | Optional: links and images used in Telegram posts |
+| `SNIPE_WAIT_SEC`, `MAX_HOLD_SEC`, `MAX_POSITIONS`, `SLIPPAGE_PCT`, `DRY_RUN` | Optional trading safety settings |
+
+The health page (`/health`) shows the engine's status, the emergency stop, the Telegram feed and its last 25 actions.
+
 ## Repository
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter), `AgentConfig` (timelocked engine/router/launcher settings), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), 50 tests, deploy script |
+| [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route to Pons), 57 tests, deploy script |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/strategies.ts) | The five house templates and the signals they need |
 | [`web/lib/custom-strategy.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/custom-strategy.ts) | Guided rules: the incremental plain-English parser behind "talk to your agent", and validation |
 | [`web/components/agents/AgentChat.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/agents/AgentChat.tsx) | The agent conversation: propose, apply or discard each rule |
-| [`web/lib/arena-sim.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/arena-sim.ts) | The sample market and agents behind the Arena until live data is connected |
+| [`web/lib/arena-sim.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/arena-sim.ts) | The sample market and agents behind the Arena's *Sample* view |
+| [`web/components/arena/LiveArena.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/arena/LiveArena.tsx) | The Arena's *Live* view: real agents, trades and PnL cards from the engine's `/arena` feed |
+| [`engine/`](https://github.com/trenchersio/trenchers/tree/main/engine) | The trading engine (runs on Railway): rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves `/health` and `/arena`, honours the emergency stop, and posts mints and sales to Telegram. Settings are environment variables (see below). |
 | [`art/`](https://github.com/trenchersio/trenchers/tree/main/art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
 | [`docs-img/`](https://github.com/trenchersio/trenchers/tree/main/docs/img) | Images used in this README |
 

@@ -12,6 +12,7 @@ function addr(name: string): Address {
   else if (!/^0x[0-9a-fA-F]{40}$/.test(v)) PROBLEMS.push(`${name} is not a valid address`);
   return v as Address;
 }
+if (clean(process.env.TELEGRAM_BOT_TOKEN) && !clean(process.env.TELEGRAM_CHAT)) PROBLEMS.push("TELEGRAM_CHAT is missing: the channel's @username, e.g. @trencherslive");
 function key(): Hex | undefined {
   let v = clean(process.env.ENGINE_KEY);
   if (!v) return undefined;
@@ -44,6 +45,13 @@ export const ENV = {
   /** Max slippage accepted on a trade, in percent. */
   SLIPPAGE_PCT: Number(opt("SLIPPAGE_PCT", "15")),
   PORT: Number(opt("PORT", "8080")),
+  /** Live Telegram channel for mints and sales (optional): the bot's token and the channel (@name). */
+  TELEGRAM_BOT_TOKEN: clean(process.env.TELEGRAM_BOT_TOKEN) || null,
+  TELEGRAM_CHAT: clean(process.env.TELEGRAM_CHAT) || null,
+  SITE_URL: opt("SITE_URL", "https://trenchers.io").replace(/\/$/, ""),
+  EXPLORER_URL: opt("EXPLORER_URL", Number(opt("CHAIN_ID", "46630")) === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robin.etherscan.io").replace(/\/$/, ""),
+  /** Where the Trenchers' PNG art is served: {IMAGE_BASE}{awake|dormant}/{id}.png */
+  IMAGE_BASE: opt("IMAGE_BASE", "https://trenchers.io/testnet-meta/png/"),
   /** DRY_RUN=1 decides and logs trades without sending them. */
   DRY_RUN: opt("DRY_RUN", "0") === "1",
 };

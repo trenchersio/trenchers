@@ -82,8 +82,14 @@ async function main() {
   await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.05"), parseEther("0.2"), true, keccak256(toHex(rule7)), rule7], 0n, alice);
   console.log("agents ready");
 
+  // A fake Telegram API that records what the engine posts.
+  const { createServer } = await import("node:http");
+  const posts: { method: string; body: { caption?: string; text?: string; photo?: string; media?: { media: string }[] } }[] = [];
+  const tg = createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { posts.push({ method: req.url!.split("/").pop()!, body: JSON.parse(b) }); res.end('{"ok":true}'); }); }).listen(8977);
+
   // The engine, in this process.
   Object.assign(process.env, {
+    TELEGRAM_API: "http://127.0.0.1:8977", TELEGRAM_BOT_TOKEN: "test", TELEGRAM_CHAT: "@trencherstest",
     RPC_URL: RPC, CHAIN_ID: "31337", ENGINE_KEY, NFT_ADDRESS: nft, FUND_ADDRESS: fund, ADAPTER_ADDRESS: adapter,
     PONS_FACTORY: pons, START_BLOCK: (block0 + 1n).toString(), SNIPE_WAIT_SEC: "3", POLL_MS: "500",
   });
@@ -130,6 +136,9 @@ async function main() {
   const arena = await engine.arena();
   console.log(JSON.stringify(arena.agents.map((a) => ({ rank: a.rank, id: a.id, pnlPct: +a.pnlPct.toFixed(2), pnlEth: +a.pnlEth.toFixed(5), trades: a.trades })), null, 0));
   check(arena.agents.length === 2 && arena.feed.length >= 4, `Arena shows both agents and their trades (${arena.feed.length} trades)`);
+  if (process.env.DUMP_ARENA) (await import("node:fs")).writeFileSync(process.env.DUMP_ARENA, JSON.stringify(arena, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+  const a6 = arena.agents.find((a) => a.id === 6)!;
+  check(a6.biggest?.symbol === "MOON" && a6.recent.length === 2 && a6.recent[0].symbol === "MOON" && a6.history.length >= 1, `Arena has coin tickers, the biggest trade and value history for PnL cards (${JSON.stringify(a6.biggest)})`);
   check(arena.agents[0].pnlPct >= arena.agents[1].pnlPct && arena.agents.every((a) => a.trades === 2), "Arena ranks by weekly PnL, each agent with its buy and sell");
 
   // Emergency stop: the team pauses all trading; nobody buys the next launch.
@@ -148,6 +157,22 @@ async function main() {
   await sleep(6000);
   const trades6 = engine.trades.filter((t) => t.agent === 6).length;
   check(trades6 === 2, `paused agent #6 did not buy the next launch (${trades6} trades total)`);
+
+  // Telegram: a mint of 2 and a sale on a marketplace are posted; a plain transfer is not.
+  const market = await deploy("MockMarket");
+  const n0 = posts.length;
+  await call(nft, "TrenchersNFT", "mint", [2n], parseEther("0.04"), alice);
+  await call(nft, "TrenchersNFT", "approve", [market, 8n], 0n, alice);
+  await call(market, "MockMarket", "buy", [nft, 8n, alice.address], parseEther("0.05"), dev);
+  await call(nft, "TrenchersNFT", "transferFrom", [alice.address, dev.address, 9n], 0n, alice);
+  await sleep(12000);
+  const fresh = posts.slice(n0);
+  const cap = (p: (typeof posts)[number]) => p.body.caption ?? p.body.text ?? (p.body as { media?: { caption?: string }[] }).media?.[0]?.caption ?? "";
+  console.log("   telegram:", JSON.stringify(fresh.map((p) => ({ m: p.method, c: cap(p).split("\n")[0] }))));
+  check(fresh.length === 2, `Telegram got exactly 2 posts (mint and sale, not the plain transfer): ${fresh.length}`);
+  check(fresh[0]?.method === "sendMediaGroup" && /2 Trenchers minted/.test(cap(fresh[0])) && /0\.04 ETH/.test(cap(fresh[0])), "Telegram: the mint of 2 is posted with both images and the price");
+  check(fresh[1]?.method === "sendPhoto" && /Trencher #8 sold<\/b> for 0\.05 ETH/.test(cap(fresh[1])) && /\/awake\/8\.png$/.test(fresh[1].body.photo ?? ""), "Telegram: the sale is posted with its price and image");
+  tg.close();
 
   running = false;
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll engine checks passed");

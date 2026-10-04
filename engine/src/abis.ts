@@ -55,3 +55,4 @@ export const ERC20_ABI = parseAbi([
 ]);
 
 export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)"]);
+export const NFT_TRANSFER = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"])[0];

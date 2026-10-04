@@ -44,3 +44,6 @@ export const ROUTES = {
 };
 /** True until the NFT contract is deployed: ownership and transactions are simulated. */
 export const SAMPLE_MODE = NFT_ADDRESS === "0x0000000000000000000000000000000000000000";
+
+/** The trading engine's public API (Railway): the live Arena reads {ENGINE_URL}/arena. */
+export const ENGINE_URL = (process.env.NEXT_PUBLIC_ENGINE_URL || "https://rare-reprieve-production-8399.up.railway.app").replace(/\/$/, "");

@@ -1567,3 +1567,30 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .tn .tn-estop > div { display: flex; flex-direction: column; gap: 4px; }
 .tn .tn-estop.on { border-color: #FF5C5C; background: rgba(255,92,92,.08); }
 .tn .tn-estop.on .tn-small { color: #FF5C5C; font-weight: 700; }
+
+/* Live Arena (real agents from the engine) */
+.arena-mode { display: flex; gap: 6px; margin: 0 0 12px; }
+.arena-mode .tbtn { display: inline-flex; align-items: center; gap: 6px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+.live-badge { color: var(--green); border-color: rgba(57,255,136,.5); }
+.live-rows { list-style: none; margin: 0; padding: 0; }
+.live-row { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) 84px 110px minmax(0, 170px); align-items: center; gap: 10px; padding: 9px 18px; background: none; border: 0; border-bottom: 1px solid var(--line); color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.live-row:hover, .live-row.active { background: rgba(57,255,136,.05); }
+.live-row .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.live-row .who canvas { border-radius: 6px; flex: none; }
+.live-row .who-txt { display: flex; flex-direction: column; min-width: 0; }
+.live-row .who-txt small { color: var(--quiet); font-size: 12px; }
+.live-row .col-last { display: flex; gap: 6px; align-items: center; font-size: 12px; overflow: hidden; }
+.live-empty { padding: 18px; }
+.live-feed { margin: 0; border-top: 1px solid var(--line); }
+.live-feed .trades a, .live-arena .trades a { color: inherit; text-decoration: none; }
+.live-feed .trades a:hover, .live-arena .trades a:hover { color: var(--green); }
+.live-arena .detail-head canvas { border-radius: 10px; flex: none; }
+.live-paused { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #FF5C5C; border-radius: 8px; color: #FF5C5C; background: rgba(255,92,92,.08); font-size: 13px; }
+.live-warn { color: var(--amber, #FFB020); font-size: 13px; margin: 8px 0 0; }
+@media (max-width: 700px) {
+  .live-row { grid-template-columns: 26px minmax(0, 1fr) 70px; padding: 9px 12px; }
+  .live-row .col-val, .live-row .col-last { display: none; }
+}

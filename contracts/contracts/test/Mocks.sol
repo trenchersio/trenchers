@@ -23,3 +23,14 @@ contract MockRegistry {
 contract ForceSend {
     constructor(address payable to) payable { selfdestruct(to); }
 }
+
+/// @dev A minimal marketplace for tests: the buyer pays ETH, the seller (who approved it) gets paid.
+contract MockMarket {
+    function buy(address nft, uint256 id, address payable seller) external payable {
+        IERC721Like(nft).transferFrom(seller, msg.sender, id);
+        (bool ok, ) = seller.call{value: msg.value}("");
+        require(ok, "pay");
+    }
+}
+
+interface IERC721Like { function transferFrom(address from, address to, uint256 id) external; }

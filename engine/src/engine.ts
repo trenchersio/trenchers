@@ -3,10 +3,11 @@ import {
   type Address, type Hash, type Log, type PublicClient, type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
+  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -26,7 +27,7 @@ type Agent = {
   understood?: string[]; ruleWarning?: string | null;
 };
 type Position = { token: Address; ethIn: bigint; tokens: bigint; openedAt: number };
-export type Trade = { agent: number; wallet: Address; token: Address; symbol?: string; side: "buy" | "sell"; eth: string; tokens: string; time: number; tx: Hash };
+export type Trade = { agent: number; wallet: Address; token: Address; symbol?: string; side: "buy" | "sell"; eth: string; tokens: string; time: number; tx: Hash; pnlPct?: number };
 type Entry = { wallet: Address; token: Address; notBefore: number; reason: string };
 
 const lc = (a: string) => a.toLowerCase() as Address;
@@ -48,6 +49,10 @@ export class Engine {
   skipNoted = new Map<Address, number>();
   /** AgentConfig (read from an agent wallet) and its emergency stop. */
   configAddress: Address | null = null;
+  /** Each agent's value (ETH) every 2 minutes, last 24 hours, for the value chart. In memory: restarts start fresh. */
+  history = new Map<Address, { t: number; v: number }[]>();
+  lastSnapshot = 0;
+  telegram: TelegramFeed | null = null;
   paused = false;
   cursor = 0n;
   liveFrom = 0n;
@@ -67,6 +72,13 @@ export class Engine {
       this.engineAddress = account.address;
     } else { this.wallet = null; this.engineAddress = null; }
     this.log = log;
+    if (ENV.TELEGRAM_BOT_TOKEN && ENV.TELEGRAM_CHAT) {
+      this.telegram = new TelegramFeed(
+        { api: process.env.TELEGRAM_API, token: ENV.TELEGRAM_BOT_TOKEN, chat: ENV.TELEGRAM_CHAT, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, imageBase: ENV.IMAGE_BASE, nft: ENV.NFT },
+        this.pub, (m) => this.log(m),
+        (id) => { const ag = [...this.agents.values()].find((a) => a.id === id); return ag ? `Its agent: ${Number(formatEther(ag.balance)).toFixed(4)} ETH · rule v${ag.ruleVersion}, and its track record moves with the NFT.` : null; },
+      );
+    }
   }
 
   // ------------------------------------------------------------------ chain sync
@@ -88,6 +100,7 @@ export class Engine {
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
     if (head > this.cursor) await this.sync(head, true);
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
+    if (Date.now() - this.lastSnapshot > 120_000) await this.snapshot();
     if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
     await this.runExits();
@@ -138,7 +151,7 @@ export class Engine {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
       const to = from + ENV.LOG_RANGE - 1n < head ? from + ENV.LOG_RANGE - 1n : head;
-      const [launches, grads, buys, sells, claims, bought, sold] = await Promise.all([
+      const [launches, grads, buys, sells, claims, bought, sold, nftMoves] = await Promise.all([
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: POOL_GRADUATED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ event: CURVE_BUY, fromBlock: from, toBlock: to }),
@@ -146,12 +159,14 @@ export class Engine {
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.ADAPTER, event: BOUGHT, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.ADAPTER, event: SOLD, fromBlock: from, toBlock: to }),
+        live && this.telegram ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
       ]);
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
       const rules = wallets.length ? await this.pub.getLogs({ address: wallets, event: RULE_APPLIED, fromBlock: from, toBlock: to }) : [];
       const all = [...launches, ...grads, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
+      if (nftMoves.length && this.telegram) this.telegram.onTransfers(nftMoves).catch(() => {});
       this.cursor = to;
     }
   }
@@ -213,6 +228,7 @@ export class Engine {
         const p = book.get(token);
         const ethIn = (a.ethIn as bigint), tokens = (a.tokensOut as bigint);
         if (p) { p.ethIn += ethIn; p.tokens += tokens; } else book.set(token, { token, ethIn, tokens, openedAt: t });
+        await this.symbolOf(token);
         this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!);
         break;
       }
@@ -221,22 +237,38 @@ export class Engine {
         const book = this.book(w);
         const p = book.get(token);
         const tokensIn = a.tokensIn as bigint, ethOut = a.ethOut as bigint;
+        let pnlPct: number | undefined;
         if (p && p.tokens > 0n) {
           const part = tokensIn >= p.tokens ? p.ethIn : (p.ethIn * tokensIn) / p.tokens;
           this.realized.push({ wallet: w, time: t, pnl: ethOut - part });
+          if (part > 0n) pnlPct = (Number(formatEther(ethOut)) / Number(formatEther(part)) - 1) * 100;
           p.ethIn -= part; p.tokens -= tokensIn;
           if (p.tokens <= 0n) book.delete(token);
         }
-        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!);
+        await this.symbolOf(token);
+        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct);
         break;
       }
     }
   }
 
+  private symbols = new Map<Address, string>();
+  /** The coin's ticker (cached); falls back to a short address. */
+  private async symbolOf(token: Address) {
+    let sym = this.symbols.get(token);
+    if (sym === undefined) {
+      sym = await this.pub.readContract({ address: token, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "") as string;
+      sym = (sym || token.slice(2, 8)).replace(/^\$/, "").slice(0, 14).toUpperCase();
+      this.symbols.set(token, sym);
+      const tok = this.tokens.get(token); if (tok) tok.symbol = sym;
+    }
+    return sym;
+  }
+
   private book(w: Address) { let b = this.positions.get(w); if (!b) { b = new Map(); this.positions.set(w, b); } return b; }
   private openCount() { let n = 0; for (const b of this.positions.values()) n += b.size; return n; }
-  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash) {
-    this.trades.push({ agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx });
+  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number) {
+    this.trades.push({ agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.symbols.get(token) ?? this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx, pnlPct });
     if (this.trades.length > 5000) this.trades.splice(0, this.trades.length - 5000);
   }
 
@@ -404,32 +436,61 @@ export class Engine {
 
   // ------------------------------------------------------------------ Arena
 
+  /** Agent value: ETH in the wallet plus open positions at what they'd sell for now. */
+  private async valueOf(ag: Agent) {
+    const book = this.book(ag.wallet);
+    ag.balance = await this.pub.getBalance({ address: ag.wallet }).catch(() => ag.balance);
+    let open = 0n, cost = 0n;
+    const positions: { token: Address; symbol?: string; cost: number; value: number; since: number }[] = [];
+    for (const p of book.values()) {
+      const tok = this.tokens.get(p.token);
+      cost += p.ethIn;
+      let value = 0n;
+      if (tok) { try { const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" }); value = (q * p.tokens) / (k + p.tokens); } catch { /* skip */ } }
+      open += value;
+      positions.push({ token: p.token, symbol: this.symbols.get(p.token), cost: Number(formatEther(p.ethIn)), value: Number(formatEther(value)), since: p.openedAt });
+    }
+    return { open, cost, positions, nav: Number(formatEther(ag.balance + open)) };
+  }
+
+  private async snapshot() {
+    this.lastSnapshot = Date.now();
+    const t = this.now();
+    for (const ag of this.agents.values()) {
+      try {
+        const { nav } = await this.valueOf(ag);
+        const h = this.history.get(ag.wallet) ?? [];
+        h.push({ t, v: nav });
+        while (h.length > 720) h.shift();
+        this.history.set(ag.wallet, h);
+      } catch { /* next time */ }
+    }
+  }
+
   /** Live leaderboard: each agent's value, open positions and trading PnL this week, from real trades. */
   async arena() {
     const weekStart = this.now() - WEEK;
     const rows = [];
     for (const ag of this.agents.values()) {
-      const book = this.book(ag.wallet);
-      ag.balance = await this.pub.getBalance({ address: ag.wallet }).catch(() => ag.balance);
-      let open = 0n, cost = 0n;
-      for (const p of book.values()) {
-        const tok = this.tokens.get(p.token);
-        cost += p.ethIn;
-        if (!tok) continue;
-        try { const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" }); open += (q * p.tokens) / (k + p.tokens); } catch { /* skip */ }
-      }
-      const week = this.trades.filter((x) => x.wallet === ag.wallet && x.time >= weekStart);
+      const { open, cost, positions, nav } = await this.valueOf(ag);
+      const mine = this.trades.filter((x) => x.wallet === ag.wallet);
+      const week = mine.filter((x) => x.time >= weekStart);
       const realized = this.realized.filter((x) => x.wallet === ag.wallet && x.time >= weekStart).reduce((sum, x) => sum + x.pnl, 0n);
       const pnlEth = Number(formatEther(realized + open - cost));
-      const nav = Number(formatEther(ag.balance + open));
       const base = nav - pnlEth;
+      const best = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined).sort((a, b) => b.pnlPct! - a.pnlPct!)[0];
+      const sells = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined);
       rows.push({
         id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
-        nav, cash: Number(formatEther(ag.balance)), openPositions: book.size, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
-        trades: week.length,
+        nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
+        trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,
+        biggest: best ? { symbol: best.symbol ?? best.token.slice(2, 8), pct: best.pnlPct! } : null,
+        history: [...(this.history.get(ag.wallet) ?? []), { t: this.now(), v: nav }],
+        recent: mine.slice(-30).reverse(),
       });
     }
     rows.sort((a, b) => b.pnlPct - a.pnlPct);
-    return { updatedAt: this.now(), agents: rows.map((r, i) => ({ rank: i + 1, ...r })), feed: this.trades.slice(-50).reverse() };
+    return { updatedAt: this.now(), chainId: ENV.CHAIN_ID, nft: ENV.NFT, paused: this.paused, agents: rows.map((r, i) => ({ rank: i + 1, ...r })), feed: this.trades.slice(-50).reverse() };
   }
+
 }

@@ -2,6 +2,8 @@
 const preview = process.env.PREVIEW_EXPORT === "1";
 export default {
   reactStrictMode: true,
+  // Native PNG renderer for share images (Telegram posts, previews); loaded at runtime, not bundled.
+  serverExternalPackages: ["@resvg/resvg-js"],
   // PREVIEW_EXPORT=1 builds a static copy with relative paths, for a shareable preview link.
   ...(preview ? { output: "export", assetPrefix: ".", images: { unoptimized: true } } : {}),
   webpack: (config) => {

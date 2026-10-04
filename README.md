@@ -377,6 +377,7 @@ flowchart LR
 - **Ranking metric:** weekly PnL: time-weighted return over the week (Monday 00:00 to Sunday 23:59 UTC). Deposits, withdrawals and fee income don't count as performance, and holdings are valued at sale value, so a thin token pumped by its holder doesn't inflate the score.
 <img src="docs/img/pnl-card.png" alt="An agent's PnL card" width="70%">
 
+- **Live view:** the Arena has a *Sample* view (what launch looks like) and a *Live* view with the real agents, read every 5 seconds from the trading engine.
 - **Prizes:** the top 10 eligible agents split the weekly pool (25 / 18 / 14 / 11 / 9 / 7 / 5 / 4 / 4 / 3 %), paid into the agent wallet so winnings stay with the agent. House agents are excluded from prizes.
 
 ---
@@ -485,6 +486,26 @@ Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/
 
 ---
 
+## Telegram live channel
+
+Every mint and every sale is posted to the Trenchers Telegram channel, with the Trencher's art, the
+price and (for sales) its agent. The engine posts them; plain wallet-to-wallet transfers aren't posted.
+To switch it on: create a bot with @BotFather, add it as an admin of the channel, and set
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT` (the channel's @username) on the engine service in Railway.
+
+## Engine settings
+
+| Variable | What |
+| --- | --- |
+| `RPC_URL`, `CHAIN_ID` | The chain (defaults: Robinhood Chain testnet) |
+| `NFT_ADDRESS`, `FUND_ADDRESS`, `ADAPTER_ADDRESS`, `PONS_FACTORY`, `START_BLOCK` | Contracts to follow; the setup page's *Trading* section prints these |
+| `ENGINE_KEY` | The engine wallet's private key, pasted into Railway by the team only. It can only trade within each holder's limits. |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT` | Optional: the live mints-and-sales channel |
+| `SITE_URL`, `EXPLORER_URL`, `IMAGE_BASE` | Optional: links and images used in Telegram posts |
+| `SNIPE_WAIT_SEC`, `MAX_HOLD_SEC`, `MAX_POSITIONS`, `SLIPPAGE_PCT`, `DRY_RUN` | Optional trading safety settings |
+
+The health page (`/health`) shows the engine's status, the emergency stop, the Telegram feed and its last 25 actions.
+
 ## Repository
 
 | Path | What |
@@ -495,7 +516,9 @@ Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/
 | [`web/lib/strategies.ts`](web/lib/strategies.ts) | The five house templates and the signals they need |
 | [`web/lib/custom-strategy.ts`](web/lib/custom-strategy.ts) | Guided rules: the incremental plain-English parser behind "talk to your agent", and validation |
 | [`web/components/agents/AgentChat.tsx`](web/components/agents/AgentChat.tsx) | The agent conversation: propose, apply or discard each rule |
-| [`web/lib/arena-sim.ts`](web/lib/arena-sim.ts) | The sample market and agents behind the Arena until live data is connected |
+| [`web/lib/arena-sim.ts`](web/lib/arena-sim.ts) | The sample market and agents behind the Arena's *Sample* view |
+| [`web/components/arena/LiveArena.tsx`](web/components/arena/LiveArena.tsx) | The Arena's *Live* view: real agents, trades and PnL cards from the engine's `/arena` feed |
+| [`engine/`](engine) | The trading engine (runs on Railway): rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves `/health` and `/arena`, honours the emergency stop, and posts mints and sales to Telegram. Settings are environment variables (see below). |
 | [`art/`](art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
 | [`docs/img/`](docs/img) | Images used in this README |
 
