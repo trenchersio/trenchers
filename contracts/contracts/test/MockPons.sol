@@ -15,6 +15,13 @@ contract MockPonsCurve {
     uint256 public tokenReserve;
     uint256 public maxSpend;                 // a buy above this is partly refunded (like near graduation)
     uint256 public constant FEE_BPS = 100;   // 1%
+    uint256 public trackedQuote;             // real ETH taken in by the curve
+    bool public graduated;
+    event CurveBuy(address indexed buyer, address indexed recipient, uint256 quoteIn, uint256 tokensOut, uint256 fee, uint256 tax);
+    event CurveSell(address indexed seller, address indexed recipient, uint256 tokensIn, uint256 quoteOut, uint256 fee, uint256 tax);
+
+    function getReserves() external view returns (uint256, uint256) { return (quoteReserve, tokenReserve); }
+    function setGraduated() external { graduated = true; }
 
     function init(address token_, uint256 supply, uint256 maxSpend_) external {
         token = token_; tokenReserve = supply; maxSpend = maxSpend_;
@@ -26,8 +33,10 @@ contract MockPonsCurve {
         uint256 net = spent - spent * FEE_BPS / 10_000;
         out = tokenReserve * net / (quoteReserve + net);
         require(out >= minTokensOut, "slippage");
-        quoteReserve += net; tokenReserve -= out;
+        require(!graduated, "graduated");
+        quoteReserve += net; tokenReserve -= out; trackedQuote += net;
         ERC20(token).transfer(recipient, out);
+        emit CurveBuy(msg.sender, recipient, spent, out, spent - net, 0);
         if (quoteIn > spent) { (bool ok, ) = msg.sender.call{value: quoteIn - spent}(""); require(ok, "refund"); }
     }
 
@@ -36,8 +45,10 @@ contract MockPonsCurve {
         uint256 gross = quoteReserve * tokensIn / (tokenReserve + tokensIn);
         out = gross - gross * FEE_BPS / 10_000;
         require(out >= minQuoteOut, "slippage");
-        quoteReserve -= gross; tokenReserve += tokensIn;
+        require(!graduated, "graduated");
+        quoteReserve -= gross; tokenReserve += tokensIn; trackedQuote = trackedQuote > gross ? trackedQuote - gross : 0;
         (bool ok, ) = recipient.call{value: out}(""); require(ok, "pay");
+        emit CurveSell(msg.sender, recipient, tokensIn, out, gross - out, 0);
     }
 
     receive() external payable {}
@@ -50,6 +61,12 @@ contract MockPonsFactory {
     }
     mapping(address => LaunchedToken) internal launched;
     event TokenLaunched(address indexed token, address indexed curve, address indexed deployer, address pairToken, uint256 launchConfigId, uint256 graduationThreshold);
+    event PoolGraduated(address indexed token, uint256 positionId, uint256 tokenAmount, uint256 pairTokenAmount);
+
+    function graduate(address token) external {
+        MockPonsCurve(payable(launched[token].curve)).setGraduated();
+        emit PoolGraduated(token, 1, 0, 0);
+    }
 
     /// @dev Launches a coin with an ETH curve; the curve gets some ETH so sells can pay out.
     function launch(string calldata name, uint256 maxSpend) external payable returns (address token, address curve) {

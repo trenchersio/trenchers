@@ -1,0 +1,18 @@
+{
+  "name": "trenchers-engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test:local": "tsx test/local.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
