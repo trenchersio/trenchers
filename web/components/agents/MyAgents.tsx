@@ -228,7 +228,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       {busy && (
         <div className="txbox mono" role="status">
           {busy.map((l, i) => <p key={l}>{i < busy.length - 1 ? "✓" : <span className="spin" />} {l}</p>)}
-          <p className="txbox-note">{SAMPLE_MODE ? "Sample mode: simulated, nothing is sent on-chain." : "Confirm in your wallet."}</p>
+          <p className="txbox-note">{SAMPLE_MODE ? "Sample mode: simulated, nothing is sent on-chain." : "Confirm in your wallet. It can take a minute to appear; if it says queued, open it and confirm."}</p>
         </div>
       )}
       {notice && <p className="notice">{notice}</p>}

@@ -159,7 +159,7 @@ export function LiveAgents() {
       {task && (
         <div className={`txbox mono live-task live-task-${task.phase}`} role="status">
           <p>{task.phase === "done" ? "✓" : task.phase === "error" ? "✕" : <span className="spin" />} {task.label}</p>
-          <p className="txbox-note">{task.phase === "check" ? "Checking it will go through…" : task.phase === "sign" ? "Confirm in your wallet." : task.phase === "chain" ? "Waiting for the network…" : task.phase === "done" ? "Done." : task.note}</p>
+          <p className="txbox-note">{task.phase === "check" ? "Checking it will go through…" : task.phase === "sign" ? "Confirm in your wallet. Its window can open behind the browser, and some wallets take a minute to show it: if it says queued, open it and confirm." : task.phase === "chain" ? "Waiting for the network. This can take up to a minute while your wallet catches up." : task.phase === "done" ? "Done." : task.note}</p>
         </div>
       )}
 
