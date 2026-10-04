@@ -1829,13 +1829,17 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .mint-done { margin-top: -8px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 18px; border-radius: 14px; border: 1px solid rgba(57,255,136,.45); background: rgba(57,255,136,.06); }
 .mint-done p { margin: 0; line-height: 1.55; }
 .mint-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; counter-reset: step; }
-.mint-steps li { counter-increment: step; display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
-.mint-steps li::before { content: counter(step); grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 600 12px var(--mono); color: var(--green); border: 1px solid rgba(57,255,136,.45); }
-.mint-steps b { font-size: 16px; }
-.mint-steps span { color: var(--quiet); font-size: 14px; line-height: 1.5; margin-top: 3px; }
-.mint-alt { margin: 0; color: var(--quiet); font-size: 14px; }
-.mint-alt a { color: var(--fog); text-decoration: underline; text-decoration-color: rgba(232,236,233,.35); text-underline-offset: 3px; }
-.mint-alt a:hover { color: var(--green); }
+.mint-steps li { counter-increment: step; position: relative; display: flex; flex-direction: column; gap: 0; padding: 16px 0 16px 48px; border-top: 1px solid var(--line); }
+.mint-steps li:last-child { border-bottom: 1px solid var(--line); }
+.mint-steps li::before { content: counter(step); position: absolute; left: 0; top: 15px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 600 12px var(--mono); color: var(--green); border: 1px solid rgba(57,255,136,.45); background: rgba(57,255,136,.06); }
+.mint-steps b { font-size: 16px; line-height: 28px; }
+.mint-steps span { color: var(--quiet); font-size: 14px; line-height: 1.55; max-width: 56ch; }
+.mint-alt { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--fog); transition: border-color .15s ease, transform .15s ease; }
+.mint-alt:hover, .mint-alt:focus-visible { border-color: var(--green); transform: translateY(-1px); }
+.mint-alt span { display: flex; flex-direction: column; gap: 3px; }
+.mint-alt b { font-size: 15px; }
+.mint-alt small { color: var(--quiet); font-size: 13px; }
+.mint-alt em { font-style: normal; color: var(--green); font-size: 18px; }
 .mint-recent { grid-column: 1 / -1; margin-top: 30px; }
 .mint-recent h2 { font: 700 26px var(--sans); letter-spacing: -.02em; margin: 0 0 16px; }
 .mint-recent ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }

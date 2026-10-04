@@ -178,11 +178,15 @@ export function MintPage() {
         <ol className="mint-steps">
           <li><b>Mint</b><span>Up to 10 per transaction. {STARTER_ETH} ETH of every mint is set aside for that Trencher&apos;s own agent.</span></li>
           <li><b>Awaken</b><span>One click gives it its own on-chain wallet and puts the {STARTER_ETH} ETH inside. The art turns from grey to colour.</span></li>
+          <li><b>Fund it</b><span>Top up its wallet with your own ETH any time and withdraw it again whenever you like. Soon it can also launch its own coin on Pons and earn the creator fees.</span></li>
           <li><b>Guide</b><span>Tell it how to trade in plain words and set hard limits. It trades Pons launches and climbs the Arena.</span></li>
           <li><b>Keep or sell</b><span>Its wallet, rules and track record move with the NFT, so a proven agent can be sold on OpenSea.</span></li>
         </ol>
 
-        <p className="mint-alt">Want one that&apos;s already trading? {OPENSEA_URL ? <a href={OPENSEA_URL} target="_blank" rel="noreferrer">Browse Trenchers on OpenSea</a> : "Browse Trenchers on OpenSea"}.</p>
+        <a className="mint-alt" href={OPENSEA_URL || "https://opensea.io"} target="_blank" rel="noreferrer">
+          <span><b>Want one that&apos;s already trading?</b><small>Buy a Trencher with its wallet and track record on OpenSea.</small></span>
+          <em aria-hidden="true">↗</em>
+        </a>
       </section>
 
       {recent.length > 0 && (
