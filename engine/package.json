@@ -2,6 +2,9 @@
   "name": "trenchers-engine",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "prestart": "node scripts/sync-rules.mjs",
     "start": "tsx src/main.ts",
