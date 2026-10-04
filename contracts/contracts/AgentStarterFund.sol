@@ -36,7 +36,8 @@ interface IERC6551Registry {
 ///         that reserve (e.g. what remains once marketplace fees are covered) can be released, and
 ///         only to the excess destination (the buyback vault).
 contract AgentStarterFund is Ownable, ReentrancyGuard {
-    uint256 public constant CLAIM = 0.01 ether;
+    /// @notice ETH paid into each agent wallet: half the list price. 0.01 ETH on mainnet (set at deploy, then fixed).
+    uint256 public immutable CLAIM;
     uint256 public constant FIRST_ID = 6;      // #1-#5 are house agents
     uint256 public constant LAST_ID = 2000;
     uint256 public constant ELIGIBLE = LAST_ID - FIRST_ID + 1; // 1,995
@@ -70,8 +71,11 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error NothingToRelease();
     error TransferFailed();
+    error ZeroAmount();
 
-    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, address treasury_) {
+    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, address treasury_, uint256 claim_) {
+        if (claim_ == 0) revert ZeroAmount();
+        CLAIM = claim_;
         if (owner_ == address(0) || address(nft_) == address(0) || address(registry_) == address(0) || treasury_ == address(0)) revert ZeroAddress();
         _transferOwnership(owner_);
         nft = nft_;
