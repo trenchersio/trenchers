@@ -1,10 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
-    "watchPatterns": [
-      "/engine/**"
-    ]
+    "builder": "RAILPACK"
   },
   "deploy": {
     "startCommand": "npm start",
