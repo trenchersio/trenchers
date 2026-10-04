@@ -1594,3 +1594,33 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   .live-row { grid-template-columns: 26px minmax(0, 1fr) 70px; padding: 9px 12px; }
   .live-row .col-val, .live-row .col-last { display: none; }
 }
+
+/* NFT / Agent Profile on the live contracts */
+.live-ap .panel-card { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.live-ap .panel-card h3 { margin: 0; font-size: 18px; }
+.live-ap .panel-card p { margin: 0; line-height: 1.55; }
+.live-ap .panel-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.live-ap .tn-upgrade-like { border-color: rgba(57,255,136,.45); background: radial-gradient(ellipse at top left, rgba(57,255,136,.08), transparent 70%), var(--panel); }
+.live-rule { border: 1px solid rgba(57,255,136,.35); background: rgba(57,255,136,.05); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.live-rule > span { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--green); }
+.live-rule > p { font-size: 15px; }
+.live-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.live-tpls .tn-tpl:disabled { opacity: .5; cursor: default; }
+.live-chat .chat { border: 1px solid var(--line); border-radius: 12px; }
+.live-limits { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; }
+.live-limits .muted-note { flex-basis: 100%; margin: 0; }
+.live-funds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.live-lbl { display: block; color: var(--quiet); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.live-row-in { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.live-row-in input { width: 130px; background: var(--black); border: 1px solid var(--line); border-radius: 4px; color: var(--fog); font-size: 14px; padding: 9px 10px; }
+.live-row-in input:focus { outline: none; border-color: var(--green); }
+.live-lock { border: 1px solid rgba(255,176,32,.45); background: rgba(255,176,32,.06); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.live-ap .trades a { color: inherit; text-decoration: none; }
+.live-ap .trades a:hover { color: var(--green); }
+.live-ap .ap-wallet-line a { color: inherit; }
+.live-task { margin: 0; }
+.live-task-done { border-color: rgba(57,255,136,.5); }
+.live-task-error { border-color: rgba(255,92,92,.6); color: #FF8A8A; }
+.live-version { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.live-empty-gate { margin: 40px auto; }
+@media (max-width: 700px) { .live-funds { grid-template-columns: 1fr; } .live-ap .panel-card { padding: 16px; } }

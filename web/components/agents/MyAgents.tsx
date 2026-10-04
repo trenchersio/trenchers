@@ -1,6 +1,8 @@
 "use client";
 import { AgentLinks } from "@/components/AgentLinks";
 import { PnlCardButton } from "@/components/PnlCard";
+import { LiveAgents } from "./LiveAgents";
+import { DEPLOYMENT } from "@/lib/chain";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
@@ -17,6 +19,13 @@ import {
 } from "@/lib/agents-store";
 
 export function MyAgents() {
+  const w = useWallet();
+  // A real wallet on a network with live contracts manages its real Trenchers; the demo wallet keeps the walkthrough.
+  if (w.ready && w.address && w.kind === "wallet" && DEPLOYMENT) return <LiveAgents />;
+  return <DemoAgents />;
+}
+
+function DemoAgents() {
   const w = useWallet();
   const [agents, setAgents] = useState<AgentState[]>([]);
   const [selected, setSelected] = useState<number | null>(null);

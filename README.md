@@ -517,6 +517,8 @@ The health page (`/health`) shows the engine's status, the emergency stop, the T
 | [`web/lib/custom-strategy.ts`](web/lib/custom-strategy.ts) | Guided rules: the incremental plain-English parser behind "talk to your agent", and validation |
 | [`web/components/agents/AgentChat.tsx`](web/components/agents/AgentChat.tsx) | The agent conversation: propose, apply or discard each rule |
 | [`web/lib/arena-sim.ts`](web/lib/arena-sim.ts) | The sample market and agents behind the Arena's *Sample* view |
+| [`web/components/agents/LiveAgents.tsx`](web/components/agents/LiveAgents.tsx) | The NFT / Agent Profile on the live contracts: awaken, talk to the agent and apply rules, limits, pause, deposit, instant withdraw, PnL card, opt-in wallet fixes |
+| [`web/lib/chain.ts`](web/lib/chain.ts) | Reading and writing the live contracts from the site (the connected wallet signs; every call is checked first and explained in plain words if it would fail) |
 | [`web/components/arena/LiveArena.tsx`](web/components/arena/LiveArena.tsx) | The Arena's *Live* view: real agents, trades and PnL cards from the engine's `/arena` feed |
 | [`engine/`](engine) | The trading engine (runs on Railway): rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves `/health` and `/arena`, honours the emergency stop, and posts mints and sales to Telegram. Settings are environment variables (see below). |
 | [`art/`](art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |

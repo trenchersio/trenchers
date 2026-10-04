@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { TextButton } from "@/components/TextButton";
+import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { DEFAULT_RULE, describe, parse, validate, type CustomRule } from "@/lib/custom-strategy";
 
 import type { ChatMsg } from "@/lib/agents-store";
@@ -62,7 +63,7 @@ export function AgentChat({ id, rule, chat, onChat, onApply, disabled }: {
       <div className="chat-log" ref={box}>
         {msgs.map((m, i) => (
           <div key={`${m.t}-${i}`} className={`msg msg-${m.role}`}>
-            {m.role === "agent" && <img src={`nft/${id}.webp`} alt="" width={28} height={28} className="msg-av" />}
+            {m.role === "agent" && <ArtCanvas id={id} size={28} className="msg-av" label="" />}
             <div className="msg-body">
               <p>{m.text}</p>
               {m.rule && (
