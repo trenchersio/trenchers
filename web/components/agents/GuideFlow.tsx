@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AgentChat } from "./AgentChat";
 import type { CustomRule } from "@/lib/custom-strategy";
 import type { ChatMsg } from "@/lib/agents-store";
@@ -30,6 +30,8 @@ export function GuideFlow(p: {
   arenaHref?: string;
 }) {
   const off = p.busy || !!p.locked;
+  // Picking a template only selects it; it's applied after the holder confirms.
+  const [pick, setPick] = useState<GuideTemplate | null>(null);
   const s1 = p.rule ? "done" : "now";
   const s3 = p.trading ? "done" : p.rule ? "now" : "todo";
   return (
@@ -65,14 +67,24 @@ export function GuideFlow(p: {
                 <span className="mono gf-sub">Or start from a house template</span>
                 {p.templates.map((t) => {
                   const on = p.activeTemplate === t.name;
+                  const picked = pick?.name === t.name;
                   return (
-                    <button key={t.name} type="button" role="listitem" className={`gf-tpl${on ? " on" : ""}`} disabled={off || on} onClick={() => p.onTemplate(t)} aria-pressed={on}>
+                    <button key={t.name} type="button" role="listitem" className={`gf-tpl${on ? " on" : ""}${picked ? " picked" : ""}`} disabled={off || on} onClick={() => setPick(picked ? null : t)} aria-pressed={on || picked}>
                       <span className="gf-radio" aria-hidden="true" />
                       <span className="gf-tpl-txt"><b>{t.name}</b><small>{t.text}</small></span>
-                      {on ? <span className="mono gf-tag on">Active</span> : t.house ? <span className="mono gf-tag">#{t.house}</span> : null}
+                      {on ? <span className="mono gf-tag on">Active</span> : picked ? <span className="mono gf-tag on">Selected</span> : t.house ? <span className="mono gf-tag">#{t.house}</span> : null}
                     </button>
                   );
                 })}
+                {pick && pick.name !== p.activeTemplate && (
+                  <div className="gf-confirm">
+                    <p>Apply <b>{pick.name}</b> as your agent&apos;s rule? You&apos;ll confirm it in your wallet. {p.trading ? "Your agent keeps trading, now with this rule." : "Trading stays off until you start it in step 3."}</p>
+                    <div className="gf-confirm-actions">
+                      <button type="button" className="gf-btn go" disabled={off} onClick={() => { const t = pick; setPick(null); p.onTemplate(t); }}>Apply {pick.name}</button>
+                      <button type="button" className="gf-btn ghost" onClick={() => setPick(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1663,6 +1663,11 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .gf-tpl.on { border-color: rgba(57,255,136,.6); background: rgba(57,255,136,.06); }
 .gf-radio { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 1px solid #4E5753; display: block; }
 .gf-tpl.on .gf-radio { border-color: var(--green); background: radial-gradient(circle, var(--green) 45%, transparent 50%); }
+.gf-tpl.picked { border-color: rgba(57,255,136,.45); background: rgba(57,255,136,.03); }
+.gf-tpl.picked .gf-radio { border-color: var(--green); }
+.gf-confirm { border: 1px solid rgba(57,255,136,.45); background: rgba(57,255,136,.05); border-radius: 11px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.gf-confirm p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fog); }
+.gf-confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .gf-tpl-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .gf-tpl-txt b { font-size: 14px; }
 .gf-tpl-txt small { color: var(--quiet); font-size: 12px; line-height: 1.4; }

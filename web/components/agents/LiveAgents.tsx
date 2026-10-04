@@ -202,7 +202,8 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   };
   const applyText = (text: string, label: string) => run(label, async (ph) => {
     const [p, dc] = limits();
-    await sendCall(me, { address: a.wallet!, abi: ABI.agent, functionName: "setPolicy", args: [p, dc, true, keccak256(toHex(text)), text] }, ph);
+    // Applying a rule never switches trading on by itself: that's the separate Start trading step.
+    await sendCall(me, { address: a.wallet!, abi: ABI.agent, functionName: "setPolicy", args: [p, dc, trading, keccak256(toHex(text)), text] }, ph);
   }, a.id);
   const applyRule = async (rule: CustomRule, c: ChatMsg[]) => {
     const ok = await applyText(describe(rule), `Applying rule v${(a.ruleVersion ?? 0) + 1} to Trencher #${a.id}`);
