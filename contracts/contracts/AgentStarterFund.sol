@@ -5,6 +5,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
+interface INFTNotify {
+    function notifyAwake(uint256 tokenId) external;
+}
+
 interface IERC6551Registry {
     function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId)
         external view returns (address);
@@ -112,6 +116,8 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
         (bool ok, ) = wallet.call{value: CLAIM}("");
         if (!ok) revert TransferFailed();
         emit Claimed(tokenId, msg.sender, wallet, CLAIM);
+        // Wake the NFT: its metadata switches from dormant (grey) to awake (colour).
+        try INFTNotify(address(nft)).notifyAwake(tokenId) {} catch {}
     }
 
     /// @notice ETH the fund must keep for Trenchers that have not claimed yet.

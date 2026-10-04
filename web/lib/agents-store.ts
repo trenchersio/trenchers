@@ -86,6 +86,7 @@ export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function statusOf(a: AgentState) {
   if (a.live) return { label: "In the Arena", tone: "live" as const };
-  if (a.registered) return { label: "Registered", tone: "ready" as const };
-  return { label: "Not registered", tone: "idle" as const };
+  if (a.starterClaimed) return { label: "Awake", tone: "ready" as const };
+  if (a.registered) return { label: "Registered · 0.05 to claim", tone: "ready" as const };
+  return { label: "Dormant", tone: "idle" as const };
 }

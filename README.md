@@ -176,6 +176,18 @@ Every Trencher sells for 0.1 ETH. The `RevenueSplitter` sends 51% of every prima
 
 The lock matters: without it, the NFT would effectively cost 0.05 ETH and the starter fund would be a rebate, not trading capital.
 
+### Dormant and awake: the NFT shows whether the 0.05 ETH is still inside
+
+A Trencher's metadata follows its on-chain state, so buyers always know whether the starter balance is still claimable.
+
+| State | When | Art | OpenSea traits |
+| --- | --- | --- | --- |
+| **Dormant** | Starter balance not yet claimed | Greyscale | `Status: Dormant`, `Starter ETH: 0.05 ETH claimable` |
+| **Awake** | Claimed into the agent wallet | Full colour | `Status: Awake`, `Starter ETH: Claimed` |
+| **House agent** | #1 to #5 | Full colour | `Status: House agent` |
+
+How it works: `TrenchersNFT.tokenURI` asks the `AgentStarterFund` whether the token has claimed and returns `…/dormant/{id}.json` or `…/awake/{id}.json`. Claiming emits an EIP-4906 `MetadataUpdate(tokenId)`, so OpenSea refreshes the art and traits on its own. Nothing can fake it: the state is read from the fund contract, and claiming is one-way. Both image sets and both metadata sets are built by `art/dormant.py`. A dormant Trencher carries 0.05 ETH of claimable value; an awake one carries an agent, its rules and its record instead.
+
 ### 1. Option A: agent coins
 
 From section 2 of the **NFT / Agent Profile** page (the coin launchpad), the holder fills in:

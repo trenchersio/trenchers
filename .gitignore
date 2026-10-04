@@ -9,3 +9,4 @@ art/preview/
 .next/
 web/out/
 __pycache__/
+art/out/release/images/

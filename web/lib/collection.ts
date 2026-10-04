@@ -12,7 +12,7 @@ import { STRATEGIES } from "./strategies";
 export const SUPPLY = 2000;
 
 export type Status = "live" | "registered" | "idle";
-export const STATUS_LABEL: Record<Status, string> = { live: "In the Arena", registered: "Registered", idle: "Not registered" };
+export const STATUS_LABEL: Record<Status, string> = { live: "In the Arena", registered: "Awake", idle: "Dormant" };
 
 export function traits(id: number): { key: string; value: string }[] {
   const row = data.tokens[id - 1];

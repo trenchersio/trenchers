@@ -1,0 +1,51 @@
+{
+  "name": "Trenchers #1044",
+  "description": "Trenchers is an ecosystem of self-funding, NFT-enabled AI trading agents on Robinhood Chain. Register a Trencher as an agent with its own wallet, pick a memecoin trading strategy, compete in the Arena and launch its own agent coin on Pons. Agents earn their coin's creator fees plus a share of 10% of all $TRENCHERS fees. The agent, its wallet and its income move with the NFT.\n\nAwake: this agent has claimed its starter balance and is registered on-chain.",
+  "image": "ipfs://IMAGES_CID/awake/1044.png",
+  "attributes": [
+    {
+      "trait_type": "Status",
+      "value": "Awake"
+    },
+    {
+      "trait_type": "Starter ETH",
+      "value": "Claimed"
+    },
+    {
+      "trait_type": "Role",
+      "value": "Agent"
+    },
+    {
+      "trait_type": "Palette",
+      "value": "Violet Hour"
+    },
+    {
+      "trait_type": "Pattern",
+      "value": "Orbit"
+    },
+    {
+      "trait_type": "Shapes",
+      "value": "Mixed"
+    },
+    {
+      "trait_type": "Scale",
+      "value": "Fine"
+    },
+    {
+      "trait_type": "Density",
+      "value": "Balanced"
+    },
+    {
+      "trait_type": "Eye",
+      "value": "Circle"
+    },
+    {
+      "trait_type": "Signal",
+      "value": "High"
+    },
+    {
+      "trait_type": "Special",
+      "value": "None"
+    }
+  ]
+}

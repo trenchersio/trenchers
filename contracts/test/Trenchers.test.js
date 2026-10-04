@@ -232,3 +232,28 @@ describe("AgentStarterFund", () => {
     await expect(fund.connect(safe).setExcessTo(alice.address)).to.be.revertedWithCustomError(fund, "AlreadySet");
   });
 });
+
+describe("Dormant / awake metadata", () => {
+  it("serves dormant metadata until the starter balance is claimed, then awake, and signals a refresh", async () => {
+    const { nft, safe, treasury, alice, deployer } = await deploy();
+    const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), treasury.address);
+    await fund.connect(safe).setAccount(alice.address, ethers.ZeroHash);
+    await nft.ownerMint(treasury.address, 5);
+    await nft.connect(treasury).transferFrom(treasury.address, alice.address, 6);
+    await nft.setBaseURI("ipfs://META/");
+    expect(await nft.tokenURI(6)).to.equal("ipfs://META/6.json");
+    await expect(nft.setStarterFund(await fund.getAddress())).to.emit(nft, "BatchMetadataUpdate");
+    await expect(nft.setStarterFund(alice.address)).to.be.revertedWithCustomError(nft, "AlreadySet");
+    expect(await nft.tokenURI(6)).to.equal("ipfs://META/dormant/6.json");
+    expect(await nft.tokenURI(1)).to.equal("ipfs://META/awake/1.json");
+    await expect(nft.notifyAwake(6)).to.be.revertedWithCustomError(nft, "NotStarterFund");
+    const w = await (await ethers.getContractFactory("MockAgentWallet")).deploy();
+    await registry.setWallet(6, await w.getAddress());
+    await deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther("1") });
+    await expect(fund.connect(alice).claim(6)).to.emit(nft, "MetadataUpdate").withArgs(6);
+    expect(await nft.isAwake(6)).to.equal(true);
+    expect(await nft.tokenURI(6)).to.equal("ipfs://META/awake/6.json");
+    expect(await nft.tokenURI(7)).to.equal("ipfs://META/dormant/7.json");
+  });
+});

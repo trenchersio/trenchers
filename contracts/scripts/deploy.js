@@ -74,6 +74,8 @@ async function main() {
   console.log(`AgentAccount impl ${await impl.getAddress()}`);
   console.log(`AgentFeeDistributor ${await dist.getAddress()}`);
   await (await config.propose(3 /* StarterFund */, await fund.getAddress())).wait();
+  // Metadata follows each Trencher: dormant (grey, 0.05 ETH claimable) until claimed, then awake.
+  await (await nft.setStarterFund(await fund.getAddress())).wait();
   if (process.env.ENGINE) await (await config.propose(0, process.env.ENGINE)).wait();
   if (process.env.SWAP_ADAPTER) await (await config.propose(1, process.env.SWAP_ADAPTER)).wait();
   if (await hasCode(PONS_ROUTER)) await (await config.propose(2, PONS_ROUTER)).wait();

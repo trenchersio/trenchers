@@ -250,7 +250,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           {a.starterClaimed ? (
             <p>Claimed. {STARTER_ETH} ETH from the Agent Starter Fund is in the agent wallet, ready to launch its coin or trade.</p>
           ) : (<>
-            <p>Half of what you paid for your Trencher is set aside for its agent. Claim it once and it goes straight into the agent wallet. It stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn.</p>
+            <p>Half of what you paid for your Trencher is set aside for its agent. Claim it once and it goes straight into the agent wallet. It stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn. Claiming also <b>awakens the NFT</b>: its art turns from grey to full colour on OpenSea and its traits change from Dormant to Awake.</p>
             <TextButton onClick={claimStarter} disabled={!a.registered || !!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
           </>)}
         </Step>

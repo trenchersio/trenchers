@@ -6,6 +6,10 @@ import "@limitbreak/creator-token-standards/src/access/OwnableBasic.sol";
 import "@limitbreak/creator-token-standards/src/programmable-royalties/BasicRoyalties.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+interface IStarterFundView {
+    function claimed(uint256 tokenId) external view returns (bool);
+}
+
 /// @title Trenchers
 /// @notice 2,000 trading agents on Robinhood Chain. Each token can be registered as an on-chain
 ///         trading agent through its ERC-6551 token-bound account.
@@ -26,13 +30,23 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     string private _contractURI;
     bool public metadataFrozen;
 
+    /// @notice The Agent Starter Fund. Once set, metadata follows each token's state:
+    ///         dormant (grey art, 0.05 ETH still claimable) until its starter balance is claimed,
+    ///         then awake (full colour). House agents #1-#5 are always awake.
+    address public starterFund;
+
     event BaseURIChanged(string baseURI);
     event MetadataFrozen();
+    event StarterFundSet(address fund);
+    /// @dev EIP-4906 single-token refresh, emitted when a Trencher wakes up.
+    event MetadataUpdate(uint256 tokenId);
 
     error SoldOut();
     error ZeroQuantity();
     error Frozen();
     error ZeroAddress();
+    error AlreadySet();
+    error NotStarterFund();
 
     constructor(
         address royaltyReceiver_,
@@ -83,6 +97,29 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
         emit BatchMetadataUpdate(1, MAX_SUPPLY);
     }
 
+    /// @notice One-time link to the Agent Starter Fund, which switches metadata to dormant/awake.
+    function setStarterFund(address fund) external onlyOwner {
+        if (starterFund != address(0)) revert AlreadySet();
+        if (fund == address(0)) revert ZeroAddress();
+        starterFund = fund;
+        emit StarterFundSet(fund);
+        emit BatchMetadataUpdate(1, MAX_SUPPLY);
+    }
+
+    /// @notice Called by the starter fund when a Trencher's starter balance is claimed, so
+    ///         marketplaces refresh it from dormant to awake.
+    function notifyAwake(uint256 tokenId) external {
+        if (msg.sender != starterFund) revert NotStarterFund();
+        emit MetadataUpdate(tokenId);
+    }
+
+    /// @notice True once the Trencher's agent has claimed its starter balance (house agents always).
+    function isAwake(uint256 tokenId) public view returns (bool) {
+        if (tokenId <= TEAM_RESERVE) return true;
+        return starterFund != address(0) && IStarterFundView(starterFund).claimed(tokenId);
+    }
+
+    /// @notice Freezing locks the base URI; the dormant/awake switch keeps working, by design.
     function freezeMetadata() external onlyOwner {
         metadataFrozen = true;
         emit MetadataFrozen();
@@ -106,7 +143,8 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireMinted(tokenId);
         if (bytes(_baseTokenURI).length == 0) return _preRevealURI;
-        return string.concat(_baseTokenURI, tokenId.toString(), ".json");
+        if (starterFund == address(0)) return string.concat(_baseTokenURI, tokenId.toString(), ".json");
+        return string.concat(_baseTokenURI, isAwake(tokenId) ? "awake/" : "dormant/", tokenId.toString(), ".json");
     }
 
     function contractURI() external view returns (string memory) {
