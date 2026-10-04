@@ -34,3 +34,9 @@ contract MockMarket {
 }
 
 interface IERC721Like { function transferFrom(address from, address to, uint256 id) external; }
+
+/// @dev Stands in for a Safe in launch tests (only what the launch page reads).
+contract MockSafe {
+    function getThreshold() external pure returns (uint256) { return 2; }
+    function getOwners() external pure returns (address[] memory o) { o = new address[](2); o[0] = address(0x5a1); o[1] = address(0x5a2); }
+}

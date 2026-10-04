@@ -467,7 +467,7 @@ wallets are *not* upgradeable by default: nobody, including the team, can change
 If a real bug is ever found in the wallet code, the team can offer a fixed version, and each holder
 chooses whether to upgrade (same address, balance and track record; switch back any time).
 
-The full table, and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md). The internal security review and what was fixed is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+The full table, and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md). The internal security review and what was fixed is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md), and the mainnet launch runbook in [docs/LAUNCH.md](docs/LAUNCH.md).
 
 ## Built on Robinhood Chain
 

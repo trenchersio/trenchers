@@ -4,7 +4,7 @@
 set -euo pipefail
 OUT="${1:-../preview-site}"
 # Route handlers (testnet metadata) can't be statically exported; set them aside for the preview build.
-mv app/testnet-meta /tmp/testnet-meta-aside && trap 'mv /tmp/testnet-meta-aside app/testnet-meta' EXIT
+mv app/testnet-meta /tmp/testnet-meta-aside && mv app/meta /tmp/meta-aside && trap "mv /tmp/testnet-meta-aside app/testnet-meta; mv /tmp/meta-aside app/meta" EXIT
 rm -rf out && PREVIEW_EXPORT=1 NEXT_PUBLIC_PREVIEW=1 NEXT_TELEMETRY_DISABLED=1 npx next build >/dev/null
 rm -rf "$OUT" && mkdir -p "$OUT"
 cp -r out/_next "$OUT/nx" && cp -r out/brand out/nft out/nft-hd out/icon.png out/opengraph-image.png "$OUT/"

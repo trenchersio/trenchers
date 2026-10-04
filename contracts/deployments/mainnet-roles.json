@@ -8,8 +8,10 @@
   "engine": "0xe15fa7c18a86Df13A4C57224b02C0e639d709f2F",
   "roles": {
     "safe": "Owns every contract; receives the dev share; signs team actions (2 signatures)",
-    "deployer": "Deploys the contracts once on launch day, then hands ownership to the Safe and keeps no power",
+    "deployer": "Deploys the contracts once on launch day (then hands ownership to the Safe) and holds house agents #1-5",
     "guardian": "Can only press the emergency stop (AgentConfig.pause)",
     "engine": "The trading engine's wallet; may only trade inside each holder's limits"
-  }
+  },
+  "houseAgents": "0x447D8F97c39df3d6FCAB8a02A54986283e818210",
+  "devShare": "0xF928e1A70d0CBf092193D4E3FE4F68edfffe4b10"
 }

@@ -20,20 +20,22 @@ export function parseId(file: string) {
   return Number.isInteger(id) && id >= 1 && id <= 2000 ? id : null;
 }
 
-export function metadata(id: number, awake: boolean) {
+/** Token metadata. Mainnet (served at trenchers.io/meta/) uses the 0.01 ETH starter and PNG art for marketplaces. */
+export function metadata(id: number, awake: boolean, net: "testnet" | "mainnet" = "testnet") {
+  const STARTER = net === "mainnet" ? "0.01" : TESTNET_STARTER_ETH;
   const t = traits as { keys: string[]; values: string[][]; rows: number[][] };
   const attrs = t.keys.map((k, i) => ({ trait_type: k, value: t.values[i][t.rows[id - 1][i]] })).filter((a) => a.value !== undefined);
   const house = id <= 5;
   const status = house ? "House agent" : awake ? "Awake" : "Dormant";
-  const starter = house ? "Not applicable" : awake ? "Claimed" : `${TESTNET_STARTER_ETH} ETH claimable`;
+  const starter = house ? "Not applicable" : awake ? "Claimed" : `${STARTER} ETH claimable`;
   const intro = "Trenchers: self-funding trading agents with an identity. 2,000 AI trading agents on Robinhood Chain; every agent is an NFT with its own wallet, rules and track record. Buy one, train it, climb the Arena and sell your proven strategy.";
   const state = house ? "House agent, run by the team in public."
     : awake ? "Awake: this agent has its wallet and has claimed its starter balance."
-    : `Dormant: this Trencher's agent has not been awakened. Its ${TESTNET_STARTER_ETH} ETH starter balance is still claimable by the holder, straight into the agent wallet.`;
+    : `Dormant: this Trencher's agent has not been awakened. Its ${STARTER} ETH starter balance is still claimable by the holder, straight into the agent wallet.`;
   return {
     name: `Trenchers #${id}`,
-    description: `${intro}\n\n${state}\n\nTestnet collection.`,
-    image: `${SITE}/testnet-meta/img/${awake || house ? "awake" : "dormant"}/${id}.svg`,
+    description: net === "mainnet" ? `${intro}\n\n${state}` : `${intro}\n\n${state}\n\nTestnet collection.`,
+    image: net === "mainnet" ? `${SITE}/meta/img/${awake || house ? "awake" : "dormant"}/${id}.png` : `${SITE}/testnet-meta/img/${awake || house ? "awake" : "dormant"}/${id}.svg`,
     external_url: `${SITE}/collection#${id}`,
     attributes: [{ trait_type: "Status", value: status }, { trait_type: "Starter ETH", value: starter }, ...attrs],
   };

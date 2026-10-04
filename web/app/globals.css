@@ -1720,3 +1720,20 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .lc-tip em { font-style: normal; }
 .lc-tip small { color: var(--quiet); }
 .lc-empty { display: grid; place-items: center; color: var(--quiet); font-size: 12px; border: 1px dashed var(--line); border-radius: 8px; }
+
+/* Mainnet launch console */
+.launch .launch-kv { grid-template-columns: 1fr; }
+.launch .launch-kv div { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+.launch .launch-kv div:last-child { border-bottom: 0; }
+.launch .launch-kv dt { margin: 0; }
+.launch .tn-log { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: 12.5px; }
+@media (max-width: 640px) { .launch .launch-kv div { grid-template-columns: 1fr; gap: 2px; } }
+.launch .launch-kv dd { overflow-wrap: anywhere; }
+.launch .launch-kv a { color: inherit; }
+.launch-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.launch-checks small { color: var(--quiet); }
+.launch-steps { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 16px; font-size: 12px; color: var(--quiet); }
+.launch-steps li.done { color: var(--green); }
+.launch-safe { display: flex; flex-direction: column; gap: 12px; padding-left: 18px; }
+.launch-safe li { display: flex; flex-direction: column; gap: 4px; }
+.launch-safe .mono { font-size: 12px; color: var(--quiet); overflow-wrap: anywhere; }
