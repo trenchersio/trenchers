@@ -22,6 +22,12 @@ contract MockPonsCurve {
 
     function getReserves() external view returns (uint256, uint256) { return (quoteReserve, tokenReserve); }
     function setGraduated() external { graduated = true; }
+    /// @dev Graduation: hands the curve's ETH and tokens to the factory, which seeds the pool.
+    function drain(address payable to) external returns (uint256 eth, uint256 tokens) {
+        graduated = true;
+        tokens = ERC20(token).balanceOf(address(this)); ERC20(token).transfer(to, tokens);
+        eth = address(this).balance; (bool ok, ) = to.call{value: eth}(""); require(ok);
+    }
 
     function init(address token_, uint256 supply, uint256 maxSpend_) external {
         token = token_; tokenReserve = supply; maxSpend = maxSpend_;
@@ -63,10 +69,18 @@ contract MockPonsFactory {
     event TokenLaunched(address indexed token, address indexed curve, address indexed deployer, address pairToken, uint256 launchConfigId, uint256 graduationThreshold);
     event PoolGraduated(address indexed token, uint256 positionId, uint256 tokenAmount, uint256 pairTokenAmount);
 
+    MockPoolManager public immutable poolManager = new MockPoolManager();
+    address public constant memeHook = address(0x40c0);
+
+    /// @dev Moves the curve's reserves into a Uniswap-v4-style pool and marks the launch PoolCreated (2).
     function graduate(address token) external {
-        MockPonsCurve(payable(launched[token].curve)).setGraduated();
-        emit PoolGraduated(token, 1, 0, 0);
+        (uint256 eth, uint256 tokens) = MockPonsCurve(payable(launched[token].curve)).drain(payable(address(this)));
+        ERC20(token).transfer(address(poolManager), tokens);
+        poolManager.seed{value: eth}(token, tokens, launched[token].poolFee, launched[token].tickSpacing, memeHook);
+        launched[token].phase = 2;
+        emit PoolGraduated(token, 1, tokens, eth);
     }
+    receive() external payable {}
 
     /// @dev Launches a coin with an ETH curve; the curve gets some ETH so sells can pay out.
     function launch(string calldata name, uint256 maxSpend) external payable returns (address token, address curve) {
@@ -86,3 +100,89 @@ contract MockPonsFactory {
 
     function getLaunchedToken(address token) external view returns (LaunchedToken memory) { return launched[token]; }
 }
+
+
+/// @dev A tiny stand-in for Uniswap v4's PoolManager: one ETH/token constant-product pool per token,
+///      exact-input swaps only, the unlock / settle / take flow, a 1% LP fee and a 1% hook tax on the
+///      output (like Pons's meme hook). Enough to test the adapter's accounting, not v4's math.
+contract MockPoolManager {
+    struct Key { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }
+    struct Params { bool zeroForOne; int256 amountSpecified; uint160 sqrtPriceLimitX96; }
+    struct Pool { uint256 eth; uint256 tokens; uint24 fee; int24 tickSpacing; address hooks; }
+    mapping(address => Pool) public pools;
+    bool internal unlocked;
+    int256 internal ethDelta;     // + owed to the caller, - owed by the caller
+    int256 internal tokenDelta;
+    address internal tokenOfSwap;
+    address internal synced; uint256 internal syncedBalance;
+
+    mapping(bytes32 => address) internal tokenOfSlot;
+
+    function seed(address token, uint256 tokens, uint24 fee, int24 tickSpacing, address hooks) external payable {
+        pools[token] = Pool(msg.value, tokens, fee, tickSpacing, hooks);
+        bytes32 poolId = keccak256(abi.encode(Key(address(0), token, fee, tickSpacing, hooks)));
+        tokenOfSlot[keccak256(abi.encodePacked(poolId, bytes32(uint256(6))))] = token;
+    }
+
+    /// @dev Like v4's extsload on a pool's state slot: sqrtPriceX96 in the low 160 bits.
+    function extsload(bytes32 slot) external view returns (bytes32) {
+        address token = tokenOfSlot[slot];
+        if (token == address(0)) return bytes32(0);
+        return bytes32(uint256(sqrtPriceX96(token)));
+    }
+
+    function unlock(bytes calldata data) external returns (bytes memory r) {
+        require(!unlocked, "locked"); unlocked = true;
+        r = IUnlockCb(msg.sender).unlockCallback(data);
+        require(ethDelta == 0 && tokenDelta == 0, "CurrencyNotSettled");
+        unlocked = false;
+    }
+
+    function swap(Key memory key, Params memory p, bytes calldata) external returns (int256 delta) {
+        require(unlocked, "not unlocked");
+        require(key.currency0 == address(0), "eth pool");
+        Pool storage pool = pools[key.currency1];
+        require(pool.tokens > 0 && key.fee == pool.fee && key.tickSpacing == pool.tickSpacing && key.hooks == pool.hooks, "no pool");
+        require(p.amountSpecified < 0, "exact in only");
+        uint256 amountIn = uint256(-p.amountSpecified);
+        uint256 inNet = amountIn - amountIn / 100;
+        tokenOfSwap = key.currency1;
+        int128 a0; int128 a1;
+        if (p.zeroForOne) { // ETH in, tokens out
+            uint256 out = pool.tokens * inNet / (pool.eth + inNet);
+            pool.eth += amountIn; pool.tokens -= out;
+            out -= out / 100; // hook tax on the output
+            a0 = -int128(int256(amountIn)); a1 = int128(int256(out));
+        } else { // tokens in, ETH out
+            uint256 out = pool.eth * inNet / (pool.tokens + inNet);
+            pool.tokens += amountIn; pool.eth -= out;
+            out -= out / 100;
+            a0 = int128(int256(out)); a1 = -int128(int256(amountIn));
+        }
+        ethDelta += a0; tokenDelta += a1;
+        delta = (int256(a0) << 128) | int256(uint256(uint128(a1)));
+    }
+
+    function sync(address currency) external { synced = currency; syncedBalance = currency == address(0) ? 0 : ERC20(currency).balanceOf(address(this)); }
+
+    function settle() external payable returns (uint256 paid) {
+        if (synced == address(0)) { paid = msg.value; ethDelta += int256(paid); }
+        else { paid = ERC20(synced).balanceOf(address(this)) - syncedBalance; tokenDelta += int256(paid); synced = address(0); }
+    }
+
+    function take(address currency, address to, uint256 amount) external {
+        if (currency == address(0)) { ethDelta -= int256(amount); (bool ok, ) = to.call{value: amount}(""); require(ok, "take"); }
+        else { tokenDelta -= int256(amount); ERC20(currency).transfer(to, amount); }
+    }
+
+    /// @dev Pool price as Uniswap's sqrtPriceX96 (token1 per token0), like StateLibrary.getSlot0 reads it.
+    function sqrtPriceX96(address token) public view returns (uint160) {
+        Pool memory pool = pools[token];
+        return uint160(_sqrt(pool.tokens * (1 << 96) / pool.eth * (1 << 96)));
+    }
+    function _sqrt(uint256 x) internal pure returns (uint256 y) { if (x == 0) return 0; uint256 z = (x + 1) / 2; y = x; while (z < y) { y = z; z = (x / z + z) / 2; } }
+
+    receive() external payable {}
+}
+
+interface IUnlockCb { function unlockCallback(bytes calldata data) external returns (bytes memory); }

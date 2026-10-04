@@ -42,6 +42,7 @@ export const RULE_APPLIED = parseAbiItem("event RuleApplied(uint32 indexed versi
 export const ADAPTER_ABI = parseAbi([
   "function buy(address token, uint256 minTokensOut) payable returns (uint256)",
   "function sell(address token, uint256 tokensIn, uint256 minEthOut) returns (uint256)",
+  "function poolPrice(address token) view returns (uint160)",
   "event Bought(address indexed agent, address indexed token, uint256 ethIn, uint256 tokensOut, uint256 refund)",
   "event Sold(address indexed agent, address indexed token, uint256 tokensIn, uint256 ethOut)",
 ]);

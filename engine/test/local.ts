@@ -158,6 +158,19 @@ async function main() {
   const trades6 = engine.trades.filter((t) => t.agent === 6).length;
   check(trades6 === 2, `paused agent #6 did not buy the next launch (${trades6} trades total)`);
 
+  // Graduation: #7 switches to "buy every coin that graduates"; MOON graduates to its Uniswap v4 pool.
+  const gradRule = "Buys every launch that graduates on Pons. Sells after 6 seconds.";
+  await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.05"), parseEther("0.5"), true, keccak256(toHex(gradRule)), gradRule], 0n, alice);
+  await sleep(3000);
+  const g0 = engine.trades.filter((t) => t.agent === 7).length;
+  await call(pons, "MockPonsFactory", "graduate", [coin]);
+  await sleep(5000);
+  const gBuy = engine.trades.filter((t) => t.agent === 7).slice(g0);
+  check(gBuy[0]?.side === "buy", `agent #7 bought MOON on its Uniswap pool right after it graduated (${gBuy.map((t) => t.side).join(",")})`);
+  await sleep(10000);
+  const gAll = engine.trades.filter((t) => t.agent === 7).slice(g0);
+  check(gAll.length === 2 && gAll[1].side === "sell" && (await read<bigint>(coin, "MockPonsToken", "balanceOf", [w7])) === 0n, "agent #7 sold it on the pool after its hold, ETH back in its wallet");
+
   // Telegram: a mint of 2 and a sale on a marketplace are posted; a plain transfer is not.
   const market = await deploy("MockMarket");
   const n0 = posts.length;

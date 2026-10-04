@@ -214,7 +214,6 @@ export class Engine {
         ag.understood = parsed?.understood ?? [];
         ag.ruleWarning = !parsed ? "No rule text found"
           : parsed.rule.trigger === "dexupdate" ? "The DexScreener signal isn't supported yet, so this agent won't buy"
-          : parsed.rule.trigger === "graduation" ? "Graduated coins aren't tradable yet, so this agent won't buy"
           : parsed.missed ? "Part of this rule wasn't understood; the agent follows the parts listed"
           : null;
         if (ag.ruleWarning) this.log(`Agent #${ag.id} rule warning: ${ag.ruleWarning}`);
@@ -301,7 +300,7 @@ export class Engine {
   // ------------------------------------------------------------------ signals → entries
 
   private signal(kind: CustomRule["trigger"], tok: Token, t: number, extra?: { before: number; after: number }) {
-    if (tok.graduated && kind !== "graduation") return;
+    if (tok.graduated && kind !== "graduation" && kind !== "devsell") return; // curve signals stop once a coin graduates
     for (const ag of this.agents.values()) {
       const r = ag.rule;
       // Live/limits are checked again with fresh on-chain data when the entry is due (runEntries).
@@ -311,11 +310,31 @@ export class Engine {
         if (!extra || !(extra.before < th && extra.after >= th)) continue;
       }
       if (kind === "mcap") continue; // evaluated in runEntries with fresh reserves (see below)
-      if (kind === "graduation") { this.log(`Agent #${ag.id}: ${tok.token} graduated to Uniswap v4; graduated coins aren't tradable through the curve yet, skipped`); continue; }
+
       const notBefore = kind === "launch" ? tok.launchedAt + ENV.SNIPE_WAIT_SEC : t;
       this.entries.push({ wallet: ag.wallet, token: tok.token, notBefore, reason: kind });
     }
     if (kind === "mcap") this.mcapCheck(tok, t);
+  }
+
+  /** Coins a buy of `eth` would get now (before slippage): on the bonding curve, or on the v4 pool once graduated. */
+  private async quoteBuy(tok: Token, eth: bigint): Promise<bigint> {
+    if (!tok.graduated) {
+      const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
+      return (k * eth) / (q + eth);
+    }
+    const sp = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolPrice", args: [tok.token] });
+    return ((eth * sp * sp) >> 192n) * 98n / 100n; // pool price, less the pool fee and the hook's tax
+  }
+
+  /** ETH a sale of `coins` would bring now (before slippage). */
+  private async quoteSell(tok: Token, coins: bigint): Promise<bigint> {
+    if (!tok.graduated) {
+      const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
+      return (q * coins) / (k + coins);
+    }
+    const sp = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolPrice", args: [tok.token] });
+    return sp > 0n ? ((coins << 192n) / (sp * sp)) * 98n / 100n : 0n;
   }
 
   private mcapPrev = new Map<Address, number>();
@@ -342,7 +361,7 @@ export class Engine {
     if (due.length) await this.refreshAgents(false, new Set(due.map((e) => e.wallet)));
     for (const e of due) {
       const ag = this.agents.get(e.wallet); const tok = this.tokens.get(e.token);
-      if (!ag || !tok || tok.graduated) continue;
+      if (!ag || !tok) continue;
       if (!this.tradable(ag)) { if (Date.now() - (this.skipNoted.get(ag.wallet) ?? 0) > 3_600_000) { this.skipNoted.set(ag.wallet, Date.now()); this.log(`Agent #${ag.id} skipped ${tok.token}: ${!ag.live || ag.setBy !== ag.owner ? "trading is switched off" : ag.perTrade === 0n ? "no per-trade limit set" : "no rule"}`); } continue; }
       const r = ag.rule!;
       if (ag.coin && ag.coin === tok.token) continue;
@@ -368,8 +387,7 @@ export class Engine {
       if (spent + size > ag.dailyCap) size = ag.dailyCap > spent ? ag.dailyCap - spent : 0n;
       if (size > ag.balance) size = ag.balance;
       if (size < 10_000_000_000n) return; // below 0.00000001 ETH: nothing worth trading
-      const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
-      const expected = (k * size) / (q + size);
+      const expected = await this.quoteBuy(tok, size);
       const minOut = (expected * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
       const data = encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, minOut] });
       this.log(`Agent #${ag.id} BUY ${tok.token} for ${formatEther(size)} ETH (${reason})`);
@@ -384,15 +402,12 @@ export class Engine {
     for (const [w, book] of this.positions) {
       const ag = this.agents.get(w); if (!ag) continue;
       for (const p of book.values()) {
-        const tok = this.tokens.get(p.token); if (!tok || tok.graduated) continue;
+        const tok = this.tokens.get(p.token); if (!tok) continue;
         const r = ag.rule;
         const age = ts - p.openedAt;
         let why: string | null = null;
         let value = 0n;
-        try {
-          const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
-          value = (q * p.tokens) / (k + p.tokens);
-        } catch { continue; }
+        try { value = await this.quoteSell(tok, p.tokens); } catch { continue; }
         const pnl = p.ethIn > 0n ? Number(value - p.ethIn) / Number(p.ethIn) * 100 : 0;
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
         else if (r?.exit === "tpsl" && r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
@@ -446,7 +461,7 @@ export class Engine {
       const tok = this.tokens.get(p.token);
       cost += p.ethIn;
       let value = 0n;
-      if (tok) { try { const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" }); value = (q * p.tokens) / (k + p.tokens); } catch { /* skip */ } }
+      if (tok) { try { value = await this.quoteSell(tok, p.tokens); } catch { /* skip */ } }
       open += value;
       positions.push({ token: p.token, symbol: this.symbols.get(p.token), cost: Number(formatEther(p.ethIn)), value: Number(formatEther(value)), since: p.openedAt });
     }

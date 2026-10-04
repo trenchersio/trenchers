@@ -94,4 +94,37 @@ describe("PonsAdapter", () => {
     await acct.connect(engine).trade(E("0.1"), buyData(t));
     await expect(acct.connect(engine).trade(E("0.1"), buyData(t))).to.be.revertedWithCustomError(acct, "OverDailyCap");
   });
+
+  it("after a coin graduates, trades it on its Uniswap v4 pool instead of the curve", async () => {
+    const { engine, acct, adapter, pons, launch, buyData, sellData } = await setup();
+    const { token } = await launch("GRAD");
+    const t = await token.getAddress(), w = await acct.getAddress();
+    // the agent holds some from before graduation
+    await acct.connect(engine).trade(E("0.05"), buyData(t));
+    const held = await token.balanceOf(w);
+    await pons.graduate(t);
+    expect(await adapter.venue(t)).to.equal(2n);
+    expect(await adapter.poolPrice(t)).to.be.gt(0n);
+    // it can still sell what it held: ETH comes back to the agent
+    await acct.connect(engine).approveRouter(t, held);
+    const before = await ethers.provider.getBalance(w);
+    await acct.connect(engine).trade(0, sellData(t, held));
+    expect(await token.balanceOf(w)).to.equal(0n);
+    expect((await ethers.provider.getBalance(w)) - before).to.be.gt(E("0.045"));
+    // and buy again, on the pool
+    await expect(acct.connect(engine).trade(E("0.02"), buyData(t))).to.changeEtherBalance(w, -E("0.02"));
+    expect(await token.balanceOf(w)).to.be.gt(0n);
+    expect(await ethers.provider.getBalance(await adapter.getAddress())).to.equal(0n);
+    expect(await token.balanceOf(await adapter.getAddress())).to.equal(0n);
+  });
+
+  it("enforces slippage on graduated coins, and nobody can call its pool callback from outside", async () => {
+    const { engine, acct, adapter, pons, launch, buyData } = await setup();
+    const { token } = await launch("SLIP");
+    const t = await token.getAddress();
+    await pons.graduate(t);
+    const err = adapter.interface.encodeErrorResult("Slippage", []);
+    await expect(acct.connect(engine).trade(E("0.01"), buyData(t, E("1000000000")))).to.be.revertedWithCustomError(acct, "CallFailed").withArgs(err);
+    await expect(adapter.unlockCallback("0x")).to.be.revertedWithCustomError(adapter, "NotPoolManager");
+  });
 });
