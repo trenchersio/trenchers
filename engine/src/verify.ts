@@ -100,12 +100,22 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   await expect("settings: starter fund", () => read(d.config, "AgentConfig", "starterFund"), d.fund);
   await expect("settings: agent wallet code", () => read(d.config, "AgentConfig", "accountLogic"), d.logic);
   await expect("settings: one wallet code version so far", () => read(d.config, "AgentConfig", "accountLogicVersions"), 1n);
-  await expect("settings: no coin launcher yet", () => read(d.config, "AgentConfig", "launcher"), zeroAddress);
   await expect("settings: guardian", () => read(d.config, "AgentConfig", "guardian"), R.guardian);
   await expect("settings: sealed (48h notice for any change)", () => read(d.config, "AgentConfig", "isSealed"), true);
   await expect("settings: not paused", () => read(d.config, "AgentConfig", "paused"), false);
   await expect("settings: 48h notice", () => read(d.config, "AgentConfig", "TIMELOCK"), 172800n);
-  for (let k = 0; k <= 4; k++) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
+  // Key 2 (coin launcher) may be pending or set: it must be the AgentCoinLauncher, built for the real Pons factory.
+  const [pendingLauncher, launcherEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [2]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
+  const liveLauncher = await read<Address>(d.config, "AgentConfig", "launcher").catch(() => zeroAddress);
+  const launcherAddr = !same(pendingLauncher, zeroAddress) ? pendingLauncher : liveLauncher;
+  if (!same(launcherAddr, zeroAddress)) {
+    const onchain = await c.getCode({ address: launcherAddr });
+    const built = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.AgentCoinLauncher.abi, bytecode: ART.AgentCoinLauncher.bytecode, args: [L.ponsFactory] }) }).then((r) => r.data).catch(() => null);
+    checks.push({ what: "coin launcher: code is AgentCoinLauncher for the real Pons factory", ok: !!built && same(built, onchain), value: launcherAddr });
+    if (!built || !same(built, onchain)) problems.push(`coin launcher ${launcherAddr} is not the expected AgentCoinLauncher`);
+    checks.push({ what: same(pendingLauncher, zeroAddress) ? "coin launcher: live" : "coin launcher: proposed, can be switched on at", ok: true, value: same(pendingLauncher, zeroAddress) ? "yes" : new Date(Number(launcherEta) * 1000).toISOString() });
+  }
+  for (const k of [0, 1, 3, 4]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet
   await expect("agent wallet: original code", () => read(d.impl, "TrenchersAgentWallet", "ORIGINAL_VERSION"), d.logic);
   await expect("agent wallet: runs the original code", () => read(d.impl, "TrenchersAgentWallet", "agentLogic"), d.logic);
