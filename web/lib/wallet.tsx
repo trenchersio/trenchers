@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { BridgeApi, BridgeState } from "./wallet-bridge";
+import { getWallet, revoke } from "./eip6963";
 
 /**
  * One place for "who is connected". A real browser wallet comes from wagmi; the demo wallet is a
@@ -18,7 +19,8 @@ type Wallet = {
   hasBrowserWallet: boolean;
   connecting: boolean;
   error: string | null;
-  connectBrowser: () => Promise<boolean>;
+  connectBrowser: (rdns?: string) => Promise<boolean>;
+  pendingWallet: string | null;
   connectDemo: () => void;
   disconnect: () => void;
   modalOpen: boolean;
@@ -55,17 +57,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const onApi = useCallback((a: BridgeApi) => { api.current = a; waiters.current.splice(0).forEach((f) => f(a)); }, []);
   const getApi = () => api.current ? Promise.resolve(api.current) : new Promise<BridgeApi>((r) => { waiters.current.push(r); setBridgeOn(true); });
 
-  const connectBrowser = useCallback(async () => {
-    setError(null);
+  const [pendingWallet, setPendingWallet] = useState<string | null>(null);
+  const connectBrowser = useCallback(async (rdns?: string) => {
+    setError(null); setPendingWallet(rdns ?? "injected");
     try {
       const a = await getApi();
-      await a.connect();
-      write(BROWSER_KEY, "1"); write(DEMO_KEY, null); setDemo(null);
+      await a.connect(rdns);
+      setPendingWallet(null);
+      write(BROWSER_KEY, rdns ?? "injected"); write(DEMO_KEY, null); setDemo(null);
       setModalOpen(false);
       return true;
     } catch (e) {
       const msg = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message;
-      setError(/not found|provider/i.test(msg) ? "No browser wallet found. Install MetaMask or Rabby, or try the demo wallet." : msg);
+      setError(/not found|provider/i.test(msg) ? "No browser wallet found. Install MetaMask or Phantom, or try the demo wallet." : /rejected|denied/i.test(msg) ? "Connection cancelled in the wallet." : msg);
+      setPendingWallet(null);
       return false;
     }
   }, []);
@@ -77,7 +82,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
-    if (bridge.address) api.current?.disconnect();
+    if (bridge.address) {
+      api.current?.disconnect();
+      const w = getWallet(read(BROWSER_KEY));
+      if (w) revoke(w.provider);
+    }
     write(BROWSER_KEY, null); write(DEMO_KEY, null); setDemo(null);
   }, [bridge.address]);
 
@@ -87,7 +96,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{
       ready, address: ready ? address : null, kind: ready ? kind : null, hasBrowserWallet, connecting: bridge.connecting, error,
-      connectBrowser, connectDemo, disconnect, modalOpen,
+      connectBrowser, connectDemo, disconnect, modalOpen, pendingWallet,
       openModal: () => { setError(null); setModalOpen(true); setBridgeOn(true); }, closeModal: () => setModalOpen(false),
     }}>
       {children}

@@ -41,6 +41,17 @@ describe("TrenchersNFT", () => {
     await expect(nft.ownerMint(treasury.address, 1)).to.be.revertedWithCustomError(nft, "SoldOut");
   });
 
+  it("lets the owner raise the cap for a later round, never lower it", async () => {
+    const { nft, treasury, alice } = await deploy();
+    for (let i = 0; i < 5; i++) await nft.ownerMint(treasury.address, 399);
+    await expect(nft.connect(alice).raiseMaxSupply(3000)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(nft.raiseMaxSupply(2000)).to.be.revertedWithCustomError(nft, "ZeroQuantity");
+    await nft.raiseMaxSupply(3000);
+    await nft.ownerMint(treasury.address, 10);
+    expect(await nft.totalSupply()).to.equal(2010n);
+    expect(await nft.isAwake(2005)).to.equal(true); // later rounds have no starter balance in this fund
+  });
+
   it("only the owner can mint or administer", async () => {
     const { nft, alice } = await deploy();
     await expect(nft.connect(alice).ownerMint(alice.address, 1)).to.be.revertedWith("Ownable: caller is not the owner");

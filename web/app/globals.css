@@ -1456,3 +1456,18 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   .tn-kv div:nth-child(2) { border-right: 0; }
   .tn-kv div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 }
+.tn-spacer { flex: 1; }
+.tn-acct img { border-radius: 5px; }
+/* wallet picker */
+.wp-list { display: flex; flex-direction: column; gap: 8px; }
+.wp-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; background: #0b0d0c; border: 1px solid var(--line); border-radius: 11px; color: var(--fog); font: 500 15px/1 var(--sans); text-decoration: none; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.wp-item:hover:not(:disabled) { border-color: rgba(57,255,136,.6); background: #101412; }
+.wp-item:disabled { opacity: .6; cursor: progress; }
+.wp-ico { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+.wp-ico-txt { display: grid; place-items: center; background: #1b201e; color: var(--green); font: 700 14px/1 var(--mono); }
+.wp-name { flex: 1; }
+.wp-go { color: var(--quiet); font-size: 12px; }
+.wp-empty { color: var(--quiet); margin: 0 0 10px; }
+.wallet-opt-col { flex-direction: column; align-items: stretch !important; gap: 12px; }
+.tn-fix { border: 1px solid rgba(255,196,0,.45); background: rgba(255,196,0,.06); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.tn .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }

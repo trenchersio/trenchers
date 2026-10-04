@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { TextButton } from "./TextButton";
 import { useWallet } from "@/lib/wallet";
 import { chain } from "@/lib/constants";
+import { WalletPicker } from "./WalletPicker";
 
 export function ConnectModal() {
   const w = useWallet();
@@ -21,12 +22,12 @@ export function ConnectModal() {
           <TextButton onClick={w.closeModal}>Close</TextButton>
         </div>
         <div className="modal-body">
-          <div className="wallet-opt">
+          <div className="wallet-opt wallet-opt-col">
             <div>
               <h3>Browser wallet</h3>
-              <p>MetaMask, Rabby or any wallet extension, on {chain.name}.</p>
+              <p>Pick the wallet you want to use, on {chain.name}.</p>
             </div>
-            <TextButton onClick={w.connectBrowser} disabled={w.connecting}>{w.connecting ? "Check your wallet" : "Connect"}</TextButton>
+            <WalletPicker onPick={(x) => w.connectBrowser(x.info.rdns)} pending={w.pendingWallet} />
           </div>
           <div className="wallet-opt">
             <div>

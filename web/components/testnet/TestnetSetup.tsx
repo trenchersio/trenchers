@@ -1,12 +1,14 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import {
-  createPublicClient, createWalletClient, custom, formatEther, keccak256, parseEther, toHex, zeroHash,
+  createPublicClient, createWalletClient, custom, fallback, formatEther, http, keccak256, parseEther, toHex, zeroHash,
   type Abi, type Address, type EIP1193Provider, type Hash, type PublicClient, type WalletClient,
 } from "viem";
 import { robinhoodTestnet } from "viem/chains";
 import artifacts from "@/lib/testnet/artifacts.json";
 import { TESTNET_DEPLOYMENT } from "@/lib/testnet/deployment";
+import { chooseAccount, revoke, waitForWallet, type InjectedWallet } from "@/lib/eip6963";
+import { WalletPicker } from "@/components/WalletPicker";
 
 /**
  * Testnet console: deploys the whole Trenchers system from the connected wallet, mints a test
@@ -31,12 +33,42 @@ type Dep = {
 };
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
-const eth = () => (typeof window !== "undefined" ? (window as unknown as { ethereum?: EIP1193Provider }).ethereum : undefined);
+const WALLET_KEY = "trenchers-wallet-rdns";
+const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string };
   return (x.shortMessage ?? x.message ?? String(e)).split("\n")[0];
 };
+/** Plain-English reasons for the contracts' custom errors, shown before the wallet even opens. */
+const REASONS: Record<string, string> = {
+  SoldOut: "The shop is empty: nothing left to buy. Mint more Trenchers into the shop with the team wallet (step 1).",
+  WrongPrice: "The price doesn't match: a test Trencher costs exactly 0.002 ETH.",
+  TreasuryCannotClaim: "The shop wallet can't awaken Trenchers. Use your buyer wallet.",
+  NotHolder: "Only the wallet that owns this Trencher can do that. Switch to that wallet in MetaMask.",
+  AlreadyClaimed: "This Trencher is already awake.",
+  Underfunded: "The starter fund doesn't hold enough ETH yet. Buy a Trencher first: half of the price funds it.",
+  NotOpen: "Awakening isn't open yet: the setup didn't finish. Continue the setup in step 1 with the team wallet.",
+  NotEligible: "House agents (#1 to #5) don't have a starter balance to claim.",
+  StarterLocked: "That amount includes the locked starter balance. You can only withdraw what you deposited yourself.",
+  TooEarly: "Not yet: a withdrawal can be completed 10 minutes after the request.",
+  NoWithdrawal: "Request a withdrawal first, then wait 10 minutes.",
+  OwnableUnauthorizedAccount: "Only the team wallet that deployed the contracts can do that.",
+  ZeroQuantity: "Enter how many to mint (at least 1).",
+};
+export function reason(e: unknown): string {
+  let cur = e as { name?: string; data?: { errorName?: string }; cause?: unknown; shortMessage?: string; message?: string; walk?: unknown } | undefined;
+  for (let i = 0; cur && i < 8; i++) {
+    const n = cur.data?.errorName;
+    if (n) return REASONS[n] ?? (/transfer|validator|operator/i.test(n) ? "The NFT's transfer rules blocked this transfer. Send me this error name: " + n : `The contract refused: ${n}.`);
+    cur = cur.cause as typeof cur;
+  }
+  const t = errText(e);
+  if (/insufficient funds/i.test(t)) return "Not enough test ETH in this wallet for this transaction plus its fee.";
+  if (/user rejected|denied/i.test(t)) return "Cancelled in the wallet.";
+  return t;
+}
+
 const loadDep = (): Dep => {
   if (TESTNET_DEPLOYMENT) return { ...TESTNET_DEPLOYMENT, done: ["all"] } as Dep;
   try { const d = JSON.parse(localStorage.getItem(STORE) || "null"); if (d?.chainId === chain.id) return d; } catch {}
@@ -52,51 +84,89 @@ export function TestnetSetup() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ supply: bigint; available: bigint; fund: bigint } | null>(null);
+  const [stats, setStats] = useState<{ supply: bigint; available: bigint; fund: bigint; validator: Address } | null>(null);
   const [mintCount, setMintCount] = useState("95");
   const [mine, setMine] = useState<number[] | null>(null);
   const [pons, setPons] = useState<boolean | null>(null);
   const [paste, setPaste] = useState("");
   const [tick, setTick] = useState(0);
-  const [hasWallet, setHasWallet] = useState(true);
+  const [wallet, setWallet] = useState<InjectedWallet | null>(null);
+  const [picker, setPicker] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const prov = wallet?.provider ?? null;
 
-  useEffect(() => { setDep(loadDep()); setHasWallet(!!eth()); }, []);
+  useEffect(() => { setDep(loadDep()); }, []);
 
   const clients = useCallback((): { wallet: WalletClient; pub: PublicClient } => {
-    const p = eth();
-    if (!p) throw new Error("No browser wallet found. Open this page in a browser with MetaMask or Rabby.");
+    if (!prov) throw new Error("Connect a wallet first.");
     return {
-      wallet: createWalletClient({ chain, transport: custom(p) }),
-      pub: createPublicClient({ chain, transport: custom(p) }) as PublicClient,
+      wallet: createWalletClient({ chain, transport: custom(prov) }),
+      pub: createPublicClient({ chain, transport: fallback([custom(prov), http()]) }) as PublicClient,
     };
-  }, []);
+  }, [prov]);
 
   const refreshAccount = useCallback(async () => {
-    const p = eth(); if (!p) return;
-    const accs = (await p.request({ method: "eth_accounts" })) as Address[];
-    const id = Number(await p.request({ method: "eth_chainId" }));
+    if (!prov) { setAccount(null); setChainOk(false); setBalance(null); return; }
+    const accs = (await prov.request({ method: "eth_accounts" })) as Address[];
+    const id = Number(await prov.request({ method: "eth_chainId" }));
     setAccount(accs[0] ?? null);
     setChainOk(id === chain.id);
-    if (accs[0] && id === chain.id) setBalance(await clients().pub.getBalance({ address: accs[0] }));
+    if (accs[0] && id === chain.id) setBalance(await clients().pub.getBalance({ address: accs[0] }).catch(() => null));
     else setBalance(null);
-  }, [clients]);
+  }, [prov, clients]);
+
+  // Reconnect quietly to the wallet used last time (no popup).
+  useEffect(() => {
+    let rdns: string | null = null;
+    try { rdns = localStorage.getItem(WALLET_KEY); } catch {}
+    if (!rdns) { setRestoring(false); return; }
+    waitForWallet(rdns).then(async (w) => {
+      if (w) {
+        const accs = (await w.provider.request({ method: "eth_accounts" }).catch(() => [])) as Address[];
+        if (accs.length) setWallet(w);
+      }
+      setRestoring(false);
+    });
+  }, []);
 
   useEffect(() => {
-    const p = eth(); if (!p) return;
+    if (!prov) { refreshAccount(); return; }
     refreshAccount();
-    const on = () => { refreshAccount(); setTick((t) => t + 1); };
-    p.on?.("accountsChanged", on); p.on?.("chainChanged", on);
-    return () => { p.removeListener?.("accountsChanged", on); p.removeListener?.("chainChanged", on); };
-  }, [refreshAccount]);
+    const onAcc = (a: unknown) => { if (Array.isArray(a) && a.length === 0) { disconnect(); return; } refreshAccount(); setTick((t) => t + 1); };
+    const onChain = () => { refreshAccount(); setTick((t) => t + 1); };
+    prov.on?.("accountsChanged", onAcc as never); prov.on?.("chainChanged", onChain as never);
+    return () => { prov.removeListener?.("accountsChanged", onAcc as never); prov.removeListener?.("chainChanged", onChain as never); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prov]);
 
-  const connect = async () => {
-    setError(null);
-    try { await eth()?.request({ method: "eth_requestAccounts" }); await refreshAccount(); } catch (e) { setError(errText(e)); }
+  const connectWith = async (w: InjectedWallet) => {
+    setError(null); setPending(w.info.rdns);
+    try {
+      await w.provider.request({ method: "eth_requestAccounts" });
+      try { localStorage.setItem(WALLET_KEY, w.info.rdns); } catch {}
+      setWallet(w); setPicker(false);
+      const id = Number(await w.provider.request({ method: "eth_chainId" }));
+      if (id !== chain.id) await switchNetwork(w.provider);
+    } catch (e) { setError(reason(e)); }
+    setPending(null);
   };
 
-  const switchNetwork = async () => {
+  const disconnect = async () => {
+    if (prov) await revoke(prov);
+    try { localStorage.removeItem(WALLET_KEY); } catch {}
+    setWallet(null); setAccount(null); setChainOk(false); setBalance(null); setMine(null);
+  };
+
+  const switchAccount = async () => {
+    if (!prov) return;
     setError(null);
-    const p = eth(); if (!p) return;
+    try { await chooseAccount(prov); await refreshAccount(); setTick((t) => t + 1); } catch (e) { setError(reason(e)); }
+  };
+
+  const switchNetwork = async (target?: EIP1193Provider) => {
+    setError(null);
+    const p = target ?? prov; if (!p) return;
     const hex = toHex(chain.id);
     try {
       await p.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
@@ -109,7 +179,7 @@ export function TestnetSetup() {
             rpcUrls: [chain.rpcUrls.default.http[0]], blockExplorerUrls: [EXPLORER],
           }] });
         } catch (e2) { setError(errText(e2)); }
-      } else setError(errText(e));
+      } else setError(reason(e));
     }
     await refreshAccount();
   };
@@ -134,8 +204,15 @@ export function TestnetSetup() {
     if (!r.contractAddress) throw new Error(`${label}: no contract address in the receipt.`);
     return r.contractAddress;
   };
-  const write = (label: string, address: Address, name: Name, functionName: string, args: unknown[] = [], value?: bigint) =>
-    sendTx(label, (w, from) => w.writeContract({ address, abi: A(name), functionName, args, account: from, chain, value }));
+  const write = async (label: string, address: Address, name: Name, functionName: string, args: unknown[] = [], value?: bigint) => {
+    if (!account) throw new Error("Connect your wallet first.");
+    // Dry run first: if it would fail, say why in plain words instead of opening the wallet.
+    try { await clients().pub.simulateContract({ address, abi: A(name), functionName, args, account, value }); }
+    catch (e) { throw new Error(reason(e)); }
+    return sendTx(label, (w, from) => w.writeContract({ address, abi: A(name), functionName, args, account: from, chain, value }));
+  };
+  const send = (label: string, to: Address, value: bigint) =>
+    sendTx(label, (w, from) => w.sendTransaction({ to, value, account: from, chain }));
   const read = async <T,>(address: Address, name: Name, functionName: string, args: unknown[] = []) =>
     (await clients().pub.readContract({ address, abi: A(name), functionName, args })) as T;
 
@@ -160,8 +237,14 @@ export function TestnetSetup() {
     { key: "seller", label: "Count shop sales as first sales", run: async (d) => { await write("Count shop sales as first sales", d.splitter!, "RevenueSplitter", "setPrimarySeller", [d.sale]); return {}; } },
     { key: "starterDest", label: "Send the 50% to the starter fund", run: async (d) => { await write("Send the 50% to the starter fund", d.splitter!, "RevenueSplitter", "proposeDestination", [3, d.fund]); return {}; } },
     { key: "baseUri", label: "Point the NFT at trenchers.io metadata", run: async (d) => { await write("Point the NFT at trenchers.io metadata", d.nft!, "TrenchersNFT", "setBaseURI", [META]); return {}; } },
+    { key: "noValidator", label: "Allow the test shop to transfer (testnet only)", run: async (d) => {
+      const v = await read<Address>(d.nft!, "TrenchersNFT", "getTransferValidator");
+      if (v !== ZERO) await write("Allow the test shop to transfer (testnet only)", d.nft!, "TrenchersNFT", "setTransferValidator", [ZERO]);
+      return {};
+    } },
   ];
-  const deployed = dep.done.includes("all") || STEPS.every((s) => dep.done.includes(s.key));
+  // "noValidator" was added later: older deployments count as deployed and get a fix-up button instead.
+  const deployed = dep.done.includes("all") || STEPS.filter((s) => s.key !== "noValidator").every((s) => dep.done.includes(s.key));
   const ready = deployed && !!dep.nft && !!dep.sale && !!dep.fund;
 
   const runDeploy = async () => {
@@ -176,7 +259,7 @@ export function TestnetSetup() {
         d = { ...d, ...patch, done: [...d.done, s.key] };
         setDep(d); saveDep(d);
       }
-    } catch (e) { setError(errText(e)); patchLast({ state: "err" }); }
+    } catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
     setBusy(false); await refreshAccount(); setTick((t) => t + 1);
   };
 
@@ -186,15 +269,23 @@ export function TestnetSetup() {
     try {
       const n = Math.max(1, Math.min(200, Number(mintCount) || 0));
       await write(`Mint ${n} Trenchers into the shop`, dep.nft, "TrenchersNFT", "ownerMint", [dep.sale, BigInt(n)]);
-    } catch (e) { setError(errText(e)); patchLast({ state: "err" }); }
+    } catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
     setBusy(false); setTick((t) => t + 1); refreshAccount();
+  };
+
+  const fixValidator = async () => {
+    if (!dep.nft) return;
+    setBusy(true); setError(null);
+    try { await write("Allow the test shop to transfer (testnet only)", dep.nft, "TrenchersNFT", "setTransferValidator", [ZERO]); }
+    catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
+    setBusy(false); setTick((t) => t + 1);
   };
 
   const buy = async () => {
     if (!dep.sale) return;
     setBusy(true); setError(null);
     try { await write("Buy a Trencher (0.002 ETH)", dep.sale, "TestnetSale", "buy", [], PRICE); }
-    catch (e) { setError(errText(e)); patchLast({ state: "err" }); }
+    catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
     setBusy(false); setTick((t) => t + 1); refreshAccount();
   };
 
@@ -206,7 +297,8 @@ export function TestnetSetup() {
       try {
         const [supply, available] = await Promise.all([read<bigint>(dep.nft!, "TrenchersNFT", "totalSupply"), read<bigint>(dep.sale!, "TestnetSale", "available")]);
         const fund = await clients().pub.getBalance({ address: dep.fund! });
-        if (live) setStats({ supply, available, fund });
+        const validator = await read<Address>(dep.nft!, "TrenchersNFT", "getTransferValidator");
+        if (live) setStats({ supply, available, fund, validator });
         if (account) {
           const ids = Array.from({ length: Number(supply) }, (_, i) => i + 1);
           const owners: (string | null)[] = [];
@@ -218,7 +310,7 @@ export function TestnetSetup() {
         }
         const code = await clients().pub.getCode({ address: PONS_ROUTER });
         if (live) setPons(!!code && code !== "0x");
-      } catch (e) { if (live) setError(errText(e)); }
+      } catch (e) { if (live) setError(reason(e)); }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,7 +324,7 @@ export function TestnetSetup() {
       const d = JSON.parse(paste);
       if (d.chainId !== chain.id || !d.nft || !d.sale || !d.fund) throw new Error("That doesn't look like a Trenchers testnet deployment code.");
       const nd: Dep = { ...d, done: ["all"] }; setDep(nd); saveDep(nd); setPaste(""); setTick((t) => t + 1);
-    } catch (e) { setError(errText(e)); }
+    } catch (e) { setError(reason(e)); }
   };
 
   return (
@@ -245,13 +337,21 @@ export function TestnetSetup() {
 
       <section className="tn-card">
         <h2><span className="tn-n mono">0</span>Your wallet</h2>
-        {!hasWallet ? <p className="notice">No browser wallet found. Open this page in Chrome or Brave with MetaMask or Rabby installed, or in the MetaMask app&apos;s browser.</p> : (
+        {!account ? (
           <div className="tn-row">
-            {!account ? <button type="button" className="tn-btn" onClick={connect}>Connect wallet</button> : (
-              <span className="mono tn-acct"><i className={`dot${chainOk ? "" : " dot-demo"}`} />{short(account)}{balance !== null && <> · {Number(formatEther(balance)).toFixed(5)} ETH</>}</span>
-            )}
-            {account && !chainOk && <button type="button" className="tn-btn" onClick={switchNetwork}>Switch to Robinhood testnet</button>}
-            {account && chainOk && <span className="mono tn-ok">✓ Robinhood Chain Testnet</span>}
+            <button type="button" className="tn-btn tn-primary" onClick={() => setPicker(true)} disabled={restoring}>{restoring ? "Reconnecting…" : "Connect wallet"}</button>
+            <span className="tn-hint">MetaMask, Phantom, Rabby or any browser wallet.</span>
+          </div>
+        ) : (
+          <div className="tn-row">
+            <span className="mono tn-acct">
+              {wallet?.info.icon ? <img src={wallet.info.icon} alt="" width={18} height={18} /> : <i className={`dot${chainOk ? "" : " dot-demo"}`} />}
+              {short(account)}{balance !== null && <> · {Number(formatEther(balance)).toFixed(5)} ETH</>}
+            </span>
+            {chainOk ? <span className="mono tn-ok">✓ Robinhood Chain Testnet</span> : <button type="button" className="tn-btn tn-primary" onClick={() => switchNetwork()}>Switch to Robinhood testnet</button>}
+            <span className="tn-spacer" />
+            <button type="button" className="tn-btn" onClick={switchAccount}>Switch account</button>
+            <button type="button" className="tn-btn" onClick={disconnect}>Disconnect</button>
           </div>
         )}
       </section>
@@ -261,6 +361,12 @@ export function TestnetSetup() {
         {deployed ? (
           <>
             <p className="tn-done">✓ Deployed{dep.owner ? <> by <span className="mono">{short(dep.owner)}</span></> : null}. {stats && <>Minted <b>{stats.supply.toString()}</b> (5 house agents + {(stats.supply - 5n).toString()} for sale), <b>{stats.available.toString()}</b> left in the shop, starter fund holds <b>{Number(formatEther(stats.fund)).toFixed(5)} ETH</b>.</>}</p>
+            {stats && stats.validator !== ZERO && (
+              <div className="tn-fix">
+                <p><b>One more step:</b> Limit Break&apos;s marketplace transfer rules are switched on, and they stop the test shop from handing out Trenchers. Switch them off for testnet (on mainnet they stay on, so OpenSea enforces the 5% royalty).</p>
+                {isOwner ? <button type="button" className="tn-btn tn-primary" onClick={fixValidator} disabled={busy}>Allow the test shop to transfer</button> : <span className="tn-hint">Switch to the team wallet to do this.</span>}
+              </div>
+            )}
             {isOwner && (
               <div className="tn-row">
                 <label className="mono tn-lbl">Mint into the shop<input className="tn-in" value={mintCount} onChange={(e) => setMintCount(e.target.value)} inputMode="numeric" /></label>
@@ -292,7 +398,8 @@ export function TestnetSetup() {
         <h2><span className="tn-n mono">2</span>Buy a Trencher <small className="mono">buyer wallet</small></h2>
         <p>Switch MetaMask to your second wallet, then buy. The shop sends the next Trencher to you; half the price goes straight into the Agent Starter Fund, waiting for your agent.</p>
         <div className="tn-row">
-          <button type="button" className="tn-btn tn-primary" onClick={buy} disabled={busy || !ready || !chainOk || isOwner}>Buy for 0.002 ETH</button>
+          <button type="button" className="tn-btn tn-primary" onClick={buy} disabled={busy || !ready || !chainOk || isOwner || stats?.available === 0n}>Buy for 0.002 ETH</button>
+          {stats && <span className="tn-hint">{stats.available === 0n ? "The shop is empty: mint Trenchers into it with the team wallet first (step 1)." : `${stats.available.toString()} left in the shop.`}</span>}
           {isOwner && <span className="tn-hint">This is the team wallet. Switch to your buyer wallet to buy (the team wallet can&apos;t claim starter ETH).</span>}
         </div>
       </section>
@@ -301,10 +408,22 @@ export function TestnetSetup() {
         <h2><span className="tn-n mono">3</span>Your Trenchers</h2>
         {mine === null ? <p className="tn-hint">Connect a wallet to see your Trenchers.</p> : mine.length === 0 ? <p className="tn-hint">This wallet has no Trenchers yet. Buy one above.</p> : (
           <div className="tn-grid">
-            {mine.map((id) => <TokenCard key={`${id}-${tick}`} id={id} dep={dep} account={account!} write={write} read={read} getBalance={(a) => clients().pub.getBalance({ address: a })} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} pons={pons} />)}
+            {mine.map((id) => <TokenCard key={`${id}-${tick}`} id={id} dep={dep} account={account!} write={write} send={send} read={read} getBalance={(a) => clients().pub.getBalance({ address: a })} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} pons={pons} />)}
           </div>
         )}
       </section>
+
+      {picker && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !pending && setPicker(false)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="tn-pick">
+            <div className="modal-head"><h2 id="tn-pick">Choose a wallet</h2><button type="button" className="tbtn" onClick={() => setPicker(false)}>Close</button></div>
+            <div className="modal-body">
+              <WalletPicker onPick={connectWith} pending={pending} />
+              {error && <p className="modal-error">{error}</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {(logs.length > 0 || error) && (
         <section className="tn-card tn-log">
@@ -327,8 +446,8 @@ export function TestnetSetup() {
 type WriteFn = (label: string, address: Address, name: Name, functionName: string, args?: unknown[], value?: bigint) => Promise<unknown>;
 type ReadFn = <T>(address: Address, name: Name, functionName: string, args?: unknown[]) => Promise<T>;
 
-function TokenCard({ id, dep, account, write, read, getBalance, onDone, setError, busy, setBusy, pons }: {
-  id: number; dep: Dep; account: Address; write: WriteFn; read: ReadFn; getBalance: (a: Address) => Promise<bigint>;
+function TokenCard({ id, dep, account, write, send, read, getBalance, onDone, setError, busy, setBusy, pons }: {
+  id: number; dep: Dep; account: Address; write: WriteFn; send: (label: string, to: Address, value: bigint) => Promise<unknown>; read: ReadFn; getBalance: (a: Address) => Promise<bigint>;
   onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void; pons: boolean | null;
 }) {
   const [s, setS] = useState<{ awake: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: bigint; wd?: { amount: bigint; readyAt: bigint } } | null>(null);
@@ -353,24 +472,20 @@ function TokenCard({ id, dep, account, write, read, getBalance, onDone, setError
           if (w[1] > 0n) wd = { amount: w[1], readyAt: w[2] };
         } catch { /* house agents may not have a wallet yet */ }
         setS({ awake, wallet, bal, locked, free, rules, wd });
-      } catch (e) { setError(errText(e)); }
+      } catch (e) { setError(reason(e)); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null);
-    try { await fn(); } catch (e) { setError(errText(e)); }
+    try { await fn(); } catch (e) { setError(reason(e)); }
     setBusy(false); onDone();
   };
   const awaken = () => act(() => write(`Awaken Trencher #${id} (+0.001 ETH)`, dep.fund!, "AgentStarterFund", "claim", [BigInt(id)]));
   const deposit = () => act(async () => {
     const v = parseEther(dep_ || "0");
-    const p = (window as unknown as { ethereum: EIP1193Provider }).ethereum;
-    const w = createWalletClient({ chain, transport: custom(p) });
-    const pub = createPublicClient({ chain, transport: custom(p) });
-    const hash = await w.sendTransaction({ to: s!.wallet!, value: v, account, chain });
-    await pub.waitForTransactionReceipt({ hash });
+    await send(`Deposit into #${id}`, s!.wallet!, v);
   });
   const requestWd = () => act(() => write(`Request withdrawal from #${id}`, s!.wallet!, "TrenchersAgentAccount", "requestWithdrawal", [parseEther(wdAmt || "0")]));
   const doWd = () => act(() => write(`Withdraw from #${id}`, s!.wallet!, "TrenchersAgentAccount", "withdraw"));

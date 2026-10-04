@@ -6,7 +6,7 @@ import { wagmiConfig } from "./config";
 
 /** Loaded on demand by WalletProvider: the only place wagmi runs. */
 export type BridgeState = { address: string | null; connecting: boolean };
-export type BridgeApi = { connect: () => Promise<void>; disconnect: () => void };
+export type BridgeApi = { connect: (rdns?: string) => Promise<void>; disconnect: () => void };
 
 export function WalletBridge({ onState, onApi }: { onState: (s: BridgeState) => void; onApi: (a: BridgeApi) => void }) {
   const [client] = useState(() => new QueryClient());
@@ -26,8 +26,8 @@ function Inner({ onState, onApi }: { onState: (s: BridgeState) => void; onApi: (
   useEffect(() => { onState({ address: account.address ?? null, connecting: isPending }); }, [account.address, isPending, onState]);
   useEffect(() => {
     onApi({
-      connect: async () => {
-        const c = connectors[0];
+      connect: async (rdns?: string) => {
+        const c = (rdns && connectors.find((x) => x.id === rdns || (x as { rdns?: string }).rdns === rdns)) || connectors.find((x) => x.id === "injected") || connectors[0];
         if (!c) throw new Error("No browser wallet found.");
         await connectAsync({ connector: c });
       },
