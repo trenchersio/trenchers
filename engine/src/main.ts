@@ -21,13 +21,14 @@ async function loop() {
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
+  const path = (req.url ?? "/").split("?")[0];
   try {
-    if (req.url === "/health" || req.url === "/") {
+    if (path === "/health" || path === "/") {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
       res.end(JSON.stringify({ ok: healthy, status: healthy ? "running" : status, block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, recent }, null, 2));
-    } else if (req.url === "/arena") {
+    } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));
     } else { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); }
