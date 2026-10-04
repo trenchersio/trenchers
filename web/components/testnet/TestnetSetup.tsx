@@ -603,14 +603,22 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
   );
 }
 
-/** Old test agent wallets (first testnet version) used a two-step, 10-minute withdrawal. This gets that ETH back. */
+/** Old test agent wallets (first testnet version) used a two-step, 10-minute withdrawal. This finds them and gets the deposits back. */
 const OLD_ABI = parseAbi([
   "function withdrawable() view returns (uint256)",
   "function withdrawal() view returns (address requestedBy, uint128 amount, uint64 readyAt)",
   "function requestWithdrawal(uint128 amount)",
   "function withdraw()",
   "function owner() view returns (address)",
+  "function totalSupply() view returns (uint256)",
+  "function ownerOf(uint256) view returns (address)",
+  "function agentWallet(uint256) view returns (address)",
 ]);
+/** First-version test deployments on Robinhood testnet (NFT, starter fund). */
+const OLD_DEPLOYMENTS: { nft: Address; fund: Address }[] = [
+  { nft: "0x5Ee3841dB960D0cd67Fffd67d69738f5AcAAab31", fund: "0xe4532032Ed78dE5270bbe29aB8522315AD91Cdb9" },
+];
+type OldWallet = { id: number; wallet: Address; bal: bigint; free: bigint; req: bigint; readyAt: number };
 
 function Rescue({ account, clients, sendTx, setError }: {
   account: Address;
@@ -618,57 +626,70 @@ function Rescue({ account, clients, sendTx, setError }: {
   sendTx: (label: string, fn: (w: WalletClient, from: Address) => Promise<Hash>) => Promise<unknown>;
   setError: (s: string | null) => void;
 }) {
-  const [addr, setAddr] = useState("");
-  const [info, setInfo] = useState<{ bal: bigint; free: bigint; req: bigint; readyAt: number; owner: Address } | null>(null);
+  const [list, setList] = useState<OldWallet[] | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [tick, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  const load = async () => {
-    setError(null); setInfo(null);
-    try {
-      const a = addr.trim() as Address;
+  useEffect(() => {
+    let live = true;
+    (async () => {
       const pub = clients().pub;
-      const [bal, free, w, owner] = await Promise.all([
-        pub.getBalance({ address: a }),
-        pub.readContract({ address: a, abi: OLD_ABI, functionName: "withdrawable" }),
-        pub.readContract({ address: a, abi: OLD_ABI, functionName: "withdrawal" }),
-        pub.readContract({ address: a, abi: OLD_ABI, functionName: "owner" }),
-      ]);
-      setInfo({ bal, free, req: w[1], readyAt: Number(w[2]) * 1000, owner });
-    } catch { setError("That address isn't an old (10-minute) test agent wallet, or it can't be read right now."); }
-  };
-  const request = async () => {
-    if (!info) return;
-    try { await sendTx(`Requesting ${Number(formatEther(info.free))} ETH from the old agent wallet`, (w, from) => w.writeContract({ address: addr.trim() as Address, abi: OLD_ABI, functionName: "requestWithdrawal", args: [info.free], account: from, chain })); await load(); }
+      const found: OldWallet[] = [];
+      for (const d of OLD_DEPLOYMENTS) {
+        try {
+          const supply = Number(await pub.readContract({ address: d.nft, abi: OLD_ABI, functionName: "totalSupply" }));
+          for (let id = 6; id <= supply; id++) {
+            const owner = await pub.readContract({ address: d.nft, abi: OLD_ABI, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => null);
+            if (owner?.toLowerCase() !== account.toLowerCase()) continue;
+            const wallet = await pub.readContract({ address: d.fund, abi: OLD_ABI, functionName: "agentWallet", args: [BigInt(id)] });
+            const code = await pub.getCode({ address: wallet });
+            if (!code || code === "0x") continue;
+            const [bal, free, w] = await Promise.all([
+              pub.getBalance({ address: wallet }),
+              pub.readContract({ address: wallet, abi: OLD_ABI, functionName: "withdrawable" }),
+              pub.readContract({ address: wallet, abi: OLD_ABI, functionName: "withdrawal" }),
+            ]);
+            found.push({ id, wallet, bal, free, req: w[1], readyAt: Number(w[2]) * 1000 });
+          }
+        } catch { /* not on this network */ }
+      }
+      if (live) setList(found);
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, tick]);
+
+  if (!list || list.length === 0) return null;
+  const request = async (o: OldWallet) => {
+    try { await sendTx(`Requesting ${Number(formatEther(o.free))} ETH from old Trencher #${o.id}`, (w, from) => w.writeContract({ address: o.wallet, abi: OLD_ABI, functionName: "requestWithdrawal", args: [o.free], account: from, chain })); }
     catch (e) { setError(reason(e)); }
+    setTick((t) => t + 1);
   };
-  const withdraw = async () => {
-    try { await sendTx("Withdrawing from the old agent wallet", (w, from) => w.writeContract({ address: addr.trim() as Address, abi: OLD_ABI, functionName: "withdraw", account: from, chain })); await load(); }
+  const withdraw = async (o: OldWallet) => {
+    try { await sendTx(`Withdrawing ${Number(formatEther(o.req))} ETH from old Trencher #${o.id}`, (w, from) => w.writeContract({ address: o.wallet, abi: OLD_ABI, functionName: "withdraw", account: from, chain })); }
     catch (e) { setError(reason(e)); }
+    setTick((t) => t + 1);
   };
-  const mine = info && info.owner.toLowerCase() === account.toLowerCase();
-  const wait = info ? Math.max(0, Math.ceil((info.readyAt - now) / 1000)) : 0;
-  const goodReq = info && info.req > 0n && info.req <= info.free;
 
   return (
     <section className="tn-card">
-      <details className="tn-details">
-        <summary className="mono">Get ETH back from an old test agent wallet (first testnet version)</summary>
-        <div className="tn-col" style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-          <p>Paste the agent wallet address of a Trencher from the first test deployment. Its own deposits can come back in two steps, 10 minutes apart (the new version is instant). The starter balance stays locked.</p>
-          <div className="tn-row"><input className="tn-in tn-wide mono" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x… agent wallet" /><button type="button" className="tn-btn" onClick={load}>Check</button></div>
-          {info && (
-            <>
-              <p className="mono tn-small">Balance {Number(formatEther(info.bal))} ETH · withdrawable {Number(formatEther(info.free))} ETH{info.req > 0n ? ` · requested ${Number(formatEther(info.req))} ETH` : ""}</p>
-              {!mine ? <p className="tn-hint">Switch to the wallet that owns this Trencher.</p> : info.free === 0n ? <p className="tn-hint">Nothing withdrawable: only the locked starter balance is left.</p> : goodReq ? (
-                <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={withdraw} disabled={wait > 0}>{wait > 0 ? `Withdraw in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, "0")}` : `Withdraw ${Number(formatEther(info.req))} ETH`}</button></div>
-              ) : (
-                <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={request}>Step 1: request {Number(formatEther(info.free))} ETH</button><span className="tn-hint">Then wait 10 minutes and come back here.</span></div>
-              )}
-            </>
-          )}
-        </div>
-      </details>
+      <h2>Your Trenchers from the first test version</h2>
+      <p>These used a two-step withdrawal: request, wait 10 minutes, withdraw (the new version is instant). Your deposits come back; the starter balance stays locked.</p>
+      {list.map((o) => {
+        const wait = Math.max(0, Math.ceil((o.readyAt - now) / 1000));
+        const ready = o.req > 0n && o.req <= o.free;
+        return (
+          <div key={o.wallet} className="tn-oldw">
+            <p className="mono tn-small">Old Trencher #{o.id} · agent wallet <a href={`${EXPLORER}/address/${o.wallet}`} target="_blank" rel="noreferrer">{short(o.wallet)} ↗</a> · balance {Number(formatEther(o.bal))} ETH · you can get back <b>{Number(formatEther(o.free))} ETH</b></p>
+            {o.free === 0n ? <p className="tn-hint">Nothing left to withdraw: only the locked starter balance remains.</p> : ready ? (
+              <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={() => withdraw(o)} disabled={wait > 0}>{wait > 0 ? `Withdraw in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, "0")}` : `Step 2: withdraw ${Number(formatEther(o.req))} ETH`}</button>{wait > 0 && <span className="tn-hint">You can leave this page open; the button unlocks by itself.</span>}</div>
+            ) : (
+              <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={() => request(o)}>Step 1: request {Number(formatEther(o.free))} ETH</button><span className="tn-hint">Then wait 10 minutes; this button turns into Withdraw.</span></div>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }
