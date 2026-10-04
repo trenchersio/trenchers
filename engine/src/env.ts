@@ -1,24 +1,36 @@
 import type { Address, Hex } from "viem";
 
 /** Engine settings, all from environment variables (Railway service variables in production). */
-function req(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing environment variable ${name}`);
-  return v;
+/** Problems with the settings; the engine reports them on /health instead of crashing. */
+export const PROBLEMS: string[] = [];
+// Values pasted into Railway sometimes carry spaces or quotes; strip them.
+const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
+const opt = (name: string, d: string) => clean(process.env[name]) || d;
+function addr(name: string): Address {
+  const v = clean(process.env[name]);
+  if (!v) PROBLEMS.push(`${name} is missing: copy the variables from the Trading section of the setup page`);
+  else if (!/^0x[0-9a-fA-F]{40}$/.test(v)) PROBLEMS.push(`${name} is not a valid address`);
+  return v as Address;
 }
-const opt = (name: string, d: string) => process.env[name] || d;
+function key(): Hex | undefined {
+  let v = clean(process.env.ENGINE_KEY);
+  if (!v) return undefined;
+  if (!v.startsWith("0x")) v = `0x${v}`; // MetaMask shows private keys without 0x
+  if (!/^0x[0-9a-fA-F]{64}$/.test(v)) { PROBLEMS.push("ENGINE_KEY doesn't look like a private key (64 letters and numbers, from MetaMask's Show private key)"); return undefined; }
+  return v as Hex;
+}
 
 export const ENV = {
   RPC_URL: opt("RPC_URL", "https://rpc.testnet.chain.robinhood.com"),
   CHAIN_ID: Number(opt("CHAIN_ID", "46630")),
   /** The engine wallet's private key. It can only call trade/approveRouter on agent wallets, within each holder's caps. */
-  ENGINE_KEY: process.env.ENGINE_KEY as Hex | undefined,
-  NFT: req("NFT_ADDRESS") as Address,
-  FUND: req("FUND_ADDRESS") as Address,
-  ADAPTER: req("ADAPTER_ADDRESS") as Address,
+  ENGINE_KEY: key(),
+  NFT: addr("NFT_ADDRESS"),
+  FUND: addr("FUND_ADDRESS"),
+  ADAPTER: addr("ADAPTER_ADDRESS"),
   PONS_FACTORY: opt("PONS_FACTORY", "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e") as Address,
   /** First block to read history from (the deployment block); 0 reads everything. */
-  START_BLOCK: BigInt(opt("START_BLOCK", "0")),
+  START_BLOCK: BigInt(/^\d+$/.test(opt("START_BLOCK", "0")) ? opt("START_BLOCK", "0") : "0"),
   /** Max blocks per log query, for RPCs that cap ranges. */
   LOG_RANGE: BigInt(opt("LOG_RANGE", "5000")),
   POLL_MS: Number(opt("POLL_MS", "2000")),
