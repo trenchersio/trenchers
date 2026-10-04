@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { createPublicClient, createWalletClient, custom, fallback, formatEther, http, parseAbi, parseEther, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, fallback, formatEther, http, parseAbi, parseEther, type Address } from "viem";
+import { reader, txParams } from "@/lib/chain";
 import { LIST_PRICE_ETH, NFT_ADDRESS, OPENSEA_URL, chain } from "@/lib/constants";
 import { connectedProvider, useWallet } from "@/lib/wallet";
 
@@ -40,9 +41,11 @@ export function MintPanel() {
       const wallet = createWalletClient({ chain, transport: custom(p) });
       const [account] = await wallet.requestAddresses();
       try { await wallet.switchChain({ id: chain.id }); } catch { /* the wallet shows its own prompt */ }
-      const hash = await wallet.writeContract({ address: NFT_ADDRESS as Address, abi: ABI, functionName: "mint", args: [BigInt(qty)], value: PRICE * BigInt(qty), account, chain });
+      const value = PRICE * BigInt(qty);
+      const extra = await txParams({ account, to: NFT_ADDRESS as Address, value, data: encodeFunctionData({ abi: ABI, functionName: "mint", args: [BigInt(qty)] }) });
+      const hash = await wallet.writeContract({ address: NFT_ADDRESS as Address, abi: ABI, functionName: "mint", args: [BigInt(qty)], value, account, chain, ...extra });
       setState({ phase: "chain" });
-      await createPublicClient({ chain, transport: custom(p) }).waitForTransactionReceipt({ hash });
+      await reader().waitForTransactionReceipt({ hash, pollingInterval: 1_000 });
       setState({ phase: "done" }); setTick((t) => t + 1);
     } catch (e) {
       const m = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message;
@@ -69,7 +72,7 @@ export function MintPanel() {
           {soon ? "Mint opens soon" : state?.phase === "sign" ? "Confirm in your wallet…" : state?.phase === "chain" ? "Minting…" : `Mint ${qty} · ${total} ETH`}
         </button>
       </div>
-      {state?.phase === "done" && <p className="mintp-msg ok">Minted. Open your <a href="agents">NFT / Agent Profile</a> to awaken it.</p>}
+      {state?.phase === "done" && <p className="mintp-msg ok">Success: minted. Open your <a href="agents">NFT / Agent Profile</a> to awaken it.</p>}
       {state?.phase === "error" && <p className="mintp-msg err">{state.note}</p>}
       <p className="mintp-note">Up to 10 per transaction. Already minted out? Trenchers trade on {OPENSEA_URL ? <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a> : "OpenSea"}.</p>
     </div>

@@ -1866,3 +1866,15 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .ld-label { margin: 0; font: 600 20px var(--sans); color: var(--fog); letter-spacing: -.01em; }
 .ld-sub { margin: 0; font: 500 13px var(--mono); color: var(--quiet); max-width: 46ch; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .ld-c, .ld-c4 { animation: none; opacity: .6; } .ld-c4 { opacity: 1; } }
+
+.mint-toast { position: fixed; z-index: 60; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; align-items: center; gap: 14px; padding: 14px 14px 14px 16px; border-radius: 14px; background: #101814; border: 1px solid rgba(57,255,136,.6); box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 40px rgba(57,255,136,.15); animation: mint-toast-in .35s ease-out; }
+@keyframes mint-toast-in { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.mint-toast-arts { display: flex; flex: none; }
+.mint-toast-arts canvas { border-radius: 8px; border: 2px solid #101814; margin-left: -10px; }
+.mint-toast-arts canvas:first-child { margin-left: 0; }
+.mint-toast-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.mint-toast-txt b { font: 700 15px var(--sans); color: var(--green); }
+.mint-toast-txt span { font-size: 13px; color: var(--quiet); line-height: 1.4; }
+.mint-toast-go { flex: none; font: 700 14px var(--sans); color: #0B0D0C; background: var(--green); border-radius: 9px; padding: 10px 14px; text-decoration: none; }
+.mint-toast-x { flex: none; background: none; border: 0; color: var(--quiet); font-size: 20px; cursor: pointer; padding: 4px 6px; }
+@media (prefers-reduced-motion: reduce) { .mint-toast { animation: none; } }

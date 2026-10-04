@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, createWalletClient, custom, formatEther, parseAbi, parseEther, parseEventLogs, zeroAddress, type Address } from "viem";
+import { createWalletClient, custom, encodeFunctionData, formatEther, parseAbi, parseEther, parseEventLogs, zeroAddress, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
-import { DEPLOYMENT, reader } from "@/lib/chain";
+import { DEPLOYMENT, reader, txParams } from "@/lib/chain";
 import { EXPLORER, LIST_PRICE_ETH, NFT_ADDRESS, OPENSEA_URL, ROUTES, STARTER_ETH, chain } from "@/lib/constants";
 import { connectedProvider, short, useWallet } from "@/lib/wallet";
 
@@ -30,6 +30,8 @@ export function MintPage() {
   const [state, setState] = useState<Phase | null>(null);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [tick, setTick] = useState(0);
+  const [toast, setToast] = useState(false);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(false), 12_000); return () => clearTimeout(t); }, [toast]);
 
   useEffect(() => {
     if (!LIVE) { setSupply(5); setOpen(false); return; }
@@ -82,11 +84,14 @@ export function MintPage() {
       const wallet = createWalletClient({ chain, transport: custom(p) });
       const [account] = await wallet.requestAddresses();
       try { await wallet.switchChain({ id: chain.id }); } catch { /* the wallet shows its own prompt */ }
-      const hash = await wallet.writeContract({ address: NFT_ADDRESS, abi: ABI, functionName: "mint", args: [BigInt(qty)], value: PRICE * BigInt(qty), account, chain });
+      const value = PRICE * BigInt(qty);
+      const extra = await txParams({ account, to: NFT_ADDRESS, value, data: encodeFunctionData({ abi: ABI, functionName: "mint", args: [BigInt(qty)] }) });
+      const hash = await wallet.writeContract({ address: NFT_ADDRESS, abi: ABI, functionName: "mint", args: [BigInt(qty)], value, account, chain, ...extra });
       setState({ phase: "chain", tx: hash });
-      const receipt = await createPublicClient({ chain, transport: custom(p) }).waitForTransactionReceipt({ hash });
+      const receipt = await reader().waitForTransactionReceipt({ hash, pollingInterval: 1_000 });
       const got = parseEventLogs({ abi: ABI, logs: receipt.logs, eventName: "Transfer" }).map((l) => Number(l.args.tokenId)).sort((a, b) => a - b);
       setState({ phase: "done", ids: got, tx: hash });
+      setToast(true);
       setTick((t) => t + 1);
     } catch (e) {
       const m = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message;
@@ -103,12 +108,23 @@ export function MintPage() {
 
   return (
     <div className="mint">
+      {toast && minted.length > 0 && (
+        <div className="mint-toast" role="status" aria-live="polite">
+          <div className="mint-toast-arts">{minted.slice(0, 4).map((id) => <ArtCanvas key={id} id={id} size={40} />)}</div>
+          <div className="mint-toast-txt">
+            <b>Success: minted {minted.map((i) => `#${i}`).join(", ")}</b>
+            <span>Now awaken {minted.length > 1 ? "them" : "it"} to give {minted.length > 1 ? "each one" : "it"} its wallet and {STARTER_ETH} ETH.</span>
+          </div>
+          <a className="mint-toast-go" href={ROUTES.agents}>Awaken</a>
+          <button type="button" className="mint-toast-x" onClick={() => setToast(false)} aria-label="Close">×</button>
+        </div>
+      )}
       <section className="mint-stage" aria-label="The Trenchers you'll mint">
         <div className={`mint-hero${minted.length ? " is-minted" : ""}`}>
-          <ArtCanvas id={hero} size={520} className="mint-hero-art is-dormant" label={`Trencher #${hero}`} />
+          <ArtCanvas id={hero} size={520} className={`mint-hero-art${minted.length ? "" : " is-dormant"}`} label={`Trencher #${hero}`} />
           <div className="mint-hero-cap">
             <span className="mint-hero-id">#{hero}</span>
-            <span className="mint-hero-state">{minted.length ? "Yours. Awaken it to light it up." : "Next to be minted · hover to see it awake"}</span>
+            <span className="mint-hero-state">{minted.length ? "Yours. This is how it looks once awake." : "Next to be minted · hover to see it awake"}</span>
           </div>
         </div>
         <div className="mint-strip" aria-label={minted.length ? "Minted" : "You'll mint"}>
@@ -149,7 +165,7 @@ export function MintPage() {
 
         <button type="button" className="mint-go" onClick={mint} disabled={!LIVE || closed || soldOut || busy}>{label}</button>
 
-        {state?.phase === "chain" && <p className="mint-msg">Minting on {chain.name}. This usually takes a few seconds{state.tx ? <>; <a href={`${EXPLORER}/tx/${state.tx}`} target="_blank" rel="noreferrer">follow it here</a></> : null}.</p>}
+        {state?.phase === "chain" && <p className="mint-msg">Minting on {chain.name}. This usually takes a few seconds{state.tx ? <>; <a href={`${EXPLORER}/tx/${state.tx}`} target="_blank" rel="noreferrer">follow it here</a></> : null}. Your wallet may keep saying &quot;queued&quot; for a while after it&apos;s done; this page tells you the moment it is.</p>}
         {state?.phase === "sign" && <p className="mint-msg">Your wallet window can open behind the browser. If it shows the transaction as queued, open it and confirm.</p>}
         {state?.phase === "done" && (
           <div className="mint-done">

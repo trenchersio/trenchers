@@ -1,6 +1,6 @@
 "use client";
 import {
-  createPublicClient, createWalletClient, custom, http, parseAbi, toHex,
+  createPublicClient, createWalletClient, custom, encodeFunctionData, http, parseAbi, toHex,
   type Address, type EIP1193Provider, type Hash, type PublicClient,
 } from "viem";
 import { chain } from "./constants";
@@ -105,15 +105,34 @@ export function reason(e: unknown): string {
 type Call = { address: Address; abi: readonly unknown[]; functionName: string; args?: readonly unknown[]; value?: bigint };
 
 /** Checks the call would succeed (so a failure is explained before the wallet opens), sends it, and waits. */
+/** Gas limit and fees worked out here (with headroom), so the wallet doesn't have to estimate them itself
+ *  over a slow connection and never sends a transaction priced too low to be picked up. */
+export async function txParams(req: { account: Address; to: Address; data?: `0x${string}`; value?: bigint }) {
+  const c = reader();
+  const [gas, block, tip] = await Promise.all([
+    c.estimateGas(req).catch(() => null),
+    c.getBlock().catch(() => null),
+    c.estimateMaxPriorityFeePerGas().catch(() => 0n),
+  ]);
+  const base = block?.baseFeePerGas ?? null;
+  return {
+    ...(gas ? { gas: (gas * 13n) / 10n } : {}),
+    ...(base !== null ? { maxFeePerGas: base * 3n + tip, maxPriorityFeePerGas: tip } : {}),
+  };
+}
+const receipt = (hash: Hash) => reader().waitForTransactionReceipt({ hash, pollingInterval: 1_000 });
+
 export async function sendCall(from: Address, call: Call, onPhase?: (p: "sign" | "chain") => void): Promise<Hash> {
   const p = await walletProvider();
   await ensureChain(p);
-  await reader().simulateContract({ ...call, account: from } as never);
+  const { request } = await reader().simulateContract({ ...call, account: from } as never) as unknown as { request: { address: Address; abi: never; functionName: string; args?: readonly unknown[]; value?: bigint } };
+  const data = encodeFunctionData({ abi: request.abi, functionName: request.functionName, args: request.args } as never);
+  const extra = await txParams({ account: from, to: request.address, data, value: request.value });
   onPhase?.("sign");
   const wallet = createWalletClient({ chain, transport: custom(p) });
-  const hash = await wallet.writeContract({ ...call, account: from, chain } as never);
+  const hash = await wallet.writeContract({ ...call, ...extra, account: from, chain } as never);
   onPhase?.("chain");
-  const r = await reader().waitForTransactionReceipt({ hash });
+  const r = await receipt(hash);
   if (r.status !== "success") throw new Error("The transaction failed on-chain.");
   return hash;
 }
@@ -121,10 +140,11 @@ export async function sendCall(from: Address, call: Call, onPhase?: (p: "sign" |
 export async function sendEth(from: Address, to: Address, value: bigint, onPhase?: (p: "sign" | "chain") => void): Promise<Hash> {
   const p = await walletProvider();
   await ensureChain(p);
+  const extra = await txParams({ account: from, to, value });
   onPhase?.("sign");
-  const hash = await createWalletClient({ chain, transport: custom(p) }).sendTransaction({ to, value, account: from, chain });
+  const hash = await createWalletClient({ chain, transport: custom(p) }).sendTransaction({ to, value, account: from, chain, ...extra });
   onPhase?.("chain");
-  await reader().waitForTransactionReceipt({ hash });
+  await receipt(hash);
   return hash;
 }
 
