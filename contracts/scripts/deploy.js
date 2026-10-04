@@ -72,17 +72,25 @@ async function main() {
   // distributor for the agents' 10% share of $TRENCHERS fees.
   const config = await (await ethers.getContractFactory("AgentConfig")).deploy(deployer.address);
   await config.waitForDeployment();
-  const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  // Agent wallets run the original wallet code forever, unless a holder opts in to a fixed version
+  // the team offers later (see TrenchersAgentWallet). The original is recorded first, then fixed in the wallet.
+  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  await logic.waitForDeployment();
+  await (await config.propose(4 /* AccountLogic */, await logic.getAddress())).wait();
+  const impl = await (await ethers.getContractFactory("TrenchersAgentWallet")).deploy(await config.getAddress());
   await impl.waitForDeployment();
   const dist = await (await ethers.getContractFactory("AgentFeeDistributor")).deploy(deployer.address, ERC6551_REGISTRY, await nft.getAddress(), RESCUE_DELAY);
   await dist.waitForDeployment();
   console.log(`AgentConfig      ${await config.getAddress()}`);
-  console.log(`AgentAccount impl ${await impl.getAddress()}`);
+  console.log(`AgentAccount code ${await logic.getAddress()}`);
+  console.log(`AgentWallet impl ${await impl.getAddress()}`);
   console.log(`AgentFeeDistributor ${await dist.getAddress()}`);
   await (await config.propose(3 /* StarterFund */, await fund.getAddress())).wait();
   // Metadata follows each Trencher: dormant (grey, 0.01 ETH claimable) until claimed, then awake.
   await (await nft.setStarterFund(await fund.getAddress())).wait();
   if (process.env.ENGINE) await (await config.propose(0, process.env.ENGINE)).wait();
+  // Emergency stop: a guardian (e.g. a team member's own wallet) can pause all engine trading instantly.
+  if (process.env.GUARDIAN) await (await config.setGuardian(process.env.GUARDIAN)).wait();
   // Agents trade Pons coins through the PonsAdapter (only genuine Pons launches, never their own coin).
   if (await hasCode(PONS_FACTORY)) {
     const adapter = await (await ethers.getContractFactory("PonsAdapter")).deploy(PONS_FACTORY, safe);

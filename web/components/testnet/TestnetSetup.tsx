@@ -34,13 +34,13 @@ const STORE = "trenchers-testnet-deployment";
 
 type Dep = {
   chainId: number; version?: number; owner?: Address; registry?: Address; splitter?: Address; nft?: Address;
-  fund?: Address; config?: Address; impl?: Address; dist?: Address; launchpad?: Address; adapter?: Address; startBlock?: string; done: string[];
+  fund?: Address; config?: Address; logic?: Address; impl?: Address; dist?: Address; launchpad?: Address; adapter?: Address; startBlock?: string; done: string[];
 };
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
 const WALLET_KEY = "trenchers-wallet-rdns";
 /** Bumped when the contracts change in a way the page relies on (5 = adds the safety net: timelocked rescue, sweeps). */
-const CONTRACTS_VERSION = 5;
+const CONTRACTS_VERSION = 6;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string };
@@ -248,7 +248,9 @@ export function TestnetSetup() {
     { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
     { key: "fund", label: "Agent Starter Fund", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund", "AgentStarterFund", [me, d.nft, d.registry, CLAIM, BigInt(RESCUE_DELAY)]) }) },
     { key: "config", label: "Agent settings", run: async (_d, me) => ({ config: await deploy("Agent settings", "AgentConfig", [me]) }) },
-    { key: "impl", label: "Agent wallet", run: async (d) => ({ impl: await deploy("Agent wallet", "TrenchersAgentAccount", [d.config]) }) },
+    { key: "logic", label: "Agent wallet code", run: async (d) => ({ logic: await deploy("Agent wallet code", "TrenchersAgentAccount", [d.config]) }) },
+    { key: "cfgLogic", label: "Record the original agent wallet code", run: async (d) => { await write("Record the original agent wallet code", d.config!, "AgentConfig", "propose", [4, d.logic]); return {}; } },
+    { key: "impl", label: "Agent wallet (fixed to the original code)", run: async (d) => ({ impl: await deploy("Agent wallet (fixed to the original code)", "TrenchersAgentWallet", [d.config]) }) },
     { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft, BigInt(RESCUE_DELAY)]) }) },
     { key: "cfgFund", label: "Link settings to the starter fund", run: async (d) => { await write("Link settings to the starter fund", d.config!, "AgentConfig", "propose", [3, d.fund]); return {}; } },
     { key: "nftFund", label: "Link NFT to the starter fund (grey / colour)", run: async (d) => { await write("Link NFT to the starter fund (grey / colour)", d.nft!, "TrenchersNFT", "setStarterFund", [d.fund]); return {}; } },
@@ -343,7 +345,7 @@ export function TestnetSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chainOk, ready, account, tick, dep.nft, dep.fund]);
 
-  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, fund: dep.fund, launchpad: dep.launchpad, adapter: dep.adapter, startBlock: dep.startBlock, config: dep.config, impl: dep.impl, dist: dep.dist });
+  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, fund: dep.fund, launchpad: dep.launchpad, adapter: dep.adapter, startBlock: dep.startBlock, config: dep.config, logic: dep.logic, impl: dep.impl, dist: dep.dist });
   const isOwner = !!account && !!dep.owner && account.toLowerCase() === dep.owner.toLowerCase();
 
   const loadPasted = () => {
@@ -400,7 +402,7 @@ export function TestnetSetup() {
             <details className="tn-details"><summary className="mono">Deployment code (send this to the team)</summary>
               <textarea className="tn-code mono" readOnly value={code} onFocus={(e) => e.currentTarget.select()} />
               <ul className="tn-addrs mono">
-                {(["nft", "fund", "splitter", "config", "impl", "dist", "registry", "launchpad", "adapter"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
+                {(["nft", "fund", "splitter", "config", "logic", "impl", "dist", "registry", "launchpad", "adapter"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
               </ul>
             </details>
           </>
@@ -499,7 +501,9 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
   getBalance: (a: Address) => Promise<bigint>; getRule: (wallet: Address, version: number) => Promise<string | null>; claim: bigint;
   onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void; pons: boolean | null;
 }) {
-  type St = { awake: boolean; deployed?: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: number; lockedAt?: bigint; ruleText?: string | null };
+  type St = { awake: boolean; deployed?: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: number; lockedAt?: bigint; ruleText?: string | null;
+    live?: boolean; perTrade?: bigint; dailyCap?: bigint; setBy?: Address; owner?: Address;
+    version?: Address; original?: Address; offered?: Address; offers?: number };
   const [s, setS] = useState<St | null>(null);
   const [depAmt, setDepAmt] = useState("0.0001");
   const [wdAmt, setWdAmt] = useState("");
@@ -521,6 +525,19 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
           next.rules = Number(await read<number>(wallet, "TrenchersAgentAccount", "ruleVersion"));
           next.lockedAt = await read<bigint>(wallet, "TrenchersAgentAccount", "starterLockedAt");
           if (next.rules > 0) next.ruleText = await getRule(wallet, next.rules);
+          const [pol, owner] = await Promise.all([
+            read<readonly [bigint, bigint, boolean, Address]>(wallet, "TrenchersAgentAccount", "policy"),
+            read<Address>(wallet, "TrenchersAgentAccount", "owner"),
+          ]);
+          Object.assign(next, { perTrade: pol[0], dailyCap: pol[1], live: pol[2], setBy: pol[3], owner });
+          // Wallet version: fixed to the original unless the holder opts in to a version the team offers.
+          if (dep.config) {
+            const [version, original, offered, offers] = await Promise.all([
+              read<Address>(wallet, "TrenchersAgentWallet", "agentLogic"), read<Address>(wallet, "TrenchersAgentWallet", "ORIGINAL_VERSION"),
+              read<Address>(dep.config, "AgentConfig", "accountLogic"), read<bigint>(dep.config, "AgentConfig", "accountLogicVersions"),
+            ]).catch(() => [undefined, undefined, undefined, 0n] as const);
+            Object.assign(next, { version, original, offered, offers: Number(offers) });
+          }
         } catch { next.deployed = false; /* house agents get their wallet created on request */ }
         if (live) setS(next);
       } catch (e) { if (live) setError(reason(e)); }
@@ -556,6 +573,14 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
     await write(`Applying rule v${(s!.rules ?? 0) + 1} to #${id}`, s!.wallet!, "TrenchersAgentAccount", "setPolicy", [claim / 2n, claim * 2n, true, keccak256(toHex(text)), text]);
     setRule("");
   });
+  const tradingOn = !!s?.live && !!s.setBy && s.setBy === s.owner;
+  const setTrading = (on: boolean) => act(() => on
+    ? write(`Switching trading on for #${id}`, s!.wallet!, "TrenchersAgentAccount", "setPolicy", [s!.perTrade || claim / 2n, s!.dailyCap || claim * 2n, true, zeroHash, ""])
+    : write(`Pausing #${id}`, s!.wallet!, "TrenchersAgentAccount", "pause"));
+  // Only shown once the team has offered a fixed version (i.e. after a real bug); never before.
+  const upgradeAvailable = !!s?.offers && s.offers > 1 && !!s.offered && s.version?.toLowerCase() !== s.offered.toLowerCase();
+  const onCustomVersion = !!s?.version && !!s.original && s.version.toLowerCase() !== s.original.toLowerCase();
+  const setVersion = (v: Address, label: string) => act(() => write(label, s!.wallet!, "TrenchersAgentWallet", "setAgentVersion", [v]));
   const fmt = (v?: bigint) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(6));
   const unlock = s?.lockedAt ? new Date((Number(s.lockedAt) + LOCK_DAYS * 86400) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const tplName = s?.ruleText ? TEMPLATES.find((t) => t.text === s.ruleText)?.name : undefined;
@@ -585,7 +610,34 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
               <div><dt>Locked starter</dt><dd>{fmt(s.locked)} ETH</dd></div>
               <div><dt>Withdrawable now</dt><dd>{fmt(s.free)} ETH</dd></div>
               <div><dt>Rule</dt><dd>{s.rules ? `v${s.rules}` : "none yet"}</dd></div>
+              <div><dt>Trading</dt><dd>{tradingOn ? <span className="tn-on">On</span> : "Paused"}</dd></div>
             </dl>
+
+            {s.rules ? (
+              <div className="tn-row">
+                {tradingOn
+                  ? <button type="button" className="tn-btn" onClick={() => setTrading(false)} disabled={busy}>Pause trading</button>
+                  : <button type="button" className="tn-btn tn-primary" onClick={() => setTrading(true)} disabled={busy}>Switch trading on</button>}
+                <span className="tn-hint">{tradingOn ? "You can pause your agent any time; it stops buying and selling straight away." : "Paused: the agent doesn't trade until you switch it back on."}</span>
+              </div>
+            ) : null}
+
+            {upgradeAvailable && (
+              <div className="tn-upgrade">
+                <b>A fixed version of the agent wallet is available</b>
+                <p>The team found and fixed an issue in the agent wallet code and offered a new version (announced 48 hours in advance). Your wallet doesn&apos;t change unless you choose to. Upgrading keeps the same address, balance, rules and track record, and you can switch back any time.</p>
+                <div className="tn-row">
+                  <button type="button" className="tn-btn tn-primary" onClick={() => setVersion(s.offered!, `Upgrading #${id} to the fixed wallet version`)} disabled={busy}>Upgrade my agent wallet</button>
+                  <a className="tn-btn tn-ghost" href={`${EXPLORER}/address/${s.offered}#code`} target="_blank" rel="noreferrer">View the new code ↗</a>
+                </div>
+              </div>
+            )}
+            {onCustomVersion && (
+              <div className="tn-row">
+                <span className="tn-hint">This wallet runs a fixed version you opted in to.</span>
+                <button type="button" className="tn-btn tn-ghost" onClick={() => setVersion(s.original!, `Switching #${id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button>
+              </div>
+            )}
 
             <div className="tn-rule">
               <span className="mono tn-rule-k">{s.rules ? `Current strategy · rule v${s.rules}${tplName ? ` · ${tplName}` : ""}` : "Current strategy"}</span>
@@ -722,7 +774,7 @@ function SafetyNet({ dep, account, read, write, getBalance, chainTime, tick, onD
   dep: Dep; account: Address; read: ReadFn; write: WriteFn; getBalance: (a: Address) => Promise<bigint>; chainTime: () => Promise<number>; tick: number;
   onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void;
 }) {
-  type S = { fund: bigint; fundTo: Address; fundEta: number; fundDelay: number; fundShut: boolean; split: bigint; owed: bigint[]; dest: Address[]; unacc: bigint; nft: bigint; dist: bigint };
+  type S = { paused: boolean; guardian: Address; fund: bigint; fundTo: Address; fundEta: number; fundDelay: number; fundShut: boolean; split: bigint; owed: bigint[]; dest: Address[]; unacc: bigint; nft: bigint; dist: bigint };
   const [s, setS] = useState<S | null>(null);
   const [clock, setClock] = useState(Date.now());
   const [skew, setSkew] = useState(0); // chain time minus this computer's clock
@@ -738,9 +790,12 @@ function SafetyNet({ dep, account, read, write, getBalance, chainTime, tick, onD
         const owed = await Promise.all([0, 1, 2, 3].map((b) => read<bigint>(dep.splitter!, "RevenueSplitter", "owed", [b])));
         const destAddrs = await Promise.all([0, 1, 2, 3].map((b) => read<Address>(dep.splitter!, "RevenueSplitter", "destination", [b])));
         const unacc = await read<bigint>(dep.splitter!, "RevenueSplitter", "unaccounted").catch(() => 0n);
+        const [paused, guardian] = dep.config
+          ? await Promise.all([read<boolean>(dep.config, "AgentConfig", "paused"), read<Address>(dep.config, "AgentConfig", "guardian")]).catch(() => [false, "0x0000000000000000000000000000000000000000" as Address] as const)
+          : [false, "0x0000000000000000000000000000000000000000" as Address] as const;
         const ct = await chainTime().catch(() => Date.now() / 1000);
         setSkew(ct * 1000 - Date.now());
-        setS({ fund, fundTo, fundEta: Number(fundEta) * 1000, fundDelay: Number(fundDelay), fundShut, split, owed, dest: destAddrs, unacc, nft, dist });
+        setS({ paused, guardian, fund, fundTo, fundEta: Number(fundEta) * 1000, fundDelay: Number(fundDelay), fundShut, split, owed, dest: destAddrs, unacc, nft, dist });
       } catch { setS(null); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -758,6 +813,17 @@ function SafetyNet({ dep, account, read, write, getBalance, chainTime, tick, onD
     <section className="tn-card tn-safety">
       <h2>Safety net <small className="mono">team wallet only</small></h2>
       <p>Every contract that can hold money, and how you get it out. Pooled money (the starter fund) can only move after a public, on-chain delay of <b>{delayText}</b> ({"48 hours"} on mainnet), so nobody can drain it silently. Agent wallets belong to whoever holds the NFT: they withdraw themselves, and for the house agents that is your team wallet.</p>
+
+      <div className={`tn-safe-row tn-estop${s.paused ? " on" : ""}`}>
+        <div>
+          <b>Emergency stop</b>
+          <span className="mono tn-small">{s.paused ? "ALL TRADING PAUSED" : "Trading running"}{s.guardian && s.guardian !== ZERO_ADDR ? ` · guardian ${short(s.guardian)}` : ""}</span>
+          <span className="tn-hint">Pauses every agent at once, e.g. if the engine key leaks or a trading bug shows up. It never moves anyone&apos;s ETH, and holders can still withdraw.</span>
+        </div>
+        {s.paused
+          ? <button type="button" className="tn-btn tn-primary" onClick={() => act(() => write("Resuming all trading", dep.config!, "AgentConfig", "unpause"))} disabled={busy}>Resume trading</button>
+          : <button type="button" className="tn-btn tn-danger" onClick={() => act(() => write("EMERGENCY STOP: pausing all trading", dep.config!, "AgentConfig", "pause"))} disabled={busy}>Stop all trading</button>}
+      </div>
 
       <div className="tn-safe-row">
         <div><b>Agent Starter Fund</b><span className="mono tn-small">{f(s.fund)}{s.fundShut ? " · shut down" : ""}</span></div>

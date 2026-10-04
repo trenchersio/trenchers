@@ -455,8 +455,18 @@ belong to whoever holds the NFT and are withdrawn by them (instantly, above the 
 in the Agent Starter Fund and the fee distributor can be rescued by the Safe only after a public
 48-hour delay (`proposeRescue` → `executeRescue`), which also shuts the contract down. The NFT and the
 Pons adapter never hold funds; the Safe can sweep anything sent there by mistake. The revenue
-splitter's buckets are released to their destinations, and stray ETH can be swept. The full table,
-and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md).
+splitter's buckets are released to their destinations, and stray ETH can be swept.
+
+**Pausing.** Any holder can pause their own agent at any time. The team also has an emergency stop
+that pauses all engine trading at once; it never moves anyone's ETH and holders can still withdraw.
+
+**Fixing bugs after launch.** The engine (how rules are read and trades decided) can be updated any
+time, and the trading route after a public 48-hour notice; holders don't need to do anything. Agent
+wallets are *not* upgradeable by default: nobody, including the team, can change an agent's wallet.
+If a real bug is ever found in the wallet code, the team can offer a fixed version, and each holder
+chooses whether to upgrade (same address, balance and track record; switch back any time).
+
+The full table, and where the buttons are, is in [docs/SAFETY.md](docs/SAFETY.md).
 
 ## Built on Robinhood Chain
 
@@ -479,7 +489,7 @@ Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter), `AgentConfig` (timelocked engine/router/launcher settings), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), 50 tests, deploy script |
+| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route to Pons), 57 tests, deploy script |
 | [`web/`](web) | Next.js site: intro, landing page, the Arena, the Collection, the NFT / Agent Profile with the agent coin launchpad, and these docs |
 | [`web/lib/agent-token.ts`](web/lib/agent-token.ts) | Agent coins and fee income: launch form validation, the 10% agent fee share |
 | [`web/lib/strategies.ts`](web/lib/strategies.ts) | The five house templates and the signals they need |

@@ -28,7 +28,9 @@ async function setup() {
   await config.connect(safe).propose(1, await router.getAddress());
   await config.connect(safe).propose(2, await launcher.getAddress());
   await config.connect(safe).propose(3, await fund.getAddress());
-  const impl = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  const logic = await (await ethers.getContractFactory("TrenchersAgentAccount")).deploy(await config.getAddress());
+  await config.connect(safe).propose(4, await logic.getAddress());
+  const impl = await (await ethers.getContractFactory("TrenchersAgentWallet")).deploy(await config.getAddress());
   await fund.connect(safe).setAccount(await impl.getAddress(), SALT);
   const { chainId } = await ethers.provider.getNetwork();
   const register = async (id) => {
@@ -37,7 +39,7 @@ async function setup() {
     return ethers.getContractAt("TrenchersAgentAccount", addr);
   };
   const swapData = router.interface.encodeFunctionData("swap");
-  return { deployer, safe, team, treasury, alice, bob, engine, keeper, nft, registry, router, launcher, config, fund, impl, register, swapData, chainId };
+  return { deployer, safe, team, treasury, alice, bob, engine, keeper, nft, registry, router, launcher, config, fund, impl, logic, register, swapData, chainId };
 }
 
 describe("TrenchersAgentAccount", () => {
@@ -207,3 +209,4 @@ describe("AgentConfig", () => {
     expect(await config.engine()).to.equal(bob.address);
   });
 });
+module.exports = { setup };

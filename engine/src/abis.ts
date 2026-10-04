@@ -26,6 +26,7 @@ export const AGENT_ABI = parseAbi([
   "function policy() view returns (uint128 perTrade, uint128 dailyCap, bool live, address setBy)",
   "function owner() view returns (address)",
   "function coin() view returns (address)",
+  "function config() view returns (address)",
   "function ruleVersion() view returns (uint32)",
   "function spentDay() view returns (uint256)",
   "function spentToday() view returns (uint256)",
@@ -52,3 +53,5 @@ export const ERC20_ABI = parseAbi([
   "function totalSupply() view returns (uint256)",
   "function symbol() view returns (string)",
 ]);
+
+export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)"]);

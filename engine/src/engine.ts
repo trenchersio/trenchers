@@ -6,7 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
+  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -22,6 +22,8 @@ type Token = { token: Address; curve: Address; deployer: Address; launchedAt: nu
 type Agent = {
   id: number; wallet: Address; owner?: Address; coin?: Address; live: boolean; perTrade: bigint; dailyCap: bigint; setBy?: Address;
   ruleVersion: number; ruleText: string | null; rule: CustomRule | null; balance: bigint; spentDay: bigint; spentToday: bigint;
+  /** How the engine read the rule, and a warning when it can't follow all of it (shown to the holder). */
+  understood?: string[]; ruleWarning?: string | null;
 };
 type Position = { token: Address; ethIn: bigint; tokens: bigint; openedAt: number };
 export type Trade = { agent: number; wallet: Address; token: Address; symbol?: string; side: "buy" | "sell"; eth: string; tokens: string; time: number; tx: Hash };
@@ -44,6 +46,9 @@ export class Engine {
   entries: Entry[] = [];
   busy = new Set<string>();
   skipNoted = new Map<Address, number>();
+  /** AgentConfig (read from an agent wallet) and its emergency stop. */
+  configAddress: Address | null = null;
+  paused = false;
   cursor = 0n;
   liveFrom = 0n;
   blockTimes = new Map<bigint, number>();
@@ -83,8 +88,23 @@ export class Engine {
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
     if (head > this.cursor) await this.sync(head, true);
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
+    if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
     await this.runExits();
+  }
+
+  /** Reads the team's emergency stop from AgentConfig. */
+  private async readPause() {
+    try {
+      if (!this.configAddress) {
+        const any = this.agents.values().next().value as Agent | undefined;
+        if (!any) return;
+        this.configAddress = lc(await this.pub.readContract({ address: any.wallet, abi: AGENT_ABI, functionName: "config" }));
+      }
+      const p = await this.pub.readContract({ address: this.configAddress, abi: CONFIG_ABI, functionName: "paused" });
+      if (p !== this.paused) this.log(p ? "EMERGENCY STOP is on: all trading paused by the team" : "Emergency stop lifted: trading resumes");
+      this.paused = p;
+    } catch { /* keep the last known state */ }
   }
 
   /** The block where the starter fund was deployed (binary search on its code), so history is read from there. */
@@ -174,7 +194,15 @@ export class Engine {
       case "RuleApplied": {
         const ag = this.agents.get(lc(l.address)); if (!ag) return;
         ag.ruleVersion = Number(a.version); ag.ruleText = (a.ruleUri as string) || null;
-        ag.rule = ag.ruleText ? parse(ag.ruleText).rule : null;
+        const parsed = ag.ruleText ? parse(ag.ruleText) : null;
+        ag.rule = parsed?.rule ?? null;
+        ag.understood = parsed?.understood ?? [];
+        ag.ruleWarning = !parsed ? "No rule text found"
+          : parsed.rule.trigger === "dexupdate" ? "The DexScreener signal isn't supported yet, so this agent won't buy"
+          : parsed.rule.trigger === "graduation" ? "Graduated coins aren't tradable yet, so this agent won't buy"
+          : parsed.missed ? "Part of this rule wasn't understood; the agent follows the parts listed"
+          : null;
+        if (ag.ruleWarning) this.log(`Agent #${ag.id} rule warning: ${ag.ruleWarning}`);
         this.log(`Agent #${ag.id} rule v${ag.ruleVersion}: ${ag.ruleText ?? "(no text)"}`);
         if (live) this.lastAgentRefresh = 0; // read its new limits and on/off switch straight away
         break;
@@ -215,7 +243,7 @@ export class Engine {
   // ------------------------------------------------------------------ agents
 
   private async refreshAgents(first: boolean, only?: Set<Address>) {
-    if (!only) this.lastAgentRefresh = Date.now();
+    if (!only) { this.lastAgentRefresh = Date.now(); await this.readPause(); }
     for (const ag of this.agents.values()) {
       if (only && !only.has(ag.wallet)) continue;
       try {
@@ -396,7 +424,7 @@ export class Engine {
       const nav = Number(formatEther(ag.balance + open));
       const base = nav - pnlEth;
       rows.push({
-        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), rule: ag.ruleText, ruleVersion: ag.ruleVersion,
+        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
         nav, cash: Number(formatEther(ag.balance)), openPositions: book.size, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length,
       });

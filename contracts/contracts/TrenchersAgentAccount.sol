@@ -25,13 +25,17 @@ interface IAgentConfig {
     function router() external view returns (address);
     function launcher() external view returns (address);
     function starterFund() external view returns (address);
+    function paused() external view returns (bool);
 }
 
 /// @title TrenchersAgentAccount
+/// @notice Agent wallet logic, version 1. Agent wallets are TrenchersAgentWallet instances that run the
+///         current version from AgentConfig, so this code can be replaced by a fixed version after
+///         launch (48-hour public timelock). Storage layout: later versions only append.
 /// @notice The wallet of a Trenchers agent: an ERC-6551 token-bound account owned by whoever holds
 ///         the NFT. The rule: the trading engine can make the agent trade, but can never take its money.
 ///
-///         Holder:  applies guided rules and limits, pauses, withdraws (after a short delay), launches
+///         Holder:  applies guided rules and limits, pauses, withdraws instantly, launches
 ///                  the agent's coin, and has full control once the starter lock has ended.
 ///         Engine:  may only call the configured router, with ETH up to the holder's per-trade and daily
 ///                  caps, and approve that router for tokens it sells. Only while the holder's policy is
@@ -42,6 +46,8 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     using SafeERC20 for IERC20;
 
     uint256 public constant STARTER_LOCK = 180 days;
+    /// @notice Agent wallet code version (fixed versions count up).
+    uint256 public constant VERSION = 1;
 
     IAgentConfig public immutable config;
 
@@ -82,6 +88,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     error NoWithdrawal();
     error TooEarly();
     error CallFailed(bytes reason);
+    error TradingPaused();
 
     constructor(IAgentConfig config_) { config = config_; }
 
@@ -193,6 +200,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     /// @notice A swap through the configured router, within the holder's limits.
     function trade(uint256 value, bytes calldata data) external nonReentrant returns (bytes memory) {
         if (msg.sender != config.engine()) revert NotEngine();
+        if (config.paused()) revert TradingPaused();
         Policy memory p = policy;
         if (p.setBy != owner()) revert PolicyStale();
         if (!p.live) revert Paused();
@@ -210,6 +218,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     /// @notice Lets the router pull a token the agent is selling. Never the agent's own coin.
     function approveRouter(IERC20 tokenToSell, uint256 amount) external {
         if (msg.sender != config.engine()) revert NotEngine();
+        if (config.paused()) revert TradingPaused();
         if (address(tokenToSell) == coin) revert NotAllowed();
         if (policy.setBy != owner()) revert PolicyStale();
         address r = config.router();

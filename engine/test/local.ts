@@ -53,7 +53,9 @@ async function main() {
   const nft = await deploy("TrenchersNFT", [splitter, deployer.address, "", "", parseEther("0.02")]);
   const fund = await deploy("AgentStarterFund", [deployer.address, nft, registry, parseEther("0.01"), 600n]);
   const config = await deploy("AgentConfig", [deployer.address]);
-  const impl = await deploy("TrenchersAgentAccount", [config]);
+  const logic = await deploy("TrenchersAgentAccount", [config]);
+  await call(config, "AgentConfig", "propose", [4, logic]);
+  const impl = await deploy("TrenchersAgentWallet", [config]);
   const pons = await deploy("MockPonsFactory");
   const adapter = await deploy("PonsAdapter", [pons, deployer.address]);
   await call(config, "AgentConfig", "propose", [0, engineAcct.address]);
@@ -129,6 +131,15 @@ async function main() {
   console.log(JSON.stringify(arena.agents.map((a) => ({ rank: a.rank, id: a.id, pnlPct: +a.pnlPct.toFixed(2), pnlEth: +a.pnlEth.toFixed(5), trades: a.trades })), null, 0));
   check(arena.agents.length === 2 && arena.feed.length >= 4, `Arena shows both agents and their trades (${arena.feed.length} trades)`);
   check(arena.agents[0].pnlPct >= arena.agents[1].pnlPct && arena.agents.every((a) => a.trades === 2), "Arena ranks by weekly PnL, each agent with its buy and sell");
+
+  // Emergency stop: the team pauses all trading; nobody buys the next launch.
+  await call(config, "AgentConfig", "pause", []);
+  await sleep(16000);
+  const before = engine.trades.length;
+  await call(pons, "MockPonsFactory", "launch", ["STOP", parseEther("100")], parseEther("1"), dev);
+  await sleep(6000);
+  check(engine.paused && engine.trades.length === before, "emergency stop: no agent traded while the team had trading paused");
+  await call(config, "AgentConfig", "unpause", []);
 
   // Engine limits: never the agent's own coin, and pausing stops trading.
   await call(w6, "TrenchersAgentAccount", "pause", [], 0n, alice);

@@ -1557,3 +1557,13 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .pnl-primary:disabled { opacity: .5; cursor: default; }
 .pnl-msg { font-size: 12px; color: var(--quiet, #8A938E); }
 @media (max-width: 600px) { .pnl-body { padding: 12px; } .pnl-actions > * { flex: 1 1 auto; text-align: center; } }
+
+/* Setup page: trading switch, wallet version opt-in, emergency stop */
+.tn .tn-on { color: var(--green); }
+.tn .tn-upgrade { border: 1px solid rgba(57,255,136,.45); background: rgba(57,255,136,.06); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+.tn .tn-upgrade p { margin: 6px 0 10px; font-size: 13px; color: var(--quiet); }
+.tn .tn-danger { background: #FF5C5C; color: #0B0D0C; border-color: #FF5C5C; font-weight: 700; }
+.tn .tn-estop { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.tn .tn-estop > div { display: flex; flex-direction: column; gap: 4px; }
+.tn .tn-estop.on { border-color: #FF5C5C; background: rgba(255,92,92,.08); }
+.tn .tn-estop.on .tn-small { color: #FF5C5C; font-weight: 700; }
