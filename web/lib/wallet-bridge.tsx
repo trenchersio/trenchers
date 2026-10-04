@@ -11,7 +11,7 @@ export type BridgeApi = { connect: (rdns?: string) => Promise<void>; disconnect:
 export function WalletBridge({ onState, onApi }: { onState: (s: BridgeState) => void; onApi: (a: BridgeApi) => void }) {
   const [client] = useState(() => new QueryClient());
   return (
-    <WagmiProvider config={wagmiConfig}>
+    <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
       <QueryClientProvider client={client}>
         <Inner onState={onState} onApi={onApi} />
       </QueryClientProvider>

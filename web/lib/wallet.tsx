@@ -2,7 +2,7 @@
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { BridgeApi, BridgeState } from "./wallet-bridge";
-import { getWallet, revoke } from "./eip6963";
+import { getWallet, revoke, waitForWallet } from "./eip6963";
 
 /**
  * One place for "who is connected". A real browser wallet comes from wagmi; the demo wallet is a
@@ -44,13 +44,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [hasBrowserWallet, setHasBrowserWallet] = useState(false);
   const [bridgeOn, setBridgeOn] = useState(false);
   const [bridge, setBridge] = useState<BridgeState>({ address: null, connecting: false });
+  // A wallet connected on an earlier visit, found with a silent eth_accounts check (never a popup).
+  const [quiet, setQuiet] = useState<string | null>(null);
   const api = useRef<BridgeApi | null>(null);
   const waiters = useRef<((a: BridgeApi) => void)[]>([]);
 
   useEffect(() => {
     setDemo(read(DEMO_KEY));
     setHasBrowserWallet(typeof window !== "undefined" && "ethereum" in window);
-    if (read(BROWSER_KEY)) setBridgeOn(true); // reconnect a wallet used on an earlier visit
+    const rdns = read(BROWSER_KEY);
+    if (rdns && rdns !== "1") {
+      waitForWallet(rdns).then(async (w) => {
+        if (!w) return;
+        const accs = (await w.provider.request({ method: "eth_accounts" }).catch(() => [])) as string[];
+        if (accs[0]) setQuiet(accs[0]);
+        w.provider.on?.("accountsChanged", ((a: string[]) => setQuiet(a[0] ?? null)) as never);
+      });
+    }
     setReady(true);
   }, []);
 
@@ -63,7 +73,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const a = await getApi();
       await a.connect(rdns);
-      setPendingWallet(null);
+      setPendingWallet(null); setQuiet(null);
       write(BROWSER_KEY, rdns ?? "injected"); write(DEMO_KEY, null); setDemo(null);
       setModalOpen(false);
       return true;
@@ -82,16 +92,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
-    if (bridge.address) {
+    if (bridge.address || quiet) {
       api.current?.disconnect();
       const w = getWallet(read(BROWSER_KEY));
       if (w) revoke(w.provider);
     }
+    setQuiet(null);
     write(BROWSER_KEY, null); write(DEMO_KEY, null); setDemo(null);
-  }, [bridge.address]);
+  }, [bridge.address, quiet]);
 
-  const address = bridge.address ?? demo;
-  const kind: Kind | null = bridge.address ? "wallet" : demo ? "demo" : null;
+  const address = bridge.address ?? quiet ?? demo;
+  const kind: Kind | null = bridge.address || quiet ? "wallet" : demo ? "demo" : null;
 
   return (
     <Ctx.Provider value={{

@@ -455,7 +455,7 @@ What we integrate with, from public sources (verified again on-chain by the depl
 | **Uniswap** | v2, v3 and v4 live since 2 July 2026; v4 PoolManager `0x8366…0951`, UniversalRouter `0x8876…0904` |
 | **ERC-8004** | Identity registry `0x8004A169…a432`, reputation registry `0x8004BAa1…9b63` |
 | **Safe** | v1.4.1 contracts deployed on chains 4663 and 46630 |
-| **Explorers & data** | Blockscout (official explorer), DexScreener (`robinhood` chain id, token-profile API covers it), GMGN (`robinhood`) |
+| **Explorers & data** | Etherscan for Robinhood Chain ([robin.etherscan.io](https://robin.etherscan.io)) on mainnet, Blockscout on testnet, DexScreener (`robinhood` chain id, token-profile API covers it), GMGN (`robinhood`) |
 | **Tokens** | WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` |
 
 Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/pons-api/), [Pons explained](https://www.datawallet.com/crypto/pons-explained), [Uniswap v4 deployments](https://developers.uniswap.org/docs/protocols/v4/deployments), [ERC-8004 contracts](https://erc-8004.quicknode.com/docs/contracts), [Safe deployments](https://github.com/safe-global/safe-deployments), [Robinhood Chain contracts](https://docs.robinhood.com/chain/contracts), [DexScreener](https://dexscreener.com/robinhood).
@@ -507,7 +507,7 @@ npm run dev
 | `NEXT_PUBLIC_NFT_ADDRESS` | Trenchers contract; empty runs the site in sample mode |
 | `NEXT_PUBLIC_OPENSEA_URL` | Collection page; empty shows a plain "OpenSea" label |
 | `NEXT_PUBLIC_X_URL` | X profile, defaults to @trenchersio |
-| `NEXT_PUBLIC_EXPLORER_URL`, `NEXT_PUBLIC_EXPLORER_NAME` | Block explorer for agent wallets; defaults to Robinhood Chain's Blockscout |
+| `NEXT_PUBLIC_EXPLORER_URL`, `NEXT_PUBLIC_EXPLORER_NAME` | Block explorer for agent wallets; defaults to robin.etherscan.io on mainnet and Blockscout on testnet |
 | `NEXT_PUBLIC_GMGN_URL` | GMGN wallet page template, `{address}` is replaced |
 | `NEXT_PUBLIC_PONS_TOKEN_URL` | Pons token page template for agent coins; empty shows a plain "Pons" label |
 
