@@ -173,6 +173,9 @@ export class Engine {
   }
 
   private async onLog(l: Log & { eventName: string; args: Record<string, unknown> }, live: boolean) {
+    // Curve trades are emitted by every Pons coin; skip coins we don't follow before any RPC call
+    // (on mainnet that's thousands of logs per replay window).
+    if ((l.eventName === "CurveBuy" || l.eventName === "CurveSell") && !this.curves.has(lc(l.address))) return;
     const t = await this.blockTime(l.blockNumber!);
     const a = l.args as Record<string, any>;
     switch (l.eventName) {
