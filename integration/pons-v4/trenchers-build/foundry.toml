@@ -1,0 +1,21 @@
+# Trenchers contracts, built exactly like contracts/hardhat.config.js: solc 0.8.24, optimizer 500 runs,
+# cancun, no via-IR, OpenZeppelin 4.8.3. The parent project's tests load these artifacts by path.
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+offline = true
+solc = "0.8.24"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 500
+via_ir = false
+bytecode_hash = "none"
+remappings = [
+  "@openzeppelin/contracts/=lib/oz4/contracts/",
+  "@limitbreak/creator-token-standards/=lib/limitbreak/creator-token-standards/",
+  "@limitbreak/permit-c/=lib/limitbreak/permit-c/",
+]
+
+[lint]
+lint_on_build = false

@@ -1,0 +1,44 @@
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+libs = ["lib"]
+offline = true
+auto_detect_solc = true
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 500
+via_ir = false
+bytecode_hash = "none"
+gas_limit = "3000000000"
+code_size_limit = 100000
+fs_permissions = [{ access = "read", path = "./out" }, { access = "read", path = "./trenchers-build/out" }]
+sparse_mode = false
+
+# Uniswap v4 core/periphery are built the way Uniswap builds them (via-IR, 0.8.26).
+additional_compiler_profiles = [
+  { name = "ir", via_ir = true, optimizer_runs = 500 },
+  { name = "pm", via_ir = true, optimizer_runs = 44444444 },
+]
+compilation_restrictions = [
+  { paths = "lib/v4-core/src/**", via_ir = true },
+  { paths = "lib/v4-core/src/PoolManager.sol", via_ir = true, min_optimizer_runs = 44444444 },
+  { paths = "lib/v4-periphery/src/**", via_ir = true },
+  { paths = "src/pons/**", via_ir = true },
+  { paths = "lib/permit2/src/**", via_ir = true },
+]
+
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@uniswap/v4-core/=lib/v4-core/",
+  "@uniswap/v4-periphery/=lib/v4-periphery/",
+  "@uniswap/v4-hooks-public/=lib/v4-hooks-public/",
+  "permit2/=lib/permit2/",
+  "solmate/=lib/solmate/",
+  "erc6551/=lib/erc6551/",
+  # Pons V2 (and Uniswap periphery) use OpenZeppelin v5: the exact files Pons vendors (OZ 5.5).
+  "@openzeppelin/contracts/=lib/oz5-pons/contracts/",
+]
+
+[lint]
+lint_on_build = false
