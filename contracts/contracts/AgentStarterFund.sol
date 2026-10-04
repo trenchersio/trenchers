@@ -108,7 +108,7 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
         return registry.account(accountImplementation, accountSalt, block.chainid, address(nft), tokenId);
     }
 
-    /// @notice Pays the 0.05 ETH starter balance into a registered Trencher's agent wallet.
+    /// @notice Pays the starter balance (CLAIM) into the Trencher's agent wallet, creating the wallet if needed.
     function claim(uint256 tokenId) external nonReentrant {
         if (tokenId < FIRST_ID || tokenId > LAST_ID) revert NotEligible();
         if (claimed[tokenId]) revert AlreadyClaimed();

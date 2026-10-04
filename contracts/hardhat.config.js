@@ -22,6 +22,8 @@ module.exports = {
     settings: { optimizer: { enabled: true, runs: 500 }, evmVersion: "cancun" },
   },
   networks: {
+    // HH_CHAIN_ID=46630 lets a local node stand in for Robinhood testnet when testing the setup page.
+    hardhat: { chainId: Number(process.env.HH_CHAIN_ID || 31337) },
     robinhoodTestnet: {
       url: process.env.RH_TESTNET_RPC || "https://rpc.testnet.chain.robinhood.com",
       chainId: 46630,
