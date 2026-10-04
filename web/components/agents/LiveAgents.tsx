@@ -8,7 +8,7 @@ import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { cardFromLive } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
-import { ENGINE_URL, OPENSEA_URL, chain, openseaItem } from "@/lib/constants";
+import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
 import { createPortal } from "react-dom";
 import { MintPanel } from "@/components/MintPanel";
 import { LiveArena } from "@/components/arena/LiveArena";
@@ -151,7 +151,7 @@ export function LiveAgents() {
         <div className="connect-gate live-empty-gate">
           <h2>No Trenchers in this wallet yet</h2>
           <p className="lede">Mint one on trenchers.io (it gets its own agent wallet and starter balance), or buy one on OpenSea. If you hold Trenchers in another wallet, switch to it in your wallet app.</p>
-          <div className="actions"><TextButton href="/">Mint a Trencher</TextButton>{OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}</div>
+          <div className="actions"><TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>{OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}</div>
         </div>
       ) : (
         <div className="ap-roster" role="tablist" aria-label="Your Trenchers">

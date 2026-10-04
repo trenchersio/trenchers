@@ -89,7 +89,7 @@ export default function Home() {
               emotion.</span>
             </p>
             <div className="cta">
-              <TextButton href="#get">Mint a Trencher</TextButton>
+              <TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
             </div>
             <ul className="facts">

@@ -294,7 +294,7 @@ function Detail({ id, b, of }: { id: number; b: Entry; of: number }) {
       )}
 
       <div className="cd-actions">
-        {b.status === "unminted" && <TextButton href={ROUTES.home}>Mint a Trencher</TextButton>}
+        {b.status === "unminted" && <TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>}
         {a && <TextButton href={`${ROUTES.arena}#agent-${id}`}>View in the Arena</TextButton>}
         {b.mine && <TextButton href={ROUTES.agents}>Manage agent</TextButton>}
         {b.status !== "unminted" && <TextButton href={openseaItem(id)} external>OpenSea</TextButton>}

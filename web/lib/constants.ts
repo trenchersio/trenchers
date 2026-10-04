@@ -41,6 +41,7 @@ export const SOCIALS = {
 const PREVIEW = process.env.NEXT_PUBLIC_PREVIEW === "1";
 export const ROUTES = {
   home: PREVIEW ? "site.html" : "/",
+  mint: PREVIEW ? "mint.html" : "/mint",
   arena: PREVIEW ? "arena.html" : "/arena",
   collection: PREVIEW ? "collection.html" : "/collection",
   agents: PREVIEW ? "agents.html" : "/agents", // NFT / Agent Profile
