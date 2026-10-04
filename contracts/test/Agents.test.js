@@ -51,15 +51,11 @@ describe("TrenchersAgentAccount", () => {
     await fund.connect(alice).claim(6);
     expect(await acct.starterLocked()).to.equal(E("0.01"));
     expect(await acct.withdrawable()).to.equal(0n);
-    await acct.connect(alice).requestWithdrawal(E("0.01"));
-    await time.increase(11 * 60);
-    await expect(acct.connect(alice).withdraw()).to.be.revertedWithCustomError(acct, "StarterLocked");
+    await expect(acct.connect(alice).withdraw(E("0.01"))).to.be.revertedWithCustomError(acct, "StarterLocked");
     // the holder's own deposits stay withdrawable
     await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.2") });
     expect(await acct.withdrawable()).to.equal(E("0.2"));
-    await acct.connect(alice).requestWithdrawal(E("0.2"));
-    await time.increase(11 * 60);
-    await expect(acct.connect(alice).withdraw()).to.changeEtherBalance(alice, E("0.2"));
+    await expect(acct.connect(alice).withdraw(E("0.2"))).to.changeEtherBalance(alice, E("0.2"));
   });
 
   it("blocks sending the locked starter out through execute, and unlocks after 180 days", async () => {
@@ -117,15 +113,15 @@ describe("TrenchersAgentAccount", () => {
     await acct.connect(engine).trade(E("0.01"), swapData);
   });
 
-  it("voids a pending withdrawal when the NFT changes hands (no sell-and-drain)", async () => {
+  it("withdraws instantly, and only the current holder can (no draining after a sale)", async () => {
     const { register, nft, alice, bob } = await setup();
     const acct = await register(6);
     await alice.sendTransaction({ to: await acct.getAddress(), value: E("0.5") });
-    await acct.connect(alice).requestWithdrawal(E("0.5"));
+    await expect(acct.connect(alice).withdraw(E("0.6"))).to.be.revertedWithCustomError(acct, "StarterLocked");
+    await expect(acct.connect(alice).withdraw(E("0.1"))).to.changeEtherBalance(alice, E("0.1"));
     await nft.connect(alice).transferFrom(alice.address, bob.address, 6);
-    await time.increase(11 * 60);
-    await expect(acct.connect(alice).withdraw()).to.be.revertedWithCustomError(acct, "NotHolder");
-    await expect(acct.connect(bob).withdraw()).to.be.revertedWithCustomError(acct, "NoWithdrawal");
+    await expect(acct.connect(alice).withdraw(E("0.1"))).to.be.revertedWithCustomError(acct, "NotHolder");
+    await expect(acct.connect(bob).withdraw(E("0.4"))).to.changeEtherBalance(bob, E("0.4"));
   });
 
   it("never approves the router for the agent's own coin", async () => {

@@ -42,7 +42,6 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     using SafeERC20 for IERC20;
 
     uint256 public constant STARTER_LOCK = 180 days;
-    uint256 public constant WITHDRAW_DELAY = 10 minutes;
 
     IAgentConfig public immutable config;
 
@@ -64,15 +63,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
     uint256 public starterLockedAt; // when the starter balance arrived
     address public coin;            // the agent's own coin, if launched (the engine must never trade it)
 
-    struct Withdrawal { address requestedBy; uint128 amount; uint64 readyAt; }
-    Withdrawal public withdrawal;
 
     event PolicySet(address indexed holder, uint128 perTrade, uint128 dailyCap, bool live);
     event RuleApplied(uint32 indexed version, bytes32 ruleHash, string ruleUri);
     event Traded(uint256 value, bytes4 selector);
     event StarterReceived(uint256 amount);
     event CoinLaunched(address indexed coin);
-    event WithdrawalRequested(address indexed holder, uint256 amount, uint256 readyAt);
     event Withdrawn(address indexed to, uint256 amount);
 
     error NotHolder();
@@ -137,7 +133,7 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         return starterLocked < address(this).balance ? starterLocked : address(this).balance;
     }
 
-    /// @notice ETH the holder can withdraw right now (subject to the withdrawal delay).
+    /// @notice ETH the holder can withdraw right now: everything except the locked starter balance.
     function withdrawable() public view returns (uint256) { return address(this).balance - lockedNow(); }
 
     // ------------------------------------------------------------------ holder
@@ -169,23 +165,14 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         if (coin_ != address(0)) { coin = coin_; emit CoinLaunched(coin_); }
     }
 
-    /// @notice Step 1 of a withdrawal. The request is void if the NFT changes hands before step 2.
-    function requestWithdrawal(uint128 amount) external onlyHolder {
-        withdrawal = Withdrawal(msg.sender, amount, uint64(block.timestamp + WITHDRAW_DELAY));
-        emit WithdrawalRequested(msg.sender, amount, block.timestamp + WITHDRAW_DELAY);
-    }
-
-    /// @notice Step 2: sends the requested ETH to the holder, never touching the locked starter balance.
-    function withdraw() external onlyHolder nonReentrant {
-        Withdrawal memory w = withdrawal;
-        if (w.requestedBy != msg.sender || w.amount == 0) revert NoWithdrawal();
-        if (block.timestamp < w.readyAt) revert TooEarly();
-        if (w.amount > withdrawable()) revert StarterLocked();
-        delete withdrawal;
+    /// @notice Instant withdrawal to the holder of anything above the locked starter balance.
+    function withdraw(uint256 amount) external onlyHolder nonReentrant {
+        if (amount == 0) revert NoWithdrawal();
+        if (amount > withdrawable()) revert StarterLocked();
         _state++;
-        (bool ok, bytes memory r) = msg.sender.call{value: w.amount}("");
+        (bool ok, bytes memory r) = msg.sender.call{value: amount}("");
         if (!ok) revert CallFailed(r);
-        emit Withdrawn(msg.sender, w.amount);
+        emit Withdrawn(msg.sender, amount);
     }
 
     /// @notice ERC-6551 execute. Unrestricted for the holder once nothing is locked; while the starter
