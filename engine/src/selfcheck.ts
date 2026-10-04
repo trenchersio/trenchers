@@ -83,6 +83,22 @@ export async function liveCheck(rpc: string) {
   if (!f.hasCode) problems.push("no Pons factory code at the expected address");
   if (typeof f.poolManager !== "string" || typeof f.memeHook !== "string") problems.push("factory.poolManager() / memeHook() not readable: graduated-coin trading would fail");
 
+  // 1b. What the Trenchers launch needs on mainnet: the ERC-6551 registry, the team Safe, the Deployer's gas.
+  const SAFE = "0xF928e1A70d0CBf092193D4E3FE4F68edfffe4b10" as Address, DEPLOYER = "0x447D8F97c39df3d6FCAB8a02A54986283e818210" as Address;
+  const SAFE_ABI = parseAbi(["function getThreshold() view returns (uint256)", "function getOwners() view returns (address[])"]);
+  const has = async (a: Address) => { const x = await c.getCode({ address: a }).catch(() => undefined); return !!x && x !== "0x"; };
+  const launch: Record<string, unknown> = {
+    erc6551Registry: await has("0x000000006551c19487814612e58FE06813775758"),
+    limitBreakValidator: await has("0x721C008fdff27BF06E7E123956E2Fe03B63342e3"),
+    deployerEth: formatEther(await c.getBalance({ address: DEPLOYER })),
+  };
+  try {
+    launch.safeThreshold = Number(await c.readContract({ address: SAFE, abi: SAFE_ABI, functionName: "getThreshold" }));
+    launch.safeOwners = await c.readContract({ address: SAFE, abi: SAFE_ABI, functionName: "getOwners" });
+  } catch { launch.safe = "not readable"; problems.push("team Safe not readable on mainnet"); }
+  report.launch = launch;
+  if (!launch.erc6551Registry) problems.push("no ERC-6551 registry on mainnet: agent wallets can't be created");
+
   // 2. Recent events decode with the engine's ABIs.
   const launches = await logsBack(c, head, 3_000_000n, (a, b) => c.getLogs({ address: PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: a, toBlock: b }) as Promise<Log[]>, 300);
   const grads = await logsBack(c, head, 6_000_000n, (a, b) => c.getLogs({ address: PONS_FACTORY, event: POOL_GRADUATED, fromBlock: a, toBlock: b }) as Promise<Log[]>, 20);
