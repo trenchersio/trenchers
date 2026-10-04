@@ -10,6 +10,8 @@ interface INFTNotify {
 }
 
 interface IERC6551Registry {
+    function createAccount(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId)
+        external returns (address);
     function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId)
         external view returns (address);
 }
@@ -19,8 +21,9 @@ interface IERC6551Registry {
 ///         buyer can give their agent a 0.05 ETH starter balance: enough to launch its own coin
 ///         on Pons and start trading.
 ///
-///         The holder registers the Trencher (its ERC-6551 agent wallet is deployed), then calls
-///         claim(tokenId). The fund pays CLAIM straight into that Trencher's agent wallet, never to
+///         The holder calls claim(tokenId) ("Awaken"): the fund deploys the Trencher's ERC-6551 agent
+///         wallet if it doesn't exist yet, pays the starter balance into it, and the NFT's metadata
+///         turns from dormant (grey) to awake (colour). The fund pays CLAIM straight into that Trencher's agent wallet, never to
 ///         a person. Each Trencher can be claimed once, ever. House agents #1-#5 and the treasury
 ///         that lists the collection cannot claim. A Trencher resold before claiming can still be
 ///         claimed by its new holder.
@@ -107,6 +110,11 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
         if (msg.sender == treasury) revert TreasuryCannotClaim();
         if (nft.ownerOf(tokenId) != msg.sender) revert NotHolder();
         address wallet = agentWallet(tokenId);
+        // Awaken in one step: deploy the agent wallet if the holder hasn't yet.
+        if (wallet.code.length == 0) {
+            registry.createAccount(accountImplementation, accountSalt, block.chainid, address(nft), tokenId);
+            wallet = agentWallet(tokenId);
+        }
         if (wallet.code.length == 0) revert NotRegistered();
         if (address(this).balance < CLAIM) revert Underfunded();
 

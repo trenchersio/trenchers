@@ -52,7 +52,7 @@ export function MyAgents() {
         <div>
           <p className="eyebrow">NFT / Agent Profile</p>
           <h1>Your agents</h1>
-          <p className="ap-sub">Register, fund and guide each Trencher. Its wallet, coin, rules and record all stay with the NFT.</p>
+          <p className="ap-sub">Awaken, fund and guide each Trencher. The NFT is the agent&apos;s identity: its wallet, coin, rules and record all stay with it.</p>
         </div>
         <div className="ap-wallet mono">
           <span className={`dot ${w.kind === "demo" ? "dot-demo" : ""}`} />{short(w.address)}
@@ -65,7 +65,7 @@ export function MyAgents() {
           const st = statusOf(a);
           return (
             <button key={a.id} type="button" role="tab" aria-selected={a.id === selected} className={`ap-card${a.id === selected ? " on" : ""}`} onClick={() => setSelected(a.id)}>
-              <ArtCanvas id={a.id} size={56} className="ap-card-art" />
+              <ArtCanvas id={a.id} size={56} className={`ap-card-art${a.starterClaimed ? "" : " is-dormant"}`} />
               <span className="ap-card-text">
                 <b>Trencher #{a.id}</b>
                 <span className={`status status-${st.tone} mono`}>{st.label}</span>
@@ -106,8 +106,13 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     finish(); setBusy(null);
   }
 
-  const register = () => run(["Creating the agent wallet (ERC-6551)…", "Registering the agent identity (ERC-8004)…"], () => {
-    onChange(log({ ...a, registered: true, registeredAt: Date.now(), agentWallet: agentWalletFor(owner, a.id), identityId: identityFor(a.id) }, "Registered as an agent"));
+  const awaken = () => run([
+    "Creating the agent wallet (ERC-6551)…",
+    `Claiming ${STARTER_ETH} ETH from the Agent Starter Fund into it…`,
+    "Registering the agent identity (ERC-8004)…",
+  ], () => {
+    const v = Number(STARTER_ETH);
+    onChange(log({ ...a, registered: true, registeredAt: Date.now(), agentWallet: agentWalletFor(owner, a.id), identityId: identityFor(a.id), starterClaimed: true, balance: +(a.balance + v).toFixed(4), locked: +((a.locked ?? 0) + v).toFixed(4) }, `Awakened: agent wallet created, ${STARTER_ETH} ETH starter claimed`));
   });
 
   const claimStarter = () => run([
@@ -180,7 +185,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   return (
     <div className="ap-main">
       <section className="ap-hero">
-        <div className="ap-art"><ArtCanvas id={a.id} size={208} /></div>
+        <div className={`ap-art${a.starterClaimed ? "" : " is-dormant"}`}><ArtCanvas id={a.id} size={208} />{!a.starterClaimed && <span className="mono ap-art-tag">{STARTER_ETH} ETH claimable</span>}</div>
         <div className="ap-id">
           <span className="mono ap-kick">Your agent</span>
           <h2>Trencher #{a.id}</h2>
@@ -192,14 +197,14 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           {a.agentWallet ? (
             <p className="mono ap-wallet-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} · {chain.name}</p>
           ) : (
-            <p className="ap-wallet-line">Not registered yet: register it below to give it a wallet and an identity.</p>
+            <p className="ap-wallet-line">Dormant: awaken it below to give it a wallet, an identity and its 0.05 ETH.</p>
           )}
           <AgentLinks wallet={a.agentWallet} />
           <dl className="ap-kpis">
             <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked</span>}</div>
             <SelfFundedKpi a={a} />
             <div><dt className="mono">Guidance</dt><dd className="mono">{versions ? `v${versions}` : "—"}</dd><span className="mono kpi-note">{versions ? `${versions} rule${versions > 1 ? "s" : ""} applied` : "Talk to it in section 3"}</span></div>
-            <div><dt className="mono">Arena</dt><dd className="mono">{a.live ? <span className="up">Live</span> : a.strategy ? "Ready" : "—"}</dd><span className="mono kpi-note">{a.live ? "Competing this epoch" : "Not entered"}</span></div>
+            <div><dt className="mono">Arena</dt><dd className="mono">{a.live ? <span className="up">Live</span> : a.strategy ? "Ready" : "—"}</dd><span className="mono kpi-note">{a.live ? "Competing this week" : "Not entered"}</span></div>
           </dl>
         </div>
       </section>
@@ -214,7 +219,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
 
       <div className="segs" role="tablist" aria-label="Agent profile sections">
         {([
-          ["register", "1", "Register + claim", a.registered && a.starterClaimed ? "done" : ""],
+          ["register", "1", "Awaken", a.registered && a.starterClaimed ? "done" : ""],
           ["coin", "2", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad", a.token ? "done" : a.fundingMode === "self" ? "skip" : "opt"],
           ["strategy", "3", "Guide your agent", a.live ? "done" : ""],
         ] as const).map(([k, n, label, state]) => (
@@ -237,25 +242,20 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       </>)}
 
       {tab === "register" && <ol className="steps-v">
-        <Step n={1} title="Register as an agent" state={a.registered ? "done" : "now"}>
-          {a.registered ? (
-            <p>Registered. Your Trencher has its own wallet and an on-chain identity. Both stay with the NFT if you sell it.</p>
-          ) : (<>
-            <p>Gives your Trencher its own wallet and an on-chain agent identity. Two transactions, paid in gas only.</p>
-            <TextButton onClick={register} disabled={!!busy}>Register agent</TextButton>
+        <Step n={1} title="Awaken your Trencher" state={a.registered && a.starterClaimed ? "done" : "now"}>
+          {a.registered && a.starterClaimed ? (
+            <p>Awake. Your Trencher has its own wallet, an on-chain identity and {STARTER_ETH} ETH of starter balance. All of it stays with the NFT if you sell it.</p>
+          ) : a.registered ? (<>
+            <p>The wallet exists but the {STARTER_ETH} ETH starter balance is still waiting in the Agent Starter Fund.</p>
+            <TextButton onClick={claimStarter} disabled={!!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
+          </>) : (<>
+            <p>One transaction does it all: it creates your Trencher&apos;s own wallet, claims the <b>{STARTER_ETH} ETH</b> set aside from your purchase straight into it, and gives it an on-chain identity. The art turns from grey to full colour on OpenSea and its traits change from Dormant to Awake.</p>
+            <p className="muted-note">The starter balance stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn.</p>
+            <TextButton onClick={awaken} disabled={!!busy}>{`Awaken · claim ${STARTER_ETH} ETH`}</TextButton>
           </>)}
         </Step>
 
-        <Step n={2} title={`Claim the ${STARTER_ETH} ETH starter balance`} state={a.starterClaimed ? "done" : a.registered ? "now" : "todo"}>
-          {a.starterClaimed ? (
-            <p>Claimed. {STARTER_ETH} ETH from the Agent Starter Fund is in the agent wallet, ready to launch its coin or trade.</p>
-          ) : (<>
-            <p>Half of what you paid for your Trencher is set aside for its agent. Claim it once and it goes straight into the agent wallet. It stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn. Claiming also <b>awakens the NFT</b>: its art turns from grey to full colour on OpenSea and its traits change from Dormant to Awake.</p>
-            <TextButton onClick={claimStarter} disabled={!a.registered || !!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
-          </>)}
-        </Step>
-
-        <Step n={3} title="Choose how your agent funds itself" state={a.token || a.fundingMode === "self" ? "done" : a.starterClaimed ? "now" : "todo"}>
+        <Step n={2} title="Choose how your agent funds itself" state={a.token || a.fundingMode === "self" ? "done" : a.starterClaimed ? "now" : "todo"}>
           <div className="ab">
             <button type="button" className={`ab-opt ab-a${a.fundingMode === "coin" || a.token ? " ab-on" : ""}`} onClick={chooseCoin} disabled={!a.registered || !!busy}>
               <span className="sf-letter">A</span>
@@ -268,7 +268,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </div>
         </Step>
 
-        <Step n={4} title="Top up (optional)" state={!a.registered ? "todo" : a.balance > Number(STARTER_ETH) || (!a.starterClaimed && a.balance > 0) ? "done" : "todo"}>
+        <Step n={3} title="Top up (optional)" state={!a.registered ? "todo" : a.balance > Number(STARTER_ETH) || (!a.starterClaimed && a.balance > 0) ? "done" : "todo"}>
           <p>Add your own ETH whenever you want more trading capital. Anything you deposit stays withdrawable.</p>
           <div className="fund-row">
             <span className="balance mono"><small>Balance</small>{a.balance.toFixed(4)} ETH{locked > 0 && <em className="locked-note">{locked.toFixed(4)} starter, locked</em>}</span>
@@ -335,7 +335,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
 
         <Step n={3} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
           {a.live ? (<>
-            <p>Trading. Your agent is competing in this week&apos;s epoch. Keep talking to it whenever you want it to trade differently.</p>
+            <p>Trading. Your agent is competing in this week&apos;s PnL race. Keep talking to it whenever you want it to trade differently.</p>
             <div className="actions">
               <TextButton href={ROUTES.arena}>View in the Arena</TextButton>
               <TextButton onClick={pause} disabled={!!busy}>Pause trading</TextButton>

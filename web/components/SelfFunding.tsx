@@ -2,15 +2,15 @@ import { TextButton } from "@/components/TextButton";
 import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
 import { LIST_PRICE_ETH, ROUTES, STARTER_ETH } from "@/lib/constants";
 
-/** Landing section: after registering and claiming the starter balance, the holder picks option A or B. */
+/** Landing section: after awakening it with the starter balance, the holder picks option A or B. */
 export function SelfFunding() {
   return (
     <div className="sf">
       <ol className="sf-path" aria-label="Before you choose">
         <li><span className="mono">Buy</span><b>{LIST_PRICE_ETH} ETH</b></li>
-        <li><span className="mono">Register</span><b>Wallet + identity</b></li>
-        <li><span className="mono">Claim</span><b>+{STARTER_ETH} ETH to the agent</b></li>
-        <li className="sf-path-choose"><span className="mono">Then choose</span><b>A or B</b></li>
+        <li><span className="mono">Awaken</span><b>+{STARTER_ETH} ETH to the agent</b></li>
+        <li><span className="mono">Identity</span><b>Wallet + agent ID</b></li>
+        <li className="sf-path-choose"><span className="mono">You choose</span><b>A or B</b></li>
       </ol>
 
       <div className="sf-pillars">

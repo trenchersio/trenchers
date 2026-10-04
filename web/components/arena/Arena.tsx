@@ -8,7 +8,8 @@ import { LineChart } from "./LineChart";
 import { useWallet } from "@/lib/wallet";
 import { liveAgentIds } from "@/lib/agents-store";
 
-const ROW_H = 50;
+const ROW_H = 58;
+type Filter = "all" | "guided" | "template" | "mine";
 
 function useSim() {
   const ref = useRef<Sim | null>(null);
@@ -39,6 +40,7 @@ const signed = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`;
 export function Arena() {
   const sim = useSim();
   const [selected, setSelected] = useState<number | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
   const { address } = useWallet();
   const [mine, setMine] = useState<number[]>([]);
   useEffect(() => {
@@ -82,7 +84,7 @@ export function Arena() {
         <div className="stat"><span className="stat-label">Active agents</span><span className="stat-value mono">{sim.agents.length}</span><span className="stat-sub">of 2,000</span></div>
         <div className="stat"><span className="stat-label">Self-funding paid</span><span className="stat-value mono">{(sim.agentFees + sim.agents.reduce((t, x) => t + x.tokenFees, 0)).toFixed(2)} <small>ETH</small></span><span className="stat-sub">agent coins + 10% of $TRENCHERS fees</span></div>
         <div className="stat"><span className="stat-label">Weekly prize pool</span><span className="stat-value mono">{sim.prizePool.toFixed(3)} <small>ETH</small></span><span className="stat-sub">top 10 agents</span></div>
-        <div className="stat"><span className="stat-label">Epoch ends in</span><span className="stat-value mono">{countdown(nextEpochEnd(now) - now)}</span><span className="stat-sub">Monday 00:00 UTC</span></div>
+        <div className="stat"><span className="stat-label">Week ends in</span><span className="stat-value mono">{countdown(nextEpochEnd(now) - now)}</span><span className="stat-sub">Monday 00:00 UTC</span></div>
         <div className="stat stat-launches">
           <span className="stat-label">Live Pons signals</span>
           <ul className="mono signals">{sim.events.slice(0, 3).map((e) => <li key={`${e.t}-${e.kind}-${e.sym}`}><span className={`sig sig-${e.kind}`} />{signalLabel(e)}</li>)}</ul>
@@ -92,17 +94,36 @@ export function Arena() {
       <div className="arena-grid">
         <section className="board" aria-label="Leaderboard">
           <div className="board-head">
-            <h1>Leaderboard</h1>
-            <span className="board-meta">{sim.agents.length} agents · ranked by epoch return</span>
+            <div className="bh-title"><h1>Leaderboard</h1><span className="board-meta">{sim.agents.length} agents · ranked by weekly PnL</span></div>
             <span className="sample">Sample data</span>
           </div>
+          <div className="podium" aria-label="Top 3">
+            {[0, 1, 2].map((rk) => { const a = sim.agents.find((x) => x.rank === rk)!; const pr = pct(a); return (
+              <button key={rk} type="button" className={`pod pod-${rk + 1}${sel?.id === a.id ? " on" : ""}`} onClick={() => choose(a.id)}>
+                <span className="pod-rank mono">{rk + 1}</span>
+                <img src={`nft/${a.id}.webp`} alt="" width={44} height={44} />
+                <span className="pod-txt"><b>#{a.id}</b><span className={`mono ${pr >= 0 ? "up" : "down"}`}>{signed(pr)}</span></span>
+              </button>
+            ); })}
+          </div>
+          <div className="board-filters" role="tablist" aria-label="Filter">
+            {([["all", "All"], ["guided", "Guided"], ["template", "Templates"], ...(mine.length ? [["mine", "Yours"]] : [])] as [Filter, string][]).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={filter === k} className={`tbtn${filter === k ? " tbtn-on" : ""}`} onClick={() => setFilter(k)}>{l}</button>
+            ))}
+          </div>
           <div className="board-cols mono" aria-hidden="true">
-            <span>#</span><span>Agent</span><span className="col-strat">Strategy</span><span className="col-num">Value ETH</span><span className="col-num">Epoch</span><span className="col-last">Last trade</span>
+            <span>#</span><span>Agent</span><span className="col-num">PnL</span><span className="col-spark">7d</span><span className="col-num col-val">Value</span><span className="col-last">Last trade</span>
           </div>
           <div className="board-scroll">
-            <ol className="board-rows" style={{ height: sim.agents.length * ROW_H }}>
-              {sim.agents.map((a) => <Row key={a.id} a={a} now={now} mine={mine.includes(a.id)} active={a.id === sel?.id} onClick={() => choose(a.id)} />)}
-            </ol>
+            {(() => {
+              const shown = [...sim.agents].filter((a) => filter === "all" || (filter === "guided" ? !!a.rule : filter === "template" ? !a.rule : mine.includes(a.id))).sort((x, y) => x.rank - y.rank);
+              const pos = new Map(shown.map((a, i) => [a.id, i]));
+              return (
+                <ol className="board-rows" style={{ height: shown.length * ROW_H }}>
+                  {sim.agents.map((a) => pos.has(a.id) ? <Row key={a.id} a={a} slot={pos.get(a.id)!} now={now} mine={mine.includes(a.id)} active={a.id === sel?.id} onClick={() => choose(a.id)} /> : null)}
+                </ol>
+              );
+            })()}
           </div>
         </section>
 
@@ -114,7 +135,15 @@ export function Arena() {
   );
 }
 
-function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active: boolean; mine: boolean; onClick: () => void }) {
+function Spark({ data }: { data: number[] }) {
+  const d = data.slice(-90); if (d.length < 2) return <svg className="spark" />;
+  const lo = Math.min(...d), hi = Math.max(...d), span = hi - lo || 1;
+  const pts = d.map((v, i) => `${(i / (d.length - 1)) * 64},${20 - ((v - lo) / span) * 18 - 1}`).join(" ");
+  const up = d[d.length - 1] >= d[0];
+  return <svg className="spark" viewBox="0 0 64 20" preserveAspectRatio="none"><polyline points={pts} fill="none" stroke={up ? "#39FF88" : "#FF4D4D"} strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>;
+}
+
+function Row({ a, slot, now, active, mine, onClick }: { a: Agent; slot: number; now: number; active: boolean; mine: boolean; onClick: () => void }) {
   const r = pct(a);
   const moved = a.prevRank - a.rank;
   const fresh = now - a.lastTradeAt < 1400;
@@ -122,18 +151,21 @@ function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active:
   return (
     <li
       className={`row${active ? " active" : ""}${moved > 0 ? " rising" : ""}${fresh ? (a.lastSide === "BUY" ? " flash-buy" : " flash-sell") : ""}`}
-      style={{ transform: `translateY(${a.rank * ROW_H}px)` }}
+      style={{ transform: `translateY(${slot * ROW_H}px)` }}
     >
       <button type="button" onClick={onClick} aria-label={`Trencher #${a.id}, rank ${a.rank + 1}, ${signed(r)}`}>
-        <span className={`mono rank${a.rank < 3 ? ` rank-top rank-${a.rank + 1}` : ""}`}>{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
+        <span className={`mono rank${a.rank < 3 ? ` rank-top rank-${a.rank + 1}` : ""}`}>{a.rank + 1}{moved !== 0 && a.rank >= 3 && <i className={moved > 0 ? "up" : "down"}>{moved > 0 ? "▲" : "▼"}</i>}</span>
         <span className="who">
-          <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
-          <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
+          <img src={`nft/${a.id}.webp`} alt="" width={34} height={34} />
+          <span className="who-txt">
+            <b>Trencher #{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</b>
+            <small>{a.rule ? <><i className="dot-g" />Guided</> : <><i className="dot-t" />{a.strategy}</>}{a.token && <span className="coin-sm"> · ${a.token}</span>}</small>
+          </span>
         </span>
-        <span className="col-strat">{a.rule ? <em className="pill pill-guided">Guided</em> : <><em className="pill pill-tpl">Template</em><span className="tpl-name">{a.strategy}</span></>}</span>
-        <span className="mono col-num">{a.nav.toFixed(3)}</span>
-        <span className={`mono col-num ${r >= 0 ? "up" : "down"}`}>{signed(r)}</span>
-        <span className="mono col-last">{last ? <><b className={last.side === "BUY" ? "up" : "down"}>{last.side}</b> ${last.sym}</> : "—"}</span>
+        <span className="col-num"><em className={`pnl mono ${r >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(r)}</em></span>
+        <span className="col-spark"><Spark data={a.history} /></span>
+        <span className="mono col-num col-val">{a.nav.toFixed(3)}<small> ETH</small></span>
+        <span className="mono col-last">{last ? <><b className={`side ${last.side === "BUY" ? "side-buy" : "side-sell"}`}>{last.side}</b><span className="sym">${last.sym}</span><span className="ago">{ago(now - last.t)}</span></> : "—"}</span>
       </button>
     </li>
   );
@@ -162,7 +194,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
 
       <dl className="kpis">
         <div><dt>Value</dt><dd className="mono">{a.nav.toFixed(3)} ETH</dd></div>
-        <div><dt>Epoch return</dt><dd className={`mono ${r >= 0 ? "up" : "down"}`}>{signed(r)}</dd></div>
+        <div><dt>PnL this week</dt><dd className={`mono ${r >= 0 ? "up" : "down"}`}>{signed(r)}</dd></div>
         <div><dt>Deposited</dt><dd className="mono">{a.deposited.toFixed(2)} ETH</dd></div>
         <div><dt>Trades</dt><dd className="mono">{a.trades.length}</dd></div>
         <div><dt>Win rate</dt><dd className="mono">{a.closed ? `${winRate.toFixed(0)}%` : "—"}</dd></div>
@@ -181,7 +213,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
           <div><dt>Coin fees earned</dt><dd className="mono">{a.tokenFees.toFixed(4)} ETH</dd></div>
           <div><dt>$TRENCHERS fee share</dt><dd className="mono">{a.shareFees.toFixed(4)} ETH</dd></div>
         </dl>
-        <p className="hint-line">Fee income is added to the agent wallet like a deposit, so it funds trading but doesn&apos;t count as epoch return.</p>
+        <p className="hint-line">Fee income is added to the agent wallet like a deposit, so it funds trading but doesn&apos;t count as PnL.</p>
       </div>
 
       <div className="panel-block">

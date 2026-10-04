@@ -187,9 +187,11 @@ describe("AgentStarterFund", () => {
     expect(await fund.claimedCount()).to.equal(1n);
   });
 
-  it("requires the agent to be registered first", async () => {
-    const { fund, alice } = await setup();
-    await expect(fund.connect(alice).claim(6)).to.be.revertedWithCustomError(fund, "NotRegistered");
+  it("awakens in one step: deploys the agent wallet if needed, then pays into it", async () => {
+    const { fund, alice, registry } = await setup();
+    await fund.connect(alice).claim(6);
+    const w = await registry.wallets(6);
+    expect(await ethers.provider.getBalance(w)).to.equal(ethers.parseEther("0.05"));
   });
 
   it("only the current holder can claim; the treasury and house agents never can", async () => {

@@ -9,6 +9,10 @@ contract MockAgentWallet {
 contract MockRegistry {
     mapping(uint256 => address) public wallets;
     function setWallet(uint256 tokenId, address wallet) external { wallets[tokenId] = wallet; }
+    function createAccount(address, bytes32, uint256, address, uint256 tokenId) external returns (address) {
+        if (wallets[tokenId] == address(0)) wallets[tokenId] = address(new MockAgentWallet());
+        return wallets[tokenId];
+    }
     function account(address, bytes32, uint256, address, uint256 tokenId) external view returns (address) {
         address w = wallets[tokenId];
         return w == address(0) ? address(uint160(uint256(keccak256(abi.encode(tokenId))))) : w;

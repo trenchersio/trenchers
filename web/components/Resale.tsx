@@ -28,7 +28,7 @@ export function Resale() {
         </div>
         <dl className="rs-stats">
           <div><dt className="mono">Arena rank</dt><dd className="mono">#3 <small>of 412</small></dd></div>
-          <div><dt className="mono">Last 8 epochs</dt><dd className="mono up">+61.4%</dd></div>
+          <div><dt className="mono">PnL, last 8 weeks</dt><dd className="mono up">+61.4%</dd></div>
           <div><dt className="mono">Win rate</dt><dd className="mono">58%</dd></div>
           <div><dt className="mono">Trades</dt><dd className="mono">1,284</dd></div>
         </dl>

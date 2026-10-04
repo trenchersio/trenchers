@@ -31,7 +31,7 @@ export function ConnectModal() {
           <div className="wallet-opt">
             <div>
               <h3>Demo wallet</h3>
-              <p>Try registering and funding an agent with sample data. Nothing is sent on-chain.</p>
+              <p>Try awakening and guiding an agent with sample data. Nothing is sent on-chain.</p>
             </div>
             <TextButton onClick={w.connectDemo}>Use demo</TextButton>
           </div>
