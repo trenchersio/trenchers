@@ -206,6 +206,12 @@ async function main() {
   check(fresh.length === 2, `Telegram got exactly 2 posts (mint and sale, not the plain transfer): ${fresh.length}`);
   check(fresh[0]?.method === "sendMediaGroup" && /2 Trenchers minted/.test(cap(fresh[0])) && /0\.04 ETH/.test(cap(fresh[0])), "Telegram: the mint of 2 is posted with both images and the price");
   check(fresh[1]?.method === "sendPhoto" && /Trencher #8 sold<\/b> for 0\.05 ETH/.test(cap(fresh[1])) && /\/awake\/8\.png$/.test(fresh[1].body.photo ?? ""), "Telegram: the sale is posted with its price and image");
+  // An awakening is posted too (#9 now belongs to dev, who claims its starter balance).
+  const n1 = posts.length;
+  await call(fund, "AgentStarterFund", "claim", [9n], 0n, dev);
+  await sleep(8000);
+  const woke = posts.slice(n1);
+  check(woke.length === 1 && /Trencher #9 awakened/.test(cap(woke[0])) && /\/awake\/9\.png$/.test(woke[0].body.photo ?? ""), `Telegram: the awakening of #9 is posted with its art (${woke.length} post)`);
   tg.close();
 
   running = false;

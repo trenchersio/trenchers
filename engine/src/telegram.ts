@@ -42,6 +42,19 @@ export class TelegramFeed {
     }
   }
 
+  /** An agent woke up: its holder claimed the starter balance into its new wallet. */
+  async onAwaken(id: number, holder: Address, wallet: Address, amount: bigint, hash: Hash | null) {
+    if (hash && this.seen.has(`awake:${hash}` as Hash)) return;
+    if (hash) this.seen.add(`awake:${hash}` as Hash);
+    const lines = [
+      `⚡ <b>Trencher #${id} awakened</b>`,
+      `${fmt(Number(formatEther(amount)))} ETH is now in its own agent wallet <code>${short(wallet)}</code>, ready to trade.`,
+      `Holder <code>${short(holder)}</code>`,
+      `<a href="${this.cfg.site}/arena">Arena</a>${hash ? ` · <a href="${this.cfg.explorer}/tx/${hash}">tx</a>` : ""}`,
+    ];
+    try { await this.post([id], "awake", lines.join("\n")); } catch (e) { this.lastError = (e as Error).message.split("\n")[0]; this.log(`telegram: ${this.lastError}`); }
+  }
+
   private async handleTx(hash: Hash, items: { from: Address; to: Address; id: number }[]) {
     const mints = items.filter((i) => i.from === ZERO);
     const moves = items.filter((i) => i.from !== ZERO && i.to !== ZERO);
@@ -56,8 +69,8 @@ export class TelegramFeed {
         `🟢 <b>${title}</b>`,
         ids.length > 1 ? `#${ids.join(", #")}` : null,
         paid > 0 ? `${fmt(paid)} ETH${ids.length > 1 ? ` (${fmt(paid / ids.length)} each)` : ""} · by <code>${short(mints[0].to)}</code>` : `by <code>${short(mints[0].to)}</code>`,
-        `Half of every mint goes straight into the agent's wallet.`,
-        `<a href="${this.cfg.site}">Mint on trenchers.io</a> · <a href="${link}">tx</a>`,
+        `0.01 ETH of every mint is set aside for the agent's own wallet.`,
+        `<a href="${this.cfg.site}/mint">Mint on trenchers.io</a> · <a href="${link}">tx</a>`,
       ];
       await this.post(ids, "dormant", lines.filter(Boolean).join("\n"));
     }

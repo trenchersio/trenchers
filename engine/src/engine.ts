@@ -89,8 +89,11 @@ export class Engine {
 
   // ------------------------------------------------------------------ chain sync
 
+  /** First block of this process's lifetime (minus a margin): NFT moves from here on are posted even during the replay. */
+  private catchUpFrom = 2n ** 255n;
   async start() {
     const head = await this.pub.getBlockNumber();
+    this.catchUpFrom = head > 100n ? head - 100n : 0n;
     const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
     this.cursor = start > 0n ? start - 1n : 0n;
     await this.discoverHouse(false);
@@ -177,7 +180,7 @@ export class Engine {
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: this.adapter, event: BOUGHT, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: this.adapter, event: SOLD, fromBlock: from, toBlock: to }),
-        live && this.telegram ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
+        this.telegram && (live || to >= this.catchUpFrom) ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: LAUNCH_SWEPT, fromBlock: from, toBlock: to }),
       ]);
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
@@ -185,7 +188,13 @@ export class Engine {
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
-      if (nftMoves.length && this.telegram) this.telegram.onTransfers(nftMoves).catch(() => {});
+      // While catching up after a restart, mints and sales made since this process started are still posted
+      // (the previous process stopped when this one came up, so it never saw them).
+      const moves = live ? nftMoves : nftMoves.filter((l) => l.blockNumber! >= this.catchUpFrom);
+      if (moves.length && this.telegram) {
+        this.log(`NFT: ${moves.length} transfer${moves.length > 1 ? "s" : ""} seen (${moves.map((m) => `#${Number(m.args.tokenId)}`).join(", ")}), posting to Telegram`);
+        this.telegram.onTransfers(moves).catch((e) => this.log(`telegram: ${(e as Error).message.split("\n")[0]}`));
+      }
       this.cursor = to;
       if (!live) this.log(`History read up to block ${to} of ${head} (${launches.length} launches, ${buys.length + sells.length} curve trades in this window)`);
     }
@@ -230,6 +239,7 @@ export class Engine {
       case "Claimed": {
         const w = lc(a.agentWallet);
         if (live) { this.lastAgentRefresh = 0; this.log(`Agent #${Number(a.tokenId)} awakened (wallet ${w})`); }
+        if (this.telegram && (live || l.blockNumber! >= this.catchUpFrom)) this.telegram.onAwaken(Number(a.tokenId), lc(a.holder), w, a.amount as bigint, l.transactionHash ?? null).catch(() => {});
         if (!this.agents.has(w)) this.agents.set(w, { id: Number(a.tokenId), wallet: w, live: false, perTrade: 0n, dailyCap: 0n, ruleVersion: 0, ruleText: null, rule: null, balance: 0n, spentDay: 0n, spentToday: 0n });
         break;
       }
