@@ -57,7 +57,7 @@ export const ERC20_ABI = parseAbi([
   "function symbol() view returns (string)",
 ]);
 
-export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)"]);
+export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)", "function router() view returns (address)"]);
 export const NFT_TRANSFER = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"])[0];
 /** Pons factory: graduation step 1 (curve sold out and drained). Step 2, the pool, emits PoolGraduated. */
 export const LAUNCH_SWEPT = parseAbi(["event LaunchSwept(address indexed token, uint256 quoteOut, uint256 tokenOut)"])[0];

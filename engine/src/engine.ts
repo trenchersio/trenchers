@@ -60,6 +60,8 @@ export class Engine {
   /** While replaying history: block times are interpolated between the window's first and last block
    *  (2 RPC calls per window instead of one per log, which takes hours on a busy chain). */
   private interp: { a: bigint; b: bigint; ta: number; tb: number } | null = null;
+  /** The trading route agents actually use (AgentConfig.router), which is where Bought/Sold are emitted. */
+  adapter: Address = lc(ENV.ADAPTER);
   lastAgentRefresh = 0;
   /** Offset between chain time and this server's clock, updated on every new block; decisions use chain time. */
   clockOffset = 0; lastHead = -1n;
@@ -69,7 +71,7 @@ export class Engine {
   constructor(log: (m: string) => void = (m) => console.log(new Date().toISOString(), m)) {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
     // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
-    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 3, retryDelay: 150, timeout: 20_000 }) }) as PublicClient;
+    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 3, retryDelay: 150, timeout: 20_000 }), batch: { multicall: { wait: 16 } } }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
       this.wallet = createWalletClient({ account, chain, transport: http(ENV.RPC_URL) });
@@ -92,6 +94,7 @@ export class Engine {
     const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
     this.cursor = start > 0n ? start - 1n : 0n;
     await this.discoverHouse(false);
+    await this.resolveRouter();
     this.log(`Replaying history from block ${this.cursor + 1n} to ${head}${this.engineAddress ? ` · engine ${this.engineAddress}` : " · read-only (no ENGINE_KEY)"}${ENV.DRY_RUN ? " · DRY RUN" : ""}`);
     await this.sync(head, false);
     this.interp = null;
@@ -107,6 +110,7 @@ export class Engine {
     if (head > this.cursor) await this.sync(head, true);
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
     if (Date.now() - this.lastSnapshot > 120_000) await this.snapshot();
+    if (Date.now() - this.lastRecover > 60_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
     if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
     await this.runExits();
@@ -171,8 +175,8 @@ export class Engine {
         this.pub.getLogs({ event: CURVE_BUY, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ event: CURVE_SELL, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: ENV.ADAPTER, event: BOUGHT, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: ENV.ADAPTER, event: SOLD, fromBlock: from, toBlock: to }),
+        this.pub.getLogs({ address: this.adapter, event: BOUGHT, fromBlock: from, toBlock: to }),
+        this.pub.getLogs({ address: this.adapter, event: SOLD, fromBlock: from, toBlock: to }),
         live && this.telegram ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: LAUNCH_SWEPT, fromBlock: from, toBlock: to }),
       ]);
@@ -296,6 +300,39 @@ export class Engine {
 
   // ------------------------------------------------------------------ agents
 
+  /** Uses the router agents really trade through, even if ADAPTER_ADDRESS was set to something else. */
+  private async resolveRouter() {
+    const any = this.agents.values().next().value as Agent | undefined;
+    if (!any) return;
+    try {
+      this.configAddress ??= lc(await this.pub.readContract({ address: any.wallet, abi: AGENT_ABI, functionName: "config" }));
+      const r = lc(await this.pub.readContract({ address: this.configAddress!, abi: CONFIG_ABI, functionName: "router" }));
+      if (r !== this.adapter) { this.log(`ADAPTER_ADDRESS is ${this.adapter}, but agents trade through ${r}: using ${r}`); this.adapter = r; }
+    } catch { /* keep the configured one */ }
+  }
+
+  /** Coins an agent holds without a recorded buy (e.g. bought while the engine restarted): picked up as
+   *  positions so the agent's exit rule still sells them. */
+  private lastRecover = 0;
+  private async recoverHoldings() {
+    this.lastRecover = Date.now();
+    const toks = [...this.tokens.values()];
+    if (!toks.length) return;
+    for (const ag of this.agents.values()) {
+      if (!this.tradable(ag)) continue;
+      const book = this.book(ag.wallet);
+      const bals = await Promise.all(toks.map((t) => this.pub.readContract({ address: t.token, abi: ERC20_ABI, functionName: "balanceOf", args: [ag.wallet] }).catch(() => 0n)));
+      for (let i = 0; i < toks.length; i++) {
+        const tok = toks[i], bal = bals[i];
+        if (bal === 0n || book.has(tok.token) || lc(tok.token) === ag.coin) continue;
+        let value = 0n;
+        try { value = await this.quoteSell(tok, bal); } catch { /* unknown */ }
+        book.set(tok.token, { token: tok.token, ethIn: value, tokens: bal, openedAt: this.now() });
+        this.log(`Agent #${ag.id} holds ${tok.token} without a recorded buy: managing it now (worth ~${Number(formatEther(value)).toPrecision(3)} ETH)`);
+      }
+    }
+  }
+
   /** House agents (#1-5) never claim a starter balance, so no Claimed event announces them: look up their
    *  wallets directly. `scan` reads the rules of a wallet found after the history replay. */
   private houseKnown = new Set<number>();
@@ -376,7 +413,7 @@ export class Engine {
 
   /** The v4 pool's virtual reserves (Pons seeds a full-range position, so it behaves like x * y = k). */
   private async poolReserves(tok: Token) {
-    const [sp, L] = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolState", args: [tok.token] });
+    const [sp, L] = await this.pub.readContract({ address: this.adapter, abi: ADAPTER_ABI, functionName: "poolState", args: [tok.token] });
     if (sp === 0n || L === 0n) throw new Error("pool not ready");
     return { eth: (L << 96n) / sp, coins: (L * sp) >> 96n };
   }

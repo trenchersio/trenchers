@@ -56,7 +56,7 @@ const server = createServer(async (req, res) => {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, telegram: engine.telegram ? { posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2));
+      res.end(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, telegram: engine.telegram ? { posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.
