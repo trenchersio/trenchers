@@ -1782,8 +1782,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .nav-mint:hover, .nav-mint:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(57,255,136,.35); }
 .nav-mint.on { box-shadow: 0 0 0 2px rgba(57,255,136,.35); }
 .mint-main { padding: 28px 16px 90px; }
-.mint { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: 56px; align-items: start; }
-.mint-stage { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.mint { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px 40px; align-items: start; }
+.mint-stage { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .mint-hero { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 1; background: #121514; border: 1px solid var(--line); }
 .mint-hero canvas { width: 100% !important; height: 100% !important; display: block; transition: filter .7s ease; }
 .mint-hero-art.is-dormant { filter: grayscale(1) brightness(.72) contrast(.95); }
@@ -1795,13 +1795,22 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .mint-hero-id { font: 700 clamp(40px, 6vw, 68px)/.9 var(--sans); letter-spacing: -.03em; color: var(--fog); }
 .mint-hero-state { font: 500 12px var(--mono); color: var(--quiet); text-align: right; }
 .mint-hero.is-minted .mint-hero-state { color: var(--green); }
-.mint-strip { display: flex; gap: 10px; flex-wrap: wrap; min-height: 92px; }
+.mint-strip { display: flex; gap: 10px; flex-wrap: wrap; }
+.mint-how { grid-column: 1 / -1; margin-top: 8px; }
+.mint-how h2 { font: 700 26px var(--sans); letter-spacing: -.02em; margin: 0 0 16px; }
+.mint-how .mint-steps { flex-direction: row; gap: 12px; margin: 0; }
+.mint-how .mint-steps li { flex: 1 1 0; min-width: 0; padding: 18px 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: #0F1211; }
+.mint-how .mint-steps li:last-child { border-bottom: 1px solid var(--line); }
+.mint-how .mint-steps li::before { position: static; margin-bottom: 12px; }
+.mint-how .mint-steps span { font-size: 13px; }
+@media (max-width: 980px) { .mint-how .mint-steps { flex-wrap: wrap; } .mint-how .mint-steps li { flex: 1 1 calc(50% - 6px); } }
+@media (max-width: 560px) { .mint-how .mint-steps li { flex: 1 1 100%; } }
 .mint-chip { display: flex; flex-direction: column; align-items: center; gap: 5px; text-decoration: none; color: var(--quiet); font: 500 11px var(--mono); }
 .mint-chip canvas { border-radius: 9px; border: 1px solid var(--line); transition: filter .3s ease, transform .2s ease; }
 .mint-chip canvas.is-dormant, .mint-recent canvas.is-dormant { filter: grayscale(1) brightness(.72); }
 .mint-chip:hover canvas { filter: none; transform: translateY(-2px); }
-.mint-panel { display: flex; flex-direction: column; gap: 26px; min-width: 0; padding-top: 6px; }
-.mint-title { font: 700 clamp(44px, 6vw, 76px)/.95 var(--sans); letter-spacing: -.035em; margin: 0; text-wrap: balance; }
+.mint-panel { align-self: stretch; display: flex; justify-content: center; flex-direction: column; gap: 24px; min-width: 0; padding: 30px; border: 1px solid var(--line); border-radius: 20px; background: radial-gradient(ellipse at top right, rgba(57,255,136,.07), transparent 60%), #0F1211; }
+.mint-title { font: 700 clamp(40px, 5vw, 64px)/.95 var(--sans); letter-spacing: -.035em; margin: 0; text-wrap: balance; }
 .mint-lede { margin: -8px 0 0; color: var(--quiet); font-size: 17px; line-height: 1.55; max-width: 44ch; }
 .mint-supply { display: flex; flex-direction: column; gap: 10px; }
 .mint-supply-row { display: flex; justify-content: space-between; gap: 12px; font: 500 13px var(--mono); color: var(--quiet); font-variant-numeric: tabular-nums; }
@@ -1849,7 +1858,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .mint-recent-to { font: 500 11px var(--mono); color: var(--quiet); }
 @media (max-width: 880px) {
   .mint { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-  .mint-stage { position: static; }
+  .mint-panel { position: static; padding: 22px; }
+  .mint-panel { order: -1; }
   .nav-mint { padding: 7px 11px; }
 }
 @media (prefers-reduced-motion: reduce) {

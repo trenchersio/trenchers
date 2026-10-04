@@ -127,14 +127,14 @@ export function MintPage() {
             <span className="mint-hero-state">{minted.length ? "Yours. This is how it looks once awake." : "Next to be minted · hover to see it awake"}</span>
           </div>
         </div>
-        <div className="mint-strip" aria-label={minted.length ? "Minted" : "You'll mint"}>
+        {(minted.length > 1 || ids.length > 1) && <div className="mint-strip" aria-label={minted.length ? "Minted" : "You'll mint"}>
           {(minted.length ? minted : ids).map((id) => (
             <a key={id} className="mint-chip" href={minted.length ? ROUTES.agents : `${ROUTES.collection}#${id}`}>
               <ArtCanvas id={id} size={64} className="is-dormant" />
               <span>#{id}</span>
             </a>
           ))}
-        </div>
+        </div>}
       </section>
 
       <section className="mint-panel" aria-label="Mint">
@@ -175,19 +175,23 @@ export function MintPage() {
         )}
         {state?.phase === "error" && <p className="mint-msg mint-err">{state.note}</p>}
 
-        <ol className="mint-steps">
-          <li><b>Mint</b><span>Up to 10 per transaction. {STARTER_ETH} ETH of every mint is set aside for that Trencher&apos;s own agent.</span></li>
-          <li><b>Awaken</b><span>One click gives it its own on-chain wallet and puts the {STARTER_ETH} ETH inside. The art turns from grey to colour.</span></li>
-          <li><b>Fund it</b><span>Top up its wallet with your own ETH any time and withdraw it again whenever you like. Soon it can also launch its own coin on Pons and earn the creator fees.</span></li>
-          <li><b>Guide</b><span>Tell it how to trade in plain words and set hard limits. It trades Pons launches and climbs the Arena.</span></li>
-          <li><b>Keep or sell</b><span>Its wallet, rules and track record move with the NFT, so a proven agent can be sold on OpenSea.</span></li>
-        </ol>
 
         <a className="mint-alt" href={OPENSEA_URL || "https://opensea.io"} target="_blank" rel="noreferrer">
           <span><b>Want one that&apos;s already trading?</b><small>Buy a Trencher with its wallet and track record on OpenSea.</small></span>
           <em aria-hidden="true">↗</em>
         </a>
       </section>
+
+        <section className="mint-how" aria-label="How it works">
+          <h2>How it works</h2>
+          <ol className="mint-steps">
+            <li><b>Mint</b><span>Up to 10 per transaction. {STARTER_ETH} ETH of every mint is set aside for that Trencher&apos;s own agent.</span></li>
+            <li><b>Awaken</b><span>One click gives it its own on-chain wallet and puts the {STARTER_ETH} ETH inside. The art turns from grey to colour.</span></li>
+            <li><b>Fund it</b><span>Top up its wallet with your own ETH any time and withdraw it again whenever you like. Soon it can also launch its own coin on Pons and earn the creator fees.</span></li>
+            <li><b>Guide</b><span>Tell it how to trade in plain words and set hard limits. It trades Pons launches and climbs the Arena.</span></li>
+            <li><b>Keep or sell</b><span>Its wallet, rules and track record move with the NFT, so a proven agent can be sold on OpenSea.</span></li>
+          </ol>
+        </section>
 
       {recent.length > 0 && (
         <section className="mint-recent" aria-label="Latest mints">
