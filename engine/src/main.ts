@@ -34,7 +34,16 @@ let lastError: string | null = null;
 async function loop() {
   if (!engine) return;
   try { await engine.tick(); lastTick = Date.now(); lastError = null; }
-  catch (e) { lastError = (e as Error).message.split("\n")[0]; engine.log(`tick failed: ${lastError}`); }
+  catch (e) {
+    // Name the RPC method and the HTTP status, so a throttled or failing RPC is easy to tell apart.
+    const x = e as { shortMessage?: string; message: string; status?: number; details?: string; body?: { method?: string } | { method?: string }[]; cause?: { status?: number; details?: string; body?: unknown } };
+    const body = (x.body ?? x.cause?.body) as { method?: string } | { method?: string }[] | undefined;
+    const method = Array.isArray(body) ? body.map((b) => b.method).join(",") : body?.method;
+    const status = x.status ?? x.cause?.status;
+    const details = x.details ?? x.cause?.details;
+    lastError = [(x.shortMessage ?? x.message).split("\n")[0], method && `(${method})`, status && `status ${status}`, details && String(details).slice(0, 120)].filter(Boolean).join(" ");
+    engine.log(`tick failed: ${lastError}`);
+  }
   setTimeout(loop, ENV.POLL_MS);
 }
 

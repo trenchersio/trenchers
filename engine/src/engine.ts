@@ -7,7 +7,7 @@ import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
+  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, FUND_ABI, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -68,7 +68,8 @@ export class Engine {
 
   constructor(log: (m: string) => void = (m) => console.log(new Date().toISOString(), m)) {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
-    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL) }) as PublicClient;
+    // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
+    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 5, retryDelay: 400, timeout: 20_000 }) }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
       this.wallet = createWalletClient({ account, chain, transport: http(ENV.RPC_URL) });
@@ -90,6 +91,7 @@ export class Engine {
     const head = await this.pub.getBlockNumber();
     const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
     this.cursor = start > 0n ? start - 1n : 0n;
+    await this.discoverHouse(false);
     this.log(`Replaying history from block ${this.cursor + 1n} to ${head}${this.engineAddress ? ` · engine ${this.engineAddress}` : " · read-only (no ENGINE_KEY)"}${ENV.DRY_RUN ? " · DRY RUN" : ""}`);
     await this.sync(head, false);
     this.interp = null;
@@ -294,8 +296,34 @@ export class Engine {
 
   // ------------------------------------------------------------------ agents
 
+  /** House agents (#1-5) never claim a starter balance, so no Claimed event announces them: look up their
+   *  wallets directly. `scan` reads the rules of a wallet found after the history replay. */
+  private houseKnown = new Set<number>();
+  private async discoverHouse(scan: boolean) {
+    for (let id = 1; id <= 5; id++) {
+      if (this.houseKnown.has(id)) continue;
+      try {
+        const w = lc(await this.pub.readContract({ address: ENV.FUND, abi: FUND_ABI, functionName: "agentWallet", args: [BigInt(id)] }));
+        const code = await this.pub.getCode({ address: w });
+        if (!code || code === "0x") continue;
+        this.houseKnown.add(id);
+        if (this.agents.has(w)) continue;
+        this.agents.set(w, { id, wallet: w, live: false, perTrade: 0n, dailyCap: 0n, ruleVersion: 0, ruleText: null, rule: null, balance: 0n, spentDay: 0n, spentToday: 0n });
+        this.log(`House agent #${id} found (wallet ${w})`);
+        if (scan) {
+          const head = await this.pub.getBlockNumber();
+          for (let f = ENV.START_BLOCK; f <= head; f += ENV.LOG_RANGE) {
+            const t = f + ENV.LOG_RANGE - 1n < head ? f + ENV.LOG_RANGE - 1n : head;
+            const logs = await this.pub.getLogs({ address: w, event: RULE_APPLIED, fromBlock: f, toBlock: t });
+            for (const l of logs) await this.onLog(l as unknown as Log & { eventName: string; args: Record<string, unknown> }, false);
+          }
+        }
+      } catch { /* awakening not open yet, or the RPC hiccuped: try again on the next refresh */ }
+    }
+  }
+
   private async refreshAgents(first: boolean, only?: Set<Address>) {
-    if (!only) { this.lastAgentRefresh = Date.now(); await this.readPause(); }
+    if (!only) { this.lastAgentRefresh = Date.now(); await this.readPause(); if (!first) await this.discoverHouse(true); }
     for (const ag of this.agents.values()) {
       if (only && !only.has(ag.wallet)) continue;
       try {

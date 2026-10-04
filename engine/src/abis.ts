@@ -19,6 +19,7 @@ export const CURVE_SELL = parseAbiItem("event CurveSell(address indexed seller, 
 
 export const FUND_ABI = parseAbi([
   "event Claimed(uint256 indexed tokenId, address indexed holder, address indexed agentWallet, uint256 amount)",
+  "function agentWallet(uint256 tokenId) view returns (address)",
 ]);
 export const CLAIMED = parseAbiItem("event Claimed(uint256 indexed tokenId, address indexed holder, address indexed agentWallet, uint256 amount)");
 
