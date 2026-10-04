@@ -5,12 +5,19 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const LIST_PRICE = ethers.parseEther("0.02");
 const Bucket = { Buyback: 0, Dev: 1, Prize: 2, Starter: 3 };
 
+const MINT_PRICE = ethers.parseEther("0.02");
+/** Mints n Trenchers to `signer` through the public mint (opening it if needed), 10 per transaction. */
+async function mintAs(nft, signer, n) {
+  if (!(await nft.mintOpen())) await nft.setMintOpen(true);
+  while (n > 0) { const k = Math.min(10, n); await nft.connect(signer).mint(k, { value: MINT_PRICE * BigInt(k) }); n -= k; }
+}
+
 async function deploy() {
   const [deployer, safe, dev, team, treasury, alice, bob, buyback, prize, market] = await ethers.getSigners();
   const start = await time.latest();
   const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(safe.address, dev.address, start);
   const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(
-    await splitter.getAddress(), team.address, "ipfs://prereveal.json", "ipfs://contract.json"
+    await splitter.getAddress(), team.address, "ipfs://prereveal.json", "ipfs://contract.json", MINT_PRICE
   );
   await splitter.connect(safe).setPrimarySeller(treasury.address);
   return { nft, splitter, deployer, safe, dev, team, treasury, alice, bob, buyback, prize, market, start };
@@ -25,38 +32,43 @@ describe("TrenchersNFT", () => {
     expect(await nft.name()).to.equal("Trenchers");
   });
 
-  it("has no paid mint: the owner mints the rest for free, in batches, to the treasury", async () => {
-    const { nft, treasury } = await deploy();
-    await nft.ownerMint(treasury.address, 400);
-    expect(await nft.ownerOf(6)).to.equal(treasury.address);
-    expect(await nft.ownerOf(405)).to.equal(treasury.address);
-    expect(nft.mint).to.equal(undefined);
+  it("public mint: closed until opened, exact price, at most 10 per transaction, to the sender", async () => {
+    const { nft, alice } = await deploy();
+    expect(await nft.mintPrice()).to.equal(MINT_PRICE);
+    await expect(nft.connect(alice).mint(1, { value: MINT_PRICE })).to.be.revertedWithCustomError(nft, "MintClosed");
+    await expect(nft.connect(alice).setMintOpen(true)).to.be.revertedWith("Ownable: caller is not the owner");
+    await nft.setMintOpen(true);
+    await expect(nft.connect(alice).mint(1, { value: MINT_PRICE - 1n })).to.be.revertedWithCustomError(nft, "WrongPrice");
+    await expect(nft.connect(alice).mint(11, { value: MINT_PRICE * 11n })).to.be.revertedWithCustomError(nft, "TooMany");
+    await expect(nft.connect(alice).mint(0)).to.be.revertedWithCustomError(nft, "ZeroQuantity");
+    await expect(nft.connect(alice).mint(3, { value: MINT_PRICE * 3n })).to.emit(nft, "Minted").withArgs(alice.address, 6, 3, MINT_PRICE * 3n);
+    expect(await nft.ownerOf(8)).to.equal(alice.address);
   });
 
   it("caps supply at 2,000 (1,995 for the treasury)", async () => {
     const { nft, treasury } = await deploy();
-    for (let i = 0; i < 5; i++) await nft.ownerMint(treasury.address, 399);
+    await mintAs(nft, treasury, 1995);
     expect(await nft.totalSupply()).to.equal(2000n);
     expect(await nft.balanceOf(treasury.address)).to.equal(1995n);
-    await expect(nft.ownerMint(treasury.address, 1)).to.be.revertedWithCustomError(nft, "SoldOut");
+    await expect(mintAs(nft, treasury, 1)).to.be.revertedWithCustomError(nft, "SoldOut");
   });
 
   it("lets the owner raise the cap for a later round, never lower it", async () => {
     const { nft, treasury, alice } = await deploy();
-    for (let i = 0; i < 5; i++) await nft.ownerMint(treasury.address, 399);
+    await mintAs(nft, treasury, 1995);
     await expect(nft.connect(alice).raiseMaxSupply(3000)).to.be.revertedWith("Ownable: caller is not the owner");
     await expect(nft.raiseMaxSupply(2000)).to.be.revertedWithCustomError(nft, "ZeroQuantity");
     await nft.raiseMaxSupply(3000);
-    await nft.ownerMint(treasury.address, 10);
+    await nft.ownerMint(treasury.address, 10); // allowed once the first 2,000 are out
     expect(await nft.totalSupply()).to.equal(2010n);
     expect(await nft.isAwake(2005)).to.equal(true); // later rounds have no starter balance in this fund
   });
 
-  it("only the owner can mint or administer", async () => {
+  it("the first 2,000 are public: the owner can't mint them for free, only administer", async () => {
     const { nft, alice } = await deploy();
     await expect(nft.connect(alice).ownerMint(alice.address, 1)).to.be.revertedWith("Ownable: caller is not the owner");
     await expect(nft.connect(alice).setBaseURI("x")).to.be.revertedWith("Ownable: caller is not the owner");
-    await expect(nft.ownerMint(alice.address, 0)).to.be.revertedWithCustomError(nft, "ZeroQuantity");
+    await expect(nft.ownerMint(alice.address, 1)).to.be.revertedWithCustomError(nft, "FirstRoundIsPublic");
   });
 
   it("serves pre-reveal metadata, then per-token URIs, and can be frozen", async () => {
@@ -169,7 +181,7 @@ describe("AgentStarterFund", () => {
       ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ctx.treasury.address, ethers.parseEther("0.01")
     );
     await fund.connect(ctx.safe).setAccount(ctx.bob.address /* any non-zero implementation */, ethers.ZeroHash);
-    await ctx.nft.ownerMint(ctx.treasury.address, 20); // ids 6..25
+    await mintAs(ctx.nft, ctx.treasury, 20); // ids 6..25
     // a sale on OpenSea: treasury -> alice
     await ctx.nft.connect(ctx.treasury).transferFrom(ctx.treasury.address, ctx.alice.address, 6);
     if (fundEth !== "0") await ctx.deployer.sendTransaction({ to: await fund.getAddress(), value: ethers.parseEther(fundEth) });
@@ -252,7 +264,7 @@ describe("Dormant / awake metadata", () => {
     const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
     const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), treasury.address, ethers.parseEther("0.01"));
     await fund.connect(safe).setAccount(alice.address, ethers.ZeroHash);
-    await nft.ownerMint(treasury.address, 5);
+    await mintAs(nft, treasury, 5);
     await nft.connect(treasury).transferFrom(treasury.address, alice.address, 6);
     await nft.setBaseURI("ipfs://META/");
     expect(await nft.tokenURI(6)).to.equal("ipfs://META/6.json");

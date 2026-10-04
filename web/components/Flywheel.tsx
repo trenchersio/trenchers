@@ -2,7 +2,7 @@ import { GITHUB_URL } from "@/lib/constants";
 
 type Seg = { pct?: number; label: string; tone: "buy" | "dev" | "prize" | "floor" | "agent" };
 const SOURCES: { key: string; source: string; headline: string; sub: string; segs: Seg[] }[] = [
-  { key: "sales", source: "First sale on OpenSea · 0.02 ETH", headline: "Half back", sub: "to the buyer's agent as its 0.01 ETH starter balance, on the first sale only. The other half funds buybacks, development and prizes.",
+  { key: "sales", source: "Mint · 0.02 ETH", headline: "Half back", sub: "to the minter's agent as its 0.01 ETH starter balance, on the mint only. The other half funds buybacks, development and prizes.",
     segs: [{ pct: 51, label: "Agent starter fund", tone: "agent" }, { pct: 24.5, label: "Buybacks", tone: "buy" }, { pct: 19.6, label: "Development", tone: "dev" }, { pct: 4.9, label: "Prize pool", tone: "prize" }] },
   { key: "royalties", source: "5% royalties", headline: "100%", sub: "of every resale royalty buys back $TRENCHERS",
     segs: [{ pct: 100, label: "Buybacks", tone: "buy" }] },

@@ -254,7 +254,7 @@ function Detail({ id, b, sim }: { id: number; b: Sample & { mine: boolean }; sim
         </>) : b.balance !== null ? (
           <div><dt>Balance</dt><dd className="mono">{b.balance.toFixed(3)} ETH</dd></div>
         ) : (
-          <div><dt>Market</dt><dd>{b.listed ? `Listed on OpenSea · ${LIST_PRICE_ETH} ETH` : "Held, not listed"}</dd></div>
+          <div><dt>Market</dt><dd>{b.listed ? "Listed for resale on OpenSea" : "Held, not listed"}</dd></div>
         )}
       </dl>
 

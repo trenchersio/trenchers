@@ -29,15 +29,14 @@ const META = "https://trenchers.io/testnet-meta/";
 const STORE = "trenchers-testnet-deployment";
 
 type Dep = {
-  chainId: number; version?: number; owner?: Address; registry?: Address; splitter?: Address; nft?: Address; sale?: Address;
+  chainId: number; version?: number; owner?: Address; registry?: Address; splitter?: Address; nft?: Address;
   fund?: Address; config?: Address; impl?: Address; dist?: Address; done: string[];
 };
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
 const WALLET_KEY = "trenchers-wallet-rdns";
-const ZERO = "0x0000000000000000000000000000000000000000" as Address;
-/** Bumped when the contracts change in a way the page relies on (2 = instant withdrawals, rule text on-chain). */
-const CONTRACTS_VERSION = 2;
+/** Bumped when the contracts change in a way the page relies on (3 = public mint, instant withdrawals, rule text). */
+const CONTRACTS_VERSION = 3;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string };
@@ -45,9 +44,11 @@ const errText = (e: unknown) => {
 };
 /** Plain-English reasons for the contracts' custom errors, shown before the wallet even opens. */
 const REASONS: Record<string, string> = {
-  SoldOut: "The shop is empty: nothing left to buy. Mint more Trenchers into the shop with the team wallet (step 1).",
+  SoldOut: "All Trenchers have been minted.",
+  MintClosed: "The mint isn't open yet. The team wallet opens it in step 1.",
+  TooMany: "You can mint up to 10 at a time.",
   WrongPrice: "The price doesn't match: a test Trencher costs exactly 0.002 ETH.",
-  TreasuryCannotClaim: "The shop wallet can't awaken Trenchers. Use your buyer wallet.",
+  TreasuryCannotClaim: "The team wallet can't claim starter ETH. Mint and awaken with your buyer wallet.",
   NotHolder: "Only the wallet that owns this Trencher can do that. Switch to that wallet in MetaMask.",
   AlreadyClaimed: "This Trencher is already awake.",
   Underfunded: "The starter fund doesn't hold enough ETH yet. Buy a Trencher first: half of the price funds it.",
@@ -92,8 +93,8 @@ export function TestnetSetup() {
     return () => clearTimeout(t);
   }, [task]);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ supply: bigint; available: bigint; fund: bigint; validator: Address } | null>(null);
-  const [mintCount, setMintCount] = useState("95");
+  const [stats, setStats] = useState<{ supply: bigint; fund: bigint; open: boolean } | null>(null);
+  const [qty, setQty] = useState(1);
   const [mine, setMine] = useState<number[] | null>(null);
   const [pons, setPons] = useState<boolean | null>(null);
   const [paste, setPaste] = useState("");
@@ -240,9 +241,8 @@ export function TestnetSetup() {
       return { registry: await deploy("Agent wallet registry (ERC-6551)", "MockERC6551Registry", []) };
     } },
     { key: "splitter", label: "Revenue splitter", run: async (_d, me) => ({ splitter: await deploy("Revenue splitter", "RevenueSplitter", [me, me, BigInt(Math.floor(Date.now() / 1000))]) }) },
-    { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`]) }) },
-    { key: "sale", label: "Test shop (0.002 ETH)", run: async (d) => ({ sale: await deploy("Test shop (0.002 ETH)", "TestnetSale", [d.nft, d.splitter, PRICE]) }) },
-    { key: "fund", label: "Agent Starter Fund (0.001 ETH)", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund (0.001 ETH)", "AgentStarterFund", [me, d.nft, d.registry, d.sale, CLAIM]) }) },
+    { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
+    { key: "fund", label: "Agent Starter Fund (0.001 ETH)", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund (0.001 ETH)", "AgentStarterFund", [me, d.nft, d.registry, me, CLAIM]) }) },
     { key: "config", label: "Agent settings", run: async (_d, me) => ({ config: await deploy("Agent settings", "AgentConfig", [me]) }) },
     { key: "impl", label: "Agent wallet", run: async (d) => ({ impl: await deploy("Agent wallet", "TrenchersAgentAccount", [d.config]) }) },
     { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft]) }) },
@@ -250,18 +250,13 @@ export function TestnetSetup() {
     { key: "nftFund", label: "Link NFT to the starter fund (grey / colour)", run: async (d) => { await write("Link NFT to the starter fund (grey / colour)", d.nft!, "TrenchersNFT", "setStarterFund", [d.fund]); return {}; } },
     { key: "fundAcct", label: "Open awakening", run: async (d) => { await write("Open awakening", d.fund!, "AgentStarterFund", "setAccount", [d.impl, zeroHash]); return {}; } },
     { key: "distAcct", label: "Link fee distributor to agent wallets", run: async (d) => { await write("Link fee distributor to agent wallets", d.dist!, "AgentFeeDistributor", "setAccount", [d.impl, zeroHash]); return {}; } },
-    { key: "seller", label: "Count shop sales as first sales", run: async (d) => { await write("Count shop sales as first sales", d.splitter!, "RevenueSplitter", "setPrimarySeller", [d.sale]); return {}; } },
+    { key: "seller", label: "Count mints as first sales", run: async (d) => { await write("Count mints as first sales", d.splitter!, "RevenueSplitter", "setPrimarySeller", [d.nft]); return {}; } },
     { key: "starterDest", label: "Send the 50% to the starter fund", run: async (d) => { await write("Send the 50% to the starter fund", d.splitter!, "RevenueSplitter", "proposeDestination", [3, d.fund]); return {}; } },
     { key: "baseUri", label: "Point the NFT at trenchers.io metadata", run: async (d) => { await write("Point the NFT at trenchers.io metadata", d.nft!, "TrenchersNFT", "setBaseURI", [META]); return {}; } },
-    { key: "noValidator", label: "Allow the test shop to transfer (testnet only)", run: async (d) => {
-      const v = await read<Address>(d.nft!, "TrenchersNFT", "getTransferValidator");
-      if (v !== ZERO) await write("Allow the test shop to transfer (testnet only)", d.nft!, "TrenchersNFT", "setTransferValidator", [ZERO]);
-      return {};
-    } },
+    { key: "openMint", label: "Open the mint (0.002 ETH)", run: async (d) => { await write("Open the mint (0.002 ETH)", d.nft!, "TrenchersNFT", "setMintOpen", [true]); return {}; } },
   ];
-  // "noValidator" was added later: older deployments count as deployed and get a fix-up button instead.
-  const deployed = dep.done.includes("all") || STEPS.filter((s) => s.key !== "noValidator").every((s) => dep.done.includes(s.key));
-  const ready = deployed && !!dep.nft && !!dep.sale && !!dep.fund;
+  const deployed = dep.done.includes("all") || STEPS.every((s) => dep.done.includes(s.key)) || ((dep.version ?? 1) < CONTRACTS_VERSION && dep.done.length > 10);
+  const ready = deployed && !!dep.nft && !!dep.fund && (dep.version ?? 1) >= CONTRACTS_VERSION;
 
   const runDeploy = async () => {
     if (!account) return;
@@ -280,17 +275,6 @@ export function TestnetSetup() {
     setBusy(false); await refreshAccount(); setTick((t) => t + 1);
   };
 
-  const mint = async () => {
-    if (!dep.nft || !dep.sale) return;
-    setBusy(true); setError(null);
-    try {
-      const n = Math.max(1, Math.min(200, Number(mintCount) || 0));
-      await write(`Mint ${n} Trenchers into the shop`, dep.nft, "TrenchersNFT", "ownerMint", [dep.sale, BigInt(n)]);
-    } catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
-    setBusy(false); setTick((t) => t + 1); refreshAccount();
-  };
-
-  /** The text of an applied rule: saved on-chain in the RuleApplied event (and cached in this browser). */
   const getRule = async (wallet: Address, version: number) => {
     const key = `trenchers-rule-${wallet.toLowerCase()}-${version}`;
     try {
@@ -307,19 +291,19 @@ export function TestnetSetup() {
     setDep(d); saveDep(d); setStats(null); setMine(null); setLogs([]);
   };
 
-  const fixValidator = async () => {
-    if (!dep.nft) return;
+  const toggleMint = async () => {
+    if (!dep.nft || !stats) return;
     setBusy(true); setError(null);
-    try { await write("Allow the test shop to transfer (testnet only)", dep.nft, "TrenchersNFT", "setTransferValidator", [ZERO]); }
-    catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
+    try { await write(stats.open ? "Pausing the mint" : "Opening the mint", dep.nft, "TrenchersNFT", "setMintOpen", [!stats.open]); }
+    catch (e) { setError(reason(e)); }
     setBusy(false); setTick((t) => t + 1);
   };
 
-  const buy = async () => {
-    if (!dep.sale) return;
+  const mintNft = async () => {
+    if (!dep.nft) return;
     setBusy(true); setError(null);
-    try { await write("Buy a Trencher (0.002 ETH)", dep.sale, "TestnetSale", "buy", [], PRICE); }
-    catch (e) { setError(reason(e)); patchLast({ state: "err" }); }
+    try { await write(`Minting ${qty} Trencher${qty > 1 ? "s" : ""} (${Number(formatEther(PRICE * BigInt(qty)))} ETH)`, dep.nft, "TrenchersNFT", "mint", [BigInt(qty)], PRICE * BigInt(qty)); }
+    catch (e) { setError(reason(e)); }
     setBusy(false); setTick((t) => t + 1); refreshAccount();
   };
 
@@ -329,10 +313,9 @@ export function TestnetSetup() {
     let live = true;
     (async () => {
       try {
-        const [supply, available] = await Promise.all([read<bigint>(dep.nft!, "TrenchersNFT", "totalSupply"), read<bigint>(dep.sale!, "TestnetSale", "available")]);
+        const [supply, open] = await Promise.all([read<bigint>(dep.nft!, "TrenchersNFT", "totalSupply"), read<boolean>(dep.nft!, "TrenchersNFT", "mintOpen")]);
         const fund = await clients().pub.getBalance({ address: dep.fund! });
-        const validator = await read<Address>(dep.nft!, "TrenchersNFT", "getTransferValidator");
-        if (live) setStats({ supply, available, fund, validator });
+        if (live) setStats({ supply, fund, open });
         if (account) {
           const ids = Array.from({ length: Number(supply) }, (_, i) => i + 1);
           const owners: (string | null)[] = [];
@@ -348,15 +331,15 @@ export function TestnetSetup() {
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chainOk, ready, account, tick, dep.nft, dep.sale, dep.fund]);
+  }, [chainOk, ready, account, tick, dep.nft, dep.fund]);
 
-  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, sale: dep.sale, fund: dep.fund, config: dep.config, impl: dep.impl, dist: dep.dist });
+  const code = JSON.stringify({ chainId: dep.chainId, owner: dep.owner, registry: dep.registry, splitter: dep.splitter, nft: dep.nft, fund: dep.fund, config: dep.config, impl: dep.impl, dist: dep.dist });
   const isOwner = !!account && !!dep.owner && account.toLowerCase() === dep.owner.toLowerCase();
 
   const loadPasted = () => {
     try {
       const d = JSON.parse(paste);
-      if (d.chainId !== chain.id || !d.nft || !d.sale || !d.fund) throw new Error("That doesn't look like a Trenchers testnet deployment code.");
+      if (d.chainId !== chain.id || !d.nft || !d.fund) throw new Error("That doesn't look like a Trenchers testnet deployment code.");
       const nd: Dep = { ...d, done: ["all"] }; setDep(nd); saveDep(nd); setPaste(""); setTick((t) => t + 1);
     } catch (e) { setError(reason(e)); }
   };
@@ -396,34 +379,24 @@ export function TestnetSetup() {
           <>
             {(dep.version ?? 1) < CONTRACTS_VERSION && !TESTNET_DEPLOYMENT && (
               <div className="tn-fix">
-                <p><b>Newer contracts available.</b> This test deployment is from before instant withdrawals and saved rule text. Start a fresh one to test the latest version (a few minutes, a few cents of test ETH).</p>
+                <p><b>Newer contracts available.</b> This test deployment is from before the mint on the website and instant withdrawals. Start a fresh one with the team wallet to test the latest version (a few minutes, a little test ETH).</p>
                 <button type="button" className="tn-btn" onClick={resetDeployment} disabled={busy}>Start a fresh test deployment</button>
               </div>
             )}
-            <p className="tn-done">✓ Deployed{dep.owner ? <> by <span className="mono">{short(dep.owner)}</span></> : null}. {stats && <>Minted <b>{stats.supply.toString()}</b> (5 house agents + {(stats.supply - 5n).toString()} for sale), <b>{stats.available.toString()}</b> left in the shop, starter fund holds <b>{Number(formatEther(stats.fund)).toFixed(5)} ETH</b>.</>}</p>
-            {stats && stats.validator !== ZERO && (
-              <div className="tn-fix">
-                <p><b>One more step:</b> Limit Break&apos;s marketplace transfer rules are switched on, and they stop the test shop from handing out Trenchers. Switch them off for testnet (on mainnet they stay on, so OpenSea enforces the 5% royalty).</p>
-                {isOwner ? <button type="button" className="tn-btn tn-primary" onClick={fixValidator} disabled={busy}>Allow the test shop to transfer</button> : <span className="tn-hint">Switch to the team wallet to do this.</span>}
-              </div>
-            )}
-            {isOwner && (
-              <div className="tn-row">
-                <label className="mono tn-lbl">Mint into the shop<input className="tn-in" value={mintCount} onChange={(e) => setMintCount(e.target.value)} inputMode="numeric" /></label>
-                <button type="button" className="tn-btn" onClick={mint} disabled={busy}>Mint</button>
-                <span className="tn-hint">Up to 200 per click, 2,000 in total.</span>
-              </div>
+            {ready && <p className="tn-done">✓ Deployed{dep.owner ? <> by <span className="mono">{short(dep.owner)}</span></> : null}. {stats && <>Minted <b>{stats.supply.toString()}</b> of 2,000 (5 house agents included), starter fund holds <b>{Number(formatEther(stats.fund)).toFixed(5)} ETH</b>. Mint is <b>{stats.open ? "open" : "paused"}</b>.</>}</p>}
+            {isOwner && stats && ready && (
+              <div className="tn-row"><button type="button" className="tn-btn" onClick={toggleMint} disabled={busy}>{stats.open ? "Pause the mint" : "Open the mint"}</button></div>
             )}
             <details className="tn-details"><summary className="mono">Deployment code (send this to the team)</summary>
               <textarea className="tn-code mono" readOnly value={code} onFocus={(e) => e.currentTarget.select()} />
               <ul className="tn-addrs mono">
-                {(["nft", "sale", "fund", "splitter", "config", "impl", "dist", "registry"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
+                {(["nft", "fund", "splitter", "config", "impl", "dist", "registry"] as const).map((k) => dep[k] && <li key={k}>{k}: <a href={`${EXPLORER}/address/${dep[k]}`} target="_blank" rel="noreferrer">{dep[k]}</a></li>)}
               </ul>
             </details>
           </>
         ) : (
           <>
-            <p>Puts every Trenchers contract on the testnet from your wallet: the NFT, the revenue split, the Agent Starter Fund, the agent wallet, the fee distributor and a test shop that stands in for OpenSea. Your wallet asks you to confirm about 15 times; it costs a tiny bit of test ETH. If it stops halfway, click again and it carries on where it left off.</p>
+            <p>Puts every Trenchers contract on the testnet from your wallet: the NFT, the revenue split, the Agent Starter Fund, the agent wallet, and the fee distributor, then opens the mint. Your wallet asks you to confirm about 15 times; it costs a tiny bit of test ETH. If it stops halfway, click again and it carries on where it left off.</p>
             <div className="tn-row">
               <button type="button" className="tn-btn tn-primary" onClick={runDeploy} disabled={busy || !account || !chainOk}>{dep.done.length ? `Continue setup (${dep.done.length}/${STEPS.length} done)` : "Deploy"}</button>
             </div>
@@ -435,18 +408,24 @@ export function TestnetSetup() {
       </section>
 
       <section className={`tn-card${!ready || !chainOk ? " tn-off" : ""}`}>
-        <h2><span className="tn-n mono">2</span>Buy a Trencher <small className="mono">buyer wallet</small></h2>
-        <p>Switch MetaMask to your second wallet, then buy. The shop sends the next Trencher to you; half the price goes straight into the Agent Starter Fund, waiting for your agent.</p>
-        <div className="tn-row">
-          <button type="button" className="tn-btn tn-primary" onClick={buy} disabled={busy || !ready || !chainOk || isOwner || stats?.available === 0n}>Buy for 0.002 ETH</button>
-          {stats && <span className="tn-hint">{stats.available === 0n ? "The shop is empty: mint Trenchers into it with the team wallet first (step 1)." : `${stats.available.toString()} left in the shop.`}</span>}
-          {isOwner && <span className="tn-hint">This is the team wallet. Switch to your buyer wallet to buy (the team wallet can&apos;t claim starter ETH).</span>}
+        <h2><span className="tn-n mono">2</span>Mint a Trencher <small className="mono">buyer wallet</small></h2>
+        <p>This is the mint people will use on trenchers.io. Switch to your second wallet, pick how many and mint. Half of what you pay goes straight into the Agent Starter Fund, waiting for your agent.</p>
+        <div className="tn-mint">
+          <div className="tn-qty">
+            <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1} aria-label="One less">−</button>
+            <span className="mono">{qty}</span>
+            <button type="button" onClick={() => setQty((q) => Math.min(10, q + 1))} disabled={qty >= 10} aria-label="One more">+</button>
+          </div>
+          <button type="button" className="tn-btn tn-primary tn-mint-btn" onClick={mintNft} disabled={busy || !ready || !chainOk || !stats?.open}>Mint {qty} for {Number(formatEther(PRICE * BigInt(qty)))} ETH</button>
+          {stats && <div className="tn-progress"><span className="mono">{stats.supply.toString()} / 2,000 minted</span><i style={{ width: `${Math.min(100, Number(stats.supply) / 20)}%` }} /></div>}
         </div>
+        {stats && !stats.open && <p className="tn-hint">The mint is paused. The team wallet opens it in step 1.</p>}
+        {isOwner && <p className="tn-hint">This is the team wallet. Mint with your buyer wallet: the team wallet can&apos;t claim starter ETH.</p>}
       </section>
 
       <section className={`tn-card${!ready || !chainOk ? " tn-off" : ""}`}>
         <h2><span className="tn-n mono">3</span>Your Trenchers</h2>
-        {mine === null ? <p className="tn-hint">Connect a wallet to see your Trenchers.</p> : mine.length === 0 ? <p className="tn-hint">This wallet has no Trenchers yet. Buy one above.</p> : (
+        {mine === null ? <p className="tn-hint">Connect a wallet to see your Trenchers.</p> : mine.length === 0 ? <p className="tn-hint">This wallet has no Trenchers yet. Mint one above.</p> : (
           <div className="tn-grid">
             {mine.map((id) => <TokenCard key={id} tick={tick} id={id} dep={dep} account={account!} write={write} send={send} read={read} getBalance={(a) => clients().pub.getBalance({ address: a })} getRule={getRule} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} pons={pons} />)}
           </div>

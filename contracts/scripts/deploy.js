@@ -1,8 +1,9 @@
-// Deploys RevenueSplitter + TrenchersNFT + AgentStarterFund, mints all 2,000 for free (5 to the team,
-// 1,995 to the treasury that lists them on OpenSea at 0.02 ETH), routes 51% of primary sales to the
-// starter fund (0.01 ETH claimable per agent, funded by the first sale only), then hands ownership to the Safe.
+// Deploys RevenueSplitter + TrenchersNFT + AgentStarterFund and the agent contracts. The 5 house agents
+// go to the team at deploy; the other 1,995 are minted by anyone on trenchers.io at MINT_PRICE (0.02 ETH).
+// Every mint is a primary sale: 51% goes to the starter fund (0.01 ETH claimable per agent), the rest to
+// the ecosystem. Resales happen on OpenSea. Ownership of everything goes to the Safe; the Safe opens the mint.
 // Usage:
-//   DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... TREASURY=0x... \
+//   DEPLOYER_KEY=0x... SAFE=0x... DEV_SAFE=0x... TEAM=0x... \
 //   PREREVEAL_URI=ipfs://... CONTRACT_URI=ipfs://... \
 //   npx hardhat run scripts/deploy.js --network robinhoodTestnet
 const { ethers, network } = require("hardhat");
@@ -26,7 +27,8 @@ async function hasCode(addr) {
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  const safe = need("SAFE"), devSafe = need("DEV_SAFE"), team = need("TEAM"), treasury = need("TREASURY");
+  const safe = need("SAFE"), devSafe = need("DEV_SAFE"), team = need("TEAM");
+  const mintPrice = ethers.parseEther(process.env.MINT_PRICE || "0.02");
   const prereveal = need("PREREVEAL_URI"), contractUri = need("CONTRACT_URI");
   const { chainId } = await ethers.provider.getNetwork();
 
@@ -50,14 +52,14 @@ async function main() {
   console.log(`RevenueSplitter ${await splitter.getAddress()}`);
 
   const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(
-    await splitter.getAddress(), team, prereveal, contractUri
+    await splitter.getAddress(), team, prereveal, contractUri, mintPrice
   );
   await nft.waitForDeployment();
   console.log(`TrenchersNFT    ${await nft.getAddress()}`);
   console.log(`  transfer validator: ${await nft.getTransferValidator()}`);
 
   const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
-    safe, await nft.getAddress(), ERC6551_REGISTRY, treasury, ethers.parseEther(process.env.CLAIM_ETH || "0.01")
+    safe, await nft.getAddress(), ERC6551_REGISTRY, team, mintPrice / 2n
   );
   await fund.waitForDeployment();
   console.log(`AgentStarterFund ${await fund.getAddress()}`);
@@ -81,21 +83,14 @@ async function main() {
   if (await hasCode(PONS_ROUTER)) await (await config.propose(2, PONS_ROUTER)).wait();
   await (await dist.setAccount(await impl.getAddress(), ethers.ZeroHash)).wait();
 
-  await (await splitter.setPrimarySeller(treasury)).wait();
+  await (await splitter.setPrimarySeller(await nft.getAddress())).wait(); // mint proceeds count as primary sales
   await (await splitter.proposeDestination(3 /* Starter */, await fund.getAddress())).wait();
-  // Free mint of the remaining 1,995 to the treasury, in batches to stay well under the block gas limit.
-  const BATCH = Number(process.env.MINT_BATCH || 200);
-  for (let left = 1995; left > 0; left -= BATCH) {
-    const n = Math.min(BATCH, left);
-    await (await nft.ownerMint(treasury, n)).wait();
-    console.log(`  minted ${n} to treasury (supply ${await nft.totalSupply()})`);
-  }
   await (await splitter.transferOwnership(safe)).wait();
   await (await nft.transferOwnership(safe)).wait();
   await (await config.transferOwnership(safe)).wait();
   await (await dist.transferOwnership(safe)).wait();
   console.log(`Ownership of all contracts transferred to ${safe}`);
-  console.log("Next: list the treasury's 1,995 Trenchers on OpenSea at 0.02 ETH; forward sale proceeds to the splitter.");
+  console.log("Next: the Safe calls TrenchersNFT.setMintOpen(true) to open the mint on trenchers.io.");
   console.log(`To open starter claims, the Safe calls AgentStarterFund.setAccount(${await impl.getAddress()}, 0x00…00).`);
 }
 

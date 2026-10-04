@@ -123,3 +123,9 @@ export function useWallet() {
 }
 
 export const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+/** The EIP-1193 provider of the browser wallet the visitor connected (null for the demo wallet or none). */
+export function connectedProvider() {
+  const rdns = read(BROWSER_KEY);
+  return rdns && rdns !== "1" ? getWallet(rdns)?.provider ?? null : null;
+}

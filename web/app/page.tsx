@@ -11,9 +11,10 @@ import { SelfFunding } from "@/components/SelfFunding";
 import { GuideDemo } from "@/components/GuideDemo";
 import { MobileDock } from "@/components/MobileDock";
 import { Resale } from "@/components/Resale";
+import { MintPanel } from "@/components/MintPanel";
 
 const STEPS = [
-  { n: "01", title: "Buy a Trencher", body: "Every one of the 2,000 is a unique pixel agent, listed on OpenSea at the same price. It starts dormant: grey, with its starter ETH still inside.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
+  { n: "01", title: "Mint a Trencher", body: "Mint one right here on trenchers.io. Every one of the 2,000 is a unique pixel agent at the same price. It starts dormant: grey, with its starter ETH still inside.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
   { n: "02", title: "Awaken it", body: `One transaction creates the agent's own wallet and drops ${STARTER_ETH} ETH, half of what you paid, straight into it. The art turns from grey to colour.`, tag: `+${STARTER_ETH} ETH to the agent`, tone: "green" },
   { n: "03", title: "It gets an identity", body: "The NFT is the agent's identity: one token, one agent, with its own wallet and an on-chain agent ID. Every rule and trade is recorded under it.", tag: "ERC-6551 + ERC-8004", tone: "" },
 ];
@@ -28,7 +29,7 @@ const ROADMAP = [
   { phase: "Phase 1", title: "Launch", status: "Now", progress: 80, items: [
     { t: "Website, Arena, Collection and docs", done: true },
     { t: "Contracts and starter fund, tested", done: true },
-    { t: `2,000 Trenchers on OpenSea at ${LIST_PRICE_ETH} ETH`, done: false },
+    { t: `Public mint of 2,000 Trenchers on trenchers.io at ${LIST_PRICE_ETH} ETH`, done: false },
   ] },
   { phase: "Phase 2", title: "Agents go live", status: "Next", progress: 35, items: [
     { t: "Awaken: agent wallets, identities and the starter claim", done: false },
@@ -52,8 +53,8 @@ const FAQ = [
   { q: "What does self-funding mean?", a: `An agent starts with a ${STARTER_ETH} ETH starter balance and then earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to awakened agents. It all lands in the agent wallet as trading capital, so you can fund it a little and let it pay its own way, or keep topping it up yourself.` },
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
   { q: "Who gets the 10% of $TRENCHERS fees?", a: "Every Trencher that has been awakened and has an agent wallet. It is paid automatically into the agent wallets; there is nothing to claim or stake." },
-  { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Half of that, ${STARTER_ETH} ETH, comes back to your agent as its starter balance; the other half funds the ecosystem. This split applies to the first sale only. The team keeps 5 as house agents.` },
-  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every first sale goes to the Agent Starter Fund contract (resales on OpenSea don't add to it; their royalties go to buybacks). Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it is locked for 6 months: until then it can't be withdrawn. After 6 months, whatever is left becomes withdrawable like any other ETH in the wallet. The lock makes sure the starter balance is used for trading, not pulled straight back out. A Trencher resold before its claim can still be claimed by the new holder.` },
+  { q: "How do I get one?", a: `Mint one on trenchers.io for ${LIST_PRICE_ETH} ETH, up to 10 per transaction. No allowlist, no tiers. Half of that, ${STARTER_ETH} ETH, comes back to your agent as its starter balance; the other half funds the ecosystem. This split applies to the first sale only. The team keeps 5 as house agents.` },
+  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every mint goes to the Agent Starter Fund contract, in the same transaction (resales on OpenSea don't add to it; their royalties go to buybacks). Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it is locked for 6 months: until then it can't be withdrawn. After 6 months, whatever is left becomes withdrawable like any other ETH in the wallet. The lock makes sure the starter balance is used for trading, not pulled straight back out. A Trencher resold before its claim can still be claimed by the new holder.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
   { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
@@ -88,8 +89,8 @@ export default function Home() {
               emotion.</span>
             </p>
             <div className="cta">
+              <TextButton href="#get">Mint a Trencher</TextButton>
               <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
-              <OpenSeaButton />
             </div>
             <ul className="facts">
               <li><span>Price</span><b>{LIST_PRICE_ETH} ETH</b></li>
@@ -177,7 +178,7 @@ export default function Home() {
         </Section>
 
         <Section id="flywheel" n="06" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
-          lede={`Half of every first sale goes back to the buyer's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
+          lede={`Half of every mint goes back to the minter's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
           <Flywheel />
         </Section>
 
@@ -201,7 +202,7 @@ export default function Home() {
         </Section>
 
         <Section id="get" n="08" label="Get an agent" title={<>{LIST_PRICE_ETH} ETH. Half of it goes to your agent.</>}
-          lede={`Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. ${STARTER_ETH} ETH of it is claimable straight into your agent's wallet. The split applies to the first sale; resales pay royalties to buybacks instead.`}>
+          lede={`Mint your Trencher right here, all at the same price. No allowlist, no tiers. ${STARTER_ETH} ETH of it is claimable straight into your agent's wallet. The split applies to the mint; resales on OpenSea pay royalties to buybacks instead.`}>
           <div className="buy">
             <div className="buy-split">
               <div className="buy-price">
@@ -218,11 +219,12 @@ export default function Home() {
               </ul>
             </div>
             <div className="buy-side">
+              <MintPanel />
               <dl className="buy-stats">
                 <div><dt className="mono">Supply</dt><dd>2,000</dd></div>
                 <div><dt className="mono">House agents</dt><dd>5</dd></div>
                 <div><dt className="mono">Agent fee share</dt><dd>{AGENT_FEE_SHARE_PCT}%</dd></div>
-                <div><dt className="mono">Market</dt><dd><OpenSeaButton /></dd></div>
+                <div><dt className="mono">Resale</dt><dd><OpenSeaButton /></dd></div>
               </dl>
               <nav className="buy-links">
                 <TextButton href={ROUTES.collection}>Browse the collection</TextButton>

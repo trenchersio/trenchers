@@ -10,12 +10,17 @@ interface IStarterFundView {
     function claimed(uint256 tokenId) external view returns (bool);
 }
 
+interface IRevenueSplitterRelease {
+    function release(uint8 bucket) external;
+}
+
 /// @title Trenchers
 /// @notice 2,000 trading agents on Robinhood Chain. Each token can be registered as an on-chain
 ///         trading agent through its ERC-6551 token-bound account.
-/// @dev    There is no public mint. The owner mints every token for free: IDs 1-5 to the team
-///         (house agents) at deploy, the other 1,995 in batches to the treasury, which lists them
-///         on OpenSea. ERC721-C (Limit Break) so OpenSea can enforce creator earnings.
+/// @dev    IDs 1-5 go to the team (house agents) at deploy. The other 1,995 are minted by anyone on
+///         trenchers.io at a fixed price; every mint's ETH goes straight to the RevenueSplitter as a
+///         primary sale, and the agent's half moves on to the Agent Starter Fund in the same transaction.
+///         Resales happen on OpenSea. ERC721-C (Limit Break) so OpenSea can enforce creator earnings.
 contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     using Strings for uint256;
 
@@ -25,6 +30,14 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     uint256 public maxSupply = FIRST_ROUND;
     uint256 public constant TEAM_RESERVE = 5;
     uint96 public constant ROYALTY_BPS = 500; // 5%
+    uint256 public constant MAX_PER_TX = 10;
+    uint8 private constant STARTER_BUCKET = 3;
+
+    /// @notice Mint price per Trencher (0.02 ETH on mainnet), fixed at deploy.
+    uint256 public immutable mintPrice;
+    /// @notice Where mint proceeds go: the RevenueSplitter (also the royalty receiver).
+    address payable public immutable splitter;
+    bool public mintOpen;
 
     uint256 public totalSupply;
 
@@ -41,6 +54,8 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     event BaseURIChanged(string baseURI);
     event MetadataFrozen();
     event StarterFundSet(address fund);
+    event MintOpened(bool open);
+    event Minted(address indexed to, uint256 firstId, uint256 quantity, uint256 paid);
     event MaxSupplyRaised(uint256 maxSupply);
     /// @dev EIP-4906 single-token refresh, emitted when a Trencher wakes up.
     event MetadataUpdate(uint256 tokenId);
@@ -51,17 +66,26 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
     error ZeroAddress();
     error AlreadySet();
     error NotStarterFund();
+    error MintClosed();
+    error WrongPrice();
+    error TooMany();
+    error TransferFailed();
+    error FirstRoundIsPublic();
 
     constructor(
         address royaltyReceiver_,
         address team_,
         string memory preRevealURI_,
-        string memory contractURI_
+        string memory contractURI_,
+        uint256 mintPrice_
     )
         ERC721OpenZeppelin("Trenchers", "TRENCH")
         BasicRoyalties(royaltyReceiver_, ROYALTY_BPS)
     {
         if (royaltyReceiver_ == address(0) || team_ == address(0)) revert ZeroAddress();
+        if (mintPrice_ == 0) revert WrongPrice();
+        mintPrice = mintPrice_;
+        splitter = payable(royaltyReceiver_);
         _preRevealURI = preRevealURI_;
         _contractURI = contractURI_;
 
@@ -80,11 +104,40 @@ contract TrenchersNFT is OwnableBasic, ERC721C, BasicRoyalties {
 
     // ------------------------------------------------------------------ minting
 
-    /// @notice Free mint by the owner, in batches, to the treasury that lists them on OpenSea.
+    /// @notice Public mint on trenchers.io: up to 10 per transaction at `mintPrice` each, while open.
+    ///         The ETH goes to the RevenueSplitter as a primary sale; the agent's half is released to the
+    ///         Agent Starter Fund right away, so the new holder can awaken their Trencher straight after.
+    function mint(uint256 quantity) external payable {
+        if (!mintOpen) revert MintClosed();
+        if (quantity == 0) revert ZeroQuantity();
+        if (quantity > MAX_PER_TX) revert TooMany();
+        if (msg.value != mintPrice * quantity) revert WrongPrice();
+        uint256 supply = totalSupply;
+        if (supply + quantity > maxSupply) revert SoldOut();
+        totalSupply = supply + quantity;
+        for (uint256 i = 1; i <= quantity; ++i) {
+            _mint(msg.sender, supply + i);
+        }
+        emit Minted(msg.sender, supply + 1, quantity, msg.value);
+        (bool ok, ) = splitter.call{value: msg.value}("");
+        if (!ok) revert TransferFailed();
+        // Best effort: if the starter destination isn't set yet, the share waits in the splitter.
+        try IRevenueSplitterRelease(splitter).release(STARTER_BUCKET) {} catch {}
+    }
+
+    /// @notice Opens or pauses the public mint.
+    function setMintOpen(bool open) external onlyOwner {
+        mintOpen = open;
+        emit MintOpened(open);
+    }
+
+    /// @notice Free mint by the owner, only for a later round: the first 2,000 are minted publicly,
+    ///         so every one of them is paid for and funds its own starter balance.
     function ownerMint(address to, uint256 quantity) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (quantity == 0) revert ZeroQuantity();
         uint256 supply = totalSupply;
+        if (supply < FIRST_ROUND) revert FirstRoundIsPublic();
         if (supply + quantity > maxSupply) revert SoldOut();
         totalSupply = supply + quantity;
         for (uint256 i = 1; i <= quantity; ++i) {

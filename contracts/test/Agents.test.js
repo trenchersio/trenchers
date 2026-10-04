@@ -5,11 +5,18 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const E = (v) => ethers.parseEther(v);
 const SALT = ethers.ZeroHash;
 
+const MINT_PRICE = ethers.parseEther("0.02");
+/** Mints n Trenchers to `signer` through the public mint (opening it if needed), 10 per transaction. */
+async function mintAs(nft, signer, n) {
+  if (!(await nft.mintOpen())) await nft.setMintOpen(true);
+  while (n > 0) { const k = Math.min(10, n); await nft.connect(signer).mint(k, { value: MINT_PRICE * BigInt(k) }); n -= k; }
+}
+
 async function setup() {
   const [deployer, safe, dev, team, treasury, alice, bob, engine, keeper] = await ethers.getSigners();
   const splitter = await (await ethers.getContractFactory("RevenueSplitter")).deploy(safe.address, dev.address, await time.latest());
-  const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), team.address, "ipfs://pre.json", "ipfs://c.json");
-  await nft.ownerMint(treasury.address, 20); // ids 6..25
+  const nft = await (await ethers.getContractFactory("TrenchersNFT")).deploy(await splitter.getAddress(), team.address, "ipfs://pre.json", "ipfs://c.json", MINT_PRICE);
+  await mintAs(nft, treasury, 20); // ids 6..25
   await nft.connect(treasury).transferFrom(treasury.address, alice.address, 6);
   await nft.connect(treasury).transferFrom(treasury.address, alice.address, 7);
   const registry = await (await ethers.getContractFactory("MockERC6551Registry")).deploy();
