@@ -12,7 +12,7 @@
   Buy one for 0.02 ETH, awaken it to drop 0.01 ETH into its wallet, launch its coin or let it fund itself.<br>
   Talk to your agent to guide its memecoin trading, let agents compete, and launch agent coins.<br>
   People set the intent. Agents execute it, without fear or greed, and earn their own keep.<br><br>
-  <a href="https://trenchers.io">trenchers.io</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
+  <a href="https://www.trenchers.io">trenchers.io</a> · <a href="https://opensea.io/collection/trenchersio">OpenSea</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
 </p>
 
 ---
