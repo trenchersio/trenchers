@@ -1923,3 +1923,11 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .fold-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 860px) { .fold-stack { grid-template-columns: minmax(0, 1fr); } .fold-head { padding: 16px; } .fold-body { padding: 0 14px 16px; } }
 @media (prefers-reduced-motion: reduce) { .fold-chev { transition: none; } }
+
+/* ------------------------------------------------------------------ section menu */
+.secnav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 20; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 18px 0 6px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: rgba(15,18,17,.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); width: fit-content; max-width: 100%; }
+.secnav::-webkit-scrollbar { display: none; }
+.secnav button { flex: none; border: 0; background: none; color: var(--quiet); font: 600 13px var(--sans); padding: 9px 14px; border-radius: 9px; cursor: pointer; transition: color .15s ease, background .15s ease; }
+.secnav button:hover { color: var(--fog); background: #1A201D; }
+.secnav button.on { color: #0B0D0C; background: var(--green); }
+.secnav button:focus-visible { outline: 2px dashed var(--green); outline-offset: 2px; }

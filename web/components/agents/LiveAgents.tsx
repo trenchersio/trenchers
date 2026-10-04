@@ -8,6 +8,7 @@ import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { CoinLaunch } from "./CoinLaunch";
 import { Fold } from "@/components/Fold";
+import { SectionNav } from "@/components/SectionNav";
 import { cardFromLive } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
@@ -36,6 +37,10 @@ type Task = { label: string; phase: "check" | "sign" | "chain" | "done" | "error
 
 const TEMPLATES = STRATEGIES.filter((s) => s.name !== "Custom").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.`, house: s.houseAgent }));
 const LOCK_DAYS = 180;
+const NAV = [
+  { id: "overview", label: "Overview" }, { id: "funding", label: "Funding" }, { id: "guide", label: "Guide" },
+  { id: "trades", label: "Trades" }, { id: "track", label: "Track all" },
+];
 const EXPLORER = chain.blockExplorers?.default.url ?? "";
 const fmt = (v?: bigint, d = 5) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(d).replace(/\.?0+$/, "") || "0");
 const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -198,6 +203,7 @@ export function LiveAgents() {
         </div>
       )}
 
+      {sel?.deployed && <SectionNav key={sel.id} items={NAV} />}
       {sel && <Profile key={sel.id} a={sel} me={me} claim={claim} live={live} engineCount={engine?.agents.length ?? 0} busy={busy} run={run} />}
 
       {ids.length > 0 && (
@@ -286,7 +292,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
 
   return (
     <div className="ap-main">
-      <section className="ap-hero">
+      <section className="ap-hero" id="sec-overview">
         <div className={`ap-art${a.awake ? "" : " is-dormant"}`}><ArtCanvas id={a.id} size={208} />{!a.awake && <span className="mono ap-art-tag">{fmt(claim)} ETH claimable</span>}</div>
         <div className="ap-id">
           <span className="mono ap-kick">Your agent</span>
