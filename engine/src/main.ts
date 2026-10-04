@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { Engine } from "./engine";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
+import { verifyDeployment } from "./verify";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
@@ -18,6 +19,15 @@ function runLiveCheck() {
     .catch((e) => ({ ok: false, error: (e as Error).message }))
     .then((r) => { lastLive = { t: Date.now(), body: JSON.stringify(r, null, 2) }; })
     .finally(() => { liveRunning = false; });
+}
+let lastVerify: { t: number; body: string } | null = null;
+let verifyRunning = false;
+function runVerify() {
+  verifyRunning = true;
+  verifyDeployment(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com")
+    .catch((e) => ({ ok: false, error: (e as Error).message }))
+    .then((r) => { lastVerify = { t: Date.now(), body: JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2) }; })
+    .finally(() => { verifyRunning = false; });
 }
 let lastError: string | null = null;
 
@@ -43,6 +53,10 @@ const server = createServer(async (req, res) => {
       // Runs in the background (it scans a lot of history); this returns the latest finished result.
       if (!liveRunning && (!lastLive || Date.now() - lastLive.t > 600_000)) runLiveCheck();
       res.end(lastLive?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));
+    } else if (path === "/verify") {
+      // Read-only check of the Trenchers mainnet deployment (see verify.ts); runs in the background, cached 5 minutes.
+      if (!verifyRunning && (!lastVerify || Date.now() - lastVerify.t > 300_000)) runVerify();
+      res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));

@@ -32,7 +32,7 @@ const FACTORY_ABI = parseAbi([
 
 type Trip = { token: Address; symbol?: string; phase: number; ethIn: string; tokensOut?: string; ethBack?: string; roundTripLossPct?: number; venueAfter?: number; error?: string };
 
-async function logsBack(c: PublicClient, head: bigint, span: bigint, fetch: (from: bigint, to: bigint) => Promise<Log[]>, want = 200) {
+export async function logsBack(c: PublicClient, head: bigint, span: bigint, fetch: (from: bigint, to: bigint) => Promise<Log[]>, want = 200) {
   const out: Log[] = [];
   let step = 20_000n, to = head;
   const floor = head > span ? head - span : 0n;
@@ -60,6 +60,29 @@ async function roundTrip(c: PublicClient, token: Address, ethIn: bigint): Promis
   } catch (e) {
     return { ethIn: formatEther(ethIn), error: ((e as { shortMessage?: string }).shortMessage ?? (e as Error).message).split("\n")[0] };
   }
+}
+
+/** The newest tradable ETH-paired Pons coins on mainnet: one on its curve (older than 5 minutes), one graduated. */
+export async function findLiveCoins(c: PublicClient): Promise<{ curve?: Address; pool?: Address }> {
+  const head = await c.getBlockNumber();
+  const now = Number((await c.getBlock()).timestamp);
+  const info = (t: Address) => c.readContract({ address: PONS_FACTORY, abi: FACTORY_ABI, functionName: "getLaunchedToken", args: [t] }).catch(() => null) as Promise<{ pairToken: Address; phase: number } | null>;
+  const out: { curve?: Address; pool?: Address } = {};
+  const launches = await logsBack(c, head, 3_000_000n, (a, b) => c.getLogs({ address: PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: a, toBlock: b }) as Promise<Log[]>, 100);
+  for (const l of [...launches].reverse()) {
+    const ev = decodeEventLog({ abi: [TOKEN_LAUNCHED], data: l.data, topics: l.topics as never }) as { args: { token: Address; pairToken: Address } };
+    if (ev.args.pairToken !== "0x0000000000000000000000000000000000000000") continue;
+    if (now - Number((await c.getBlock({ blockNumber: l.blockNumber! })).timestamp) < 300) continue;
+    const i = await info(ev.args.token);
+    if (i && Number(i.phase) === 0) { out.curve = ev.args.token; break; }
+  }
+  const grads = await logsBack(c, head, 6_000_000n, (a, b) => c.getLogs({ address: PONS_FACTORY, event: POOL_GRADUATED, fromBlock: a, toBlock: b }) as Promise<Log[]>, 20);
+  for (const l of [...grads].reverse()) {
+    const ev = decodeEventLog({ abi: [POOL_GRADUATED], data: l.data, topics: l.topics as never }) as { args: { token: Address } };
+    const i = await info(ev.args.token);
+    if (i && i.pairToken === "0x0000000000000000000000000000000000000000" && Number(i.phase) === 2) { out.pool = ev.args.token; break; }
+  }
+  return out;
 }
 
 export async function liveCheck(rpc: string) {

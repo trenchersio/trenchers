@@ -258,4 +258,34 @@ describe("Mainnet launch rehearsal", () => {
     expect(await (await ethers.getContractAt("AgentAccountV2Mock", await addr(w))).versionTwo()).to.equal(2n);
     await w.connect(x.stranger).trade(E("0.01"), fixed.interface.encodeFunctionData("buy", [t, 0n])); // still trading
   });
+  it("the on-chain launch rehearsal (run against mainnet by the engine's /verify) passes, read-only, and changes nothing", async () => {
+    const x = await launch();
+    const curve = await addr(await x.launchCoin("CURVE"));
+    const pool = await addr(await x.launchCoin("POOL"));
+    await x.pons.graduateAll(pool);
+    const code = async (n) => (await ethers.provider.getCode(await addr(await (await ethers.getContractFactory(n)).deploy())));
+    const [reh, fwd] = [await code("LaunchRehearsal"), await code("Forwarder")];
+    await ethers.provider.send("hardhat_setCode", [x.safe.address, reh]);
+    for (const w of [x.engine, x.guardian, x.deployer]) await ethers.provider.send("hardhat_setCode", [w.address, fwd]);
+    const r = await ethers.getContractAt("LaunchRehearsal", x.safe.address);
+    const args = { nft: await addr(x.nft), fund: await addr(x.fund), splitter: await addr(x.splitter), config: await addr(x.config), impl: await addr(x.impl), adapter: await addr(x.adapter), registry: await addr(x.registry), engine: x.engine.address, guardian: x.guardian.address, deployer: x.deployer.address, curveCoin: curve, poolCoin: pool };
+    const supply = await x.nft.totalSupply();
+    const [n, before, after] = await r.run.staticCall(args, { value: E("1") });
+    expect(n[0]).to.equal(supply + 1n);
+    expect(n[1]).to.equal(E("0.01"));
+    expect(n[2]).to.equal(E("0.01"));
+    expect(n[13]).to.equal(E("0.0102"));
+    expect(before).to.equal(`https://trenchers.io/meta/dormant/${n[0]}.json`);
+    expect(after).to.equal(`https://trenchers.io/meta/awake/${n[0]}.json`);
+    for (const i of [3, 5, 9]) expect(n[i]).to.be.gt(0n);
+    expect(n[4]).to.be.gt(E("0.009")); expect(n[6]).to.be.gt(E("0.008"));
+    expect(n[7]).to.be.gt(0n); // the top-up minus what trading lost from the locked starter
+    expect(n[8]).to.equal(1n); expect(n[12]).to.equal(1n);
+    expect(n[10]).to.be.gt(E("0.009"));
+    expect(n[11]).to.be.gt(0n);
+    // read-only: nothing changed
+    expect(await x.nft.mintOpen()).to.equal(false);
+    expect(await x.nft.totalSupply()).to.equal(supply);
+    expect(await x.config.paused()).to.equal(false);
+  });
 });
