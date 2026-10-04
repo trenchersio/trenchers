@@ -350,7 +350,7 @@ export class Engine {
       const held = await this.pub.readContract({ address: tok.token, abi: ERC20_ABI, functionName: "balanceOf", args: [ag.wallet] });
       if (held === 0n) { this.book(ag.wallet).delete(tok.token); return; }
       const minOut = (value * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
-      this.log(`Agent #${ag.id} SELL ${tok.token} (${why}), ~${formatEther(value)} ETH`);
+      this.log(`Agent #${ag.id} SELL ${tok.token} (${why}), ~${Number(formatEther(value)).toPrecision(4)} ETH`);
       const ok = await this.send(ag.wallet, "approveRouter", [tok.token, held]);
       if (!ok) return;
       await this.send(ag.wallet, "trade", [0n, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "sell", args: [tok.token, held, minOut] })]);
