@@ -25,8 +25,8 @@ interface IERC6551Registry {
 ///         The holder calls claim(tokenId) ("Awaken"): the fund deploys the Trencher's ERC-6551 agent
 ///         wallet if it doesn't exist yet, pays the starter balance into it, and the NFT's metadata
 ///         turns from dormant (grey) to awake (colour). The fund pays CLAIM straight into that Trencher's agent wallet, never to
-///         a person. Each Trencher can be claimed once, ever. House agents #1-#5 and the treasury
-///         that lists the collection cannot claim. A Trencher resold before claiming can still be
+///         a person. Each Trencher can be claimed once, ever, by whoever holds it (team wallets included).
+///         House agents #1-#5 have no starter balance. A Trencher resold before claiming can still be
 ///         claimed by its new holder.
 ///
 ///         The agent wallet implementation treats ETH arriving from this contract as a locked
@@ -44,7 +44,6 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
 
     IERC721 public immutable nft;
     IERC6551Registry public immutable registry;
-    address public immutable treasury;
 
     address public accountImplementation; // set once, when the agent wallet contract is deployed
     bytes32 public accountSalt;
@@ -63,7 +62,6 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     error NotEligible();
     error AlreadyClaimed();
     error NotHolder();
-    error TreasuryCannotClaim();
     error NotRegistered();
     error NotOpen();
     error Underfunded();
@@ -73,14 +71,13 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     error TransferFailed();
     error ZeroAmount();
 
-    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, address treasury_, uint256 claim_) {
+    constructor(address owner_, IERC721 nft_, IERC6551Registry registry_, uint256 claim_) {
         if (claim_ == 0) revert ZeroAmount();
         CLAIM = claim_;
-        if (owner_ == address(0) || address(nft_) == address(0) || address(registry_) == address(0) || treasury_ == address(0)) revert ZeroAddress();
+        if (owner_ == address(0) || address(nft_) == address(0) || address(registry_) == address(0)) revert ZeroAddress();
         _transferOwnership(owner_);
         nft = nft_;
         registry = registry_;
-        treasury = treasury_;
     }
 
     receive() external payable { emit Funded(msg.sender, msg.value); }
@@ -112,7 +109,6 @@ contract AgentStarterFund is Ownable, ReentrancyGuard {
     function claim(uint256 tokenId) external nonReentrant {
         if (tokenId < FIRST_ID || tokenId > LAST_ID) revert NotEligible();
         if (claimed[tokenId]) revert AlreadyClaimed();
-        if (msg.sender == treasury) revert TreasuryCannotClaim();
         if (nft.ownerOf(tokenId) != msg.sender) revert NotHolder();
         address wallet = agentWallet(tokenId);
         // Awaken in one step: deploy the agent wallet if the holder hasn't yet.

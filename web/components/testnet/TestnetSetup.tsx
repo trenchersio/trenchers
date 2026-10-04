@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import {
-  createPublicClient, createWalletClient, custom, fallback, formatEther, http, keccak256, parseEther, toHex, zeroHash,
+  createPublicClient, createWalletClient, custom, fallback, formatEther, http, parseAbi, keccak256, parseEther, toHex, zeroHash,
   type Abi, type Address, type EIP1193Provider, type Hash, type PublicClient, type WalletClient,
 } from "viem";
 import { robinhoodTestnet } from "viem/chains";
@@ -14,15 +14,17 @@ import { STRATEGIES } from "@/lib/strategies";
 /**
  * Testnet console: deploys the whole Trenchers system from the connected wallet, mints a test
  * collection into a stand-in shop, and lets any wallet buy, awaken and manage a Trencher.
- * Testnet runs at one tenth of mainnet prices (0.002 ETH, 0.001 ETH to the agent), same 50% split.
+ * Testnet runs at one hundredth of mainnet prices (0.0002 ETH, 0.0001 ETH to the agent), same 50% split.
+ * The page reads the actual price from the deployed contract, so older test deployments keep working.
  */
 
 type Name = keyof typeof artifacts;
 const A = (n: Name) => artifacts[n].abi as Abi;
 const chain = robinhoodTestnet;
 const EXPLORER = chain.blockExplorers.default.url;
-const PRICE = parseEther("0.002");
-const CLAIM = parseEther("0.001");
+const PRICE = parseEther("0.0002");
+const CLAIM = parseEther("0.0001");
+const eth = (v: bigint) => Number(formatEther(v)).toString();
 const CANONICAL_REGISTRY = "0x000000006551c19487814612e58FE06813775758" as Address;
 const PONS_ROUTER = "0xe33e9e479df8802cb0866d5d05258bec4cf62948" as Address;
 const META = "https://trenchers.io/testnet-meta/";
@@ -35,8 +37,8 @@ type Dep = {
 type Log = { label: string; state: "wait" | "ok" | "err"; hash?: Hash; note?: string };
 
 const WALLET_KEY = "trenchers-wallet-rdns";
-/** Bumped when the contracts change in a way the page relies on (3 = public mint, instant withdrawals, rule text). */
-const CONTRACTS_VERSION = 3;
+/** Bumped when the contracts change in a way the page relies on (4 = public mint, instant withdrawals, rule text, any holder can awaken). */
+const CONTRACTS_VERSION = 4;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string };
@@ -47,14 +49,13 @@ const REASONS: Record<string, string> = {
   SoldOut: "All Trenchers have been minted.",
   MintClosed: "The mint isn't open yet. The team wallet opens it in step 1.",
   TooMany: "You can mint up to 10 at a time.",
-  WrongPrice: "The price doesn't match: a test Trencher costs exactly 0.002 ETH.",
-  TreasuryCannotClaim: "The team wallet can't claim starter ETH. Mint and awaken with your buyer wallet.",
+  WrongPrice: "The price doesn't match the mint price. Refresh the page and try again.",
   NotHolder: "Only the wallet that owns this Trencher can do that. Switch to that wallet in MetaMask.",
   AlreadyClaimed: "This Trencher is already awake.",
   Underfunded: "The starter fund doesn't hold enough ETH yet. Buy a Trencher first: half of the price funds it.",
   NotOpen: "Awakening isn't open yet: the setup didn't finish. Continue the setup in step 1 with the team wallet.",
   NotEligible: "House agents (#1 to #5) don't have a starter balance to claim.",
-  StarterLocked: "That's more than you can withdraw: the 0.001 ETH starter balance is locked in the agent for 6 months. Everything above it can be withdrawn at once.",
+  StarterLocked: "That's more than you can withdraw: the starter balance from awakening is locked in the agent for 6 months. Everything above it can be withdrawn at once.",
   NoWithdrawal: "Enter an amount to withdraw.",
   OwnableUnauthorizedAccount: "Only the team wallet that deployed the contracts can do that.",
   ZeroQuantity: "Enter how many to mint (at least 1).",
@@ -93,7 +94,7 @@ export function TestnetSetup() {
     return () => clearTimeout(t);
   }, [task]);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ supply: bigint; fund: bigint; open: boolean } | null>(null);
+  const [stats, setStats] = useState<{ supply: bigint; fund: bigint; open: boolean; price: bigint; claim: bigint } | null>(null);
   const [qty, setQty] = useState(1);
   const [mine, setMine] = useState<number[] | null>(null);
   const [pons, setPons] = useState<boolean | null>(null);
@@ -242,7 +243,7 @@ export function TestnetSetup() {
     } },
     { key: "splitter", label: "Revenue splitter", run: async (_d, me) => ({ splitter: await deploy("Revenue splitter", "RevenueSplitter", [me, me, BigInt(Math.floor(Date.now() / 1000))]) }) },
     { key: "nft", label: "Trenchers NFT", run: async (d, me) => ({ nft: await deploy("Trenchers NFT", "TrenchersNFT", [d.splitter, me, "", `${META}contract.json`, PRICE]) }) },
-    { key: "fund", label: "Agent Starter Fund (0.001 ETH)", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund (0.001 ETH)", "AgentStarterFund", [me, d.nft, d.registry, me, CLAIM]) }) },
+    { key: "fund", label: "Agent Starter Fund", run: async (d, me) => ({ fund: await deploy("Agent Starter Fund", "AgentStarterFund", [me, d.nft, d.registry, CLAIM]) }) },
     { key: "config", label: "Agent settings", run: async (_d, me) => ({ config: await deploy("Agent settings", "AgentConfig", [me]) }) },
     { key: "impl", label: "Agent wallet", run: async (d) => ({ impl: await deploy("Agent wallet", "TrenchersAgentAccount", [d.config]) }) },
     { key: "dist", label: "Fee distributor", run: async (d, me) => ({ dist: await deploy("Fee distributor", "AgentFeeDistributor", [me, d.registry, d.nft]) }) },
@@ -253,7 +254,7 @@ export function TestnetSetup() {
     { key: "seller", label: "Count mints as first sales", run: async (d) => { await write("Count mints as first sales", d.splitter!, "RevenueSplitter", "setPrimarySeller", [d.nft]); return {}; } },
     { key: "starterDest", label: "Send the 50% to the starter fund", run: async (d) => { await write("Send the 50% to the starter fund", d.splitter!, "RevenueSplitter", "proposeDestination", [3, d.fund]); return {}; } },
     { key: "baseUri", label: "Point the NFT at trenchers.io metadata", run: async (d) => { await write("Point the NFT at trenchers.io metadata", d.nft!, "TrenchersNFT", "setBaseURI", [META]); return {}; } },
-    { key: "openMint", label: "Open the mint (0.002 ETH)", run: async (d) => { await write("Open the mint (0.002 ETH)", d.nft!, "TrenchersNFT", "setMintOpen", [true]); return {}; } },
+    { key: "openMint", label: "Open the mint", run: async (d) => { await write("Open the mint", d.nft!, "TrenchersNFT", "setMintOpen", [true]); return {}; } },
   ];
   const deployed = dep.done.includes("all") || STEPS.every((s) => dep.done.includes(s.key)) || ((dep.version ?? 1) < CONTRACTS_VERSION && dep.done.length > 10);
   const ready = deployed && !!dep.nft && !!dep.fund && (dep.version ?? 1) >= CONTRACTS_VERSION;
@@ -302,7 +303,7 @@ export function TestnetSetup() {
   const mintNft = async () => {
     if (!dep.nft) return;
     setBusy(true); setError(null);
-    try { await write(`Minting ${qty} Trencher${qty > 1 ? "s" : ""} (${Number(formatEther(PRICE * BigInt(qty)))} ETH)`, dep.nft, "TrenchersNFT", "mint", [BigInt(qty)], PRICE * BigInt(qty)); }
+    try { await write(`Minting ${qty} Trencher${qty > 1 ? "s" : ""} (${Number(formatEther((stats?.price ?? PRICE) * BigInt(qty)))} ETH)`, dep.nft, "TrenchersNFT", "mint", [BigInt(qty)], (stats?.price ?? PRICE) * BigInt(qty)); }
     catch (e) { setError(reason(e)); }
     setBusy(false); setTick((t) => t + 1); refreshAccount();
   };
@@ -315,7 +316,9 @@ export function TestnetSetup() {
       try {
         const [supply, open] = await Promise.all([read<bigint>(dep.nft!, "TrenchersNFT", "totalSupply"), read<boolean>(dep.nft!, "TrenchersNFT", "mintOpen")]);
         const fund = await clients().pub.getBalance({ address: dep.fund! });
-        if (live) setStats({ supply, fund, open });
+        const price = await read<bigint>(dep.nft!, "TrenchersNFT", "mintPrice").catch(() => PRICE);
+        const claim = await read<bigint>(dep.fund!, "AgentStarterFund", "CLAIM").catch(() => CLAIM);
+        if (live) setStats({ supply, fund, open, price, claim });
         if (account) {
           const ids = Array.from({ length: Number(supply) }, (_, i) => i + 1);
           const owners: (string | null)[] = [];
@@ -349,7 +352,7 @@ export function TestnetSetup() {
       <header className="tn-head">
         <span className="mono eyebrow">Testnet · Robinhood Chain</span>
         <h1>Try Trenchers on testnet</h1>
-        <p>Everything here runs on Robinhood Chain testnet with free test ETH, at one tenth of the real prices: a Trencher costs <b>0.002 ETH</b> and <b>0.001 ETH</b> goes into its agent wallet when you awaken it. Same 50/50 split as mainnet.</p>
+        <p>Everything here runs on Robinhood Chain testnet with free test ETH, at one hundredth of the real prices: a Trencher costs <b>0.0002 ETH</b> and <b>0.0001 ETH</b> goes into its agent wallet when you awaken it. Same 50/50 split as mainnet.</p>
       </header>
 
       <section className="tn-card">
@@ -379,7 +382,7 @@ export function TestnetSetup() {
           <>
             {(dep.version ?? 1) < CONTRACTS_VERSION && !TESTNET_DEPLOYMENT && (
               <div className="tn-fix">
-                <p><b>Newer contracts available.</b> This test deployment is from before the mint on the website and instant withdrawals. Start a fresh one with the team wallet to test the latest version (a few minutes, a little test ETH).</p>
+                <p><b>Newer contracts available.</b> This test deployment is from an older version. Start a fresh one with the team wallet to test the latest version (a few minutes, a little test ETH).</p>
                 <button type="button" className="tn-btn" onClick={resetDeployment} disabled={busy}>Start a fresh test deployment</button>
               </div>
             )}
@@ -416,18 +419,17 @@ export function TestnetSetup() {
             <span className="mono">{qty}</span>
             <button type="button" onClick={() => setQty((q) => Math.min(10, q + 1))} disabled={qty >= 10} aria-label="One more">+</button>
           </div>
-          <button type="button" className="tn-btn tn-primary tn-mint-btn" onClick={mintNft} disabled={busy || !ready || !chainOk || !stats?.open}>Mint {qty} for {Number(formatEther(PRICE * BigInt(qty)))} ETH</button>
+          <button type="button" className="tn-btn tn-primary tn-mint-btn" onClick={mintNft} disabled={busy || !ready || !chainOk || !stats?.open}>Mint {qty} for {Number(formatEther((stats?.price ?? PRICE) * BigInt(qty)))} ETH</button>
           {stats && <div className="tn-progress"><span className="mono">{stats.supply.toString()} / 2,000 minted</span><i style={{ width: `${Math.min(100, Number(stats.supply) / 20)}%` }} /></div>}
         </div>
         {stats && !stats.open && <p className="tn-hint">The mint is paused. The team wallet opens it in step 1.</p>}
-        {isOwner && <p className="tn-hint">This is the team wallet. Mint with your buyer wallet: the team wallet can&apos;t claim starter ETH.</p>}
       </section>
 
       <section className={`tn-card${!ready || !chainOk ? " tn-off" : ""}`}>
         <h2><span className="tn-n mono">3</span>Your Trenchers</h2>
         {mine === null ? <p className="tn-hint">Connect a wallet to see your Trenchers.</p> : mine.length === 0 ? <p className="tn-hint">This wallet has no Trenchers yet. Mint one above.</p> : (
           <div className="tn-grid">
-            {mine.map((id) => <TokenCard key={id} tick={tick} id={id} dep={dep} account={account!} write={write} send={send} read={read} getBalance={(a) => clients().pub.getBalance({ address: a })} getRule={getRule} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} pons={pons} />)}
+            {mine.map((id) => <TokenCard key={id} tick={tick} id={id} dep={dep} account={account!} write={write} send={send} read={read} getBalance={(a) => clients().pub.getBalance({ address: a })} getRule={getRule} claim={stats?.claim ?? CLAIM} onDone={() => { setTick((t) => t + 1); refreshAccount(); }} setError={setError} busy={busy} setBusy={setBusy} pons={pons} />)}
           </div>
         )}
       </section>
@@ -457,6 +459,8 @@ export function TestnetSetup() {
         </div>
       )}
 
+      {account && chainOk && <Rescue account={account} clients={clients} sendTx={sendTx} setError={setError} />}
+
       {(logs.length > 0 || error) && (
         <section className="tn-card tn-log">
           <h2>Transactions</h2>
@@ -481,14 +485,14 @@ type ReadFn = <T>(address: Address, name: Name, functionName: string, args?: unk
 const TEMPLATES = STRATEGIES.filter((x) => x.name !== "Custom").map((x) => ({ name: x.name, text: `${x.trigger}. ${x.exit}.` }));
 const LOCK_DAYS = 180;
 
-function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getRule, onDone, setError, busy, setBusy, pons }: {
+function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getRule, claim, onDone, setError, busy, setBusy, pons }: {
   id: number; tick: number; dep: Dep; account: Address; write: WriteFn; send: (label: string, to: Address, value: bigint) => Promise<unknown>; read: ReadFn;
-  getBalance: (a: Address) => Promise<bigint>; getRule: (wallet: Address, version: number) => Promise<string | null>;
+  getBalance: (a: Address) => Promise<bigint>; getRule: (wallet: Address, version: number) => Promise<string | null>; claim: bigint;
   onDone: () => void; setError: (s: string | null) => void; busy: boolean; setBusy: (b: boolean) => void; pons: boolean | null;
 }) {
   type St = { awake: boolean; wallet?: Address; bal?: bigint; locked?: bigint; free?: bigint; rules?: number; lockedAt?: bigint; ruleText?: string | null };
   const [s, setS] = useState<St | null>(null);
-  const [depAmt, setDepAmt] = useState("0.001");
+  const [depAmt, setDepAmt] = useState("0.0001");
   const [wdAmt, setWdAmt] = useState("");
   const [rule, setRule] = useState("");
   const house = id <= 5;
@@ -532,10 +536,10 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
   const applyRule = () => act(async () => {
     const text = rule.trim().slice(0, 500);
     try { localStorage.setItem(`trenchers-rule-${s!.wallet!.toLowerCase()}-${(s!.rules ?? 0) + 1}`, text); } catch {}
-    await write(`Applying rule v${(s!.rules ?? 0) + 1} to #${id}`, s!.wallet!, "TrenchersAgentAccount", "setPolicy", [parseEther("0.0005"), parseEther("0.002"), true, keccak256(toHex(text)), text]);
+    await write(`Applying rule v${(s!.rules ?? 0) + 1} to #${id}`, s!.wallet!, "TrenchersAgentAccount", "setPolicy", [claim / 2n, claim * 2n, true, keccak256(toHex(text)), text]);
     setRule("");
   });
-  const fmt = (v?: bigint) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(5));
+  const fmt = (v?: bigint) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(6));
   const unlock = s?.lockedAt ? new Date((Number(s.lockedAt) + LOCK_DAYS * 86400) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const tplName = s?.ruleText ? TEMPLATES.find((t) => t.text === s.ruleText)?.name : undefined;
 
@@ -543,11 +547,11 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
     <article className="tn-tok">
       <img src={`/testnet-meta/img/${s?.awake ? "awake" : "dormant"}/${id}.svg`} alt={`Trencher #${id}`} width={160} height={160} className={s ? "" : "tn-img-wait"} />
       <div className="tn-tok-body">
-        <h3>Trencher #{id} <span className={`mono tn-badge${s?.awake ? " on" : ""}`}>{house ? "House agent" : s ? (s.awake ? "Awake" : "Dormant · 0.001 claimable") : "…"}</span></h3>
+        <h3>Trencher #{id} <span className={`mono tn-badge${s?.awake ? " on" : ""}`}>{house ? "House agent" : s ? (s.awake ? "Awake" : `Dormant · ${eth(claim)} claimable`) : "…"}</span></h3>
         {s && !s.awake && (
           <>
-            <p>Grey for now: its 0.001 ETH starter balance is waiting. Awaken it to create its agent wallet, move the 0.001 ETH in and turn it to full colour.</p>
-            <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={awaken} disabled={busy}>Awaken · claim 0.001 ETH</button></div>
+            <p>Grey for now: its {eth(claim)} ETH starter balance is waiting. Awaken it to create its agent wallet, move the {eth(claim)} ETH in and turn it to full colour.</p>
+            <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={awaken} disabled={busy}>Awaken · claim {eth(claim)} ETH</button></div>
           </>
         )}
         {s?.awake && s.wallet && (
@@ -571,7 +575,7 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
                 {TEMPLATES.map((t) => <button key={t.name} type="button" className={`tn-tpl${rule === t.text ? " on" : ""}`} onClick={() => setRule(t.text)}><b>{t.name}</b><small>{t.text}</small></button>)}
               </div>
               <textarea className="tn-in tn-area" value={rule} onChange={(e) => setRule(e.target.value)} placeholder="Or write your own, e.g. Only new launches with more than 3 ETH liquidity. Take profit at 40%, stop loss 20%." />
-              <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={applyRule} disabled={busy || !rule.trim()}>Apply rule</button><span className="tn-hint">Saved on-chain as rule v{(s.rules ?? 0) + 1}, with limits of 0.0005 ETH per trade and 0.002 ETH per day.</span></div>
+              <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={applyRule} disabled={busy || !rule.trim()}>Apply rule</button><span className="tn-hint">Saved on-chain as rule v{(s.rules ?? 0) + 1}, with limits of {eth(claim / 2n)} ETH per trade and {eth(claim * 2n)} ETH per day.</span></div>
             </div>
 
             <div className="tn-sub">
@@ -596,5 +600,75 @@ function TokenCard({ id, tick, dep, account, write, send, read, getBalance, getR
         )}
       </div>
     </article>
+  );
+}
+
+/** Old test agent wallets (first testnet version) used a two-step, 10-minute withdrawal. This gets that ETH back. */
+const OLD_ABI = parseAbi([
+  "function withdrawable() view returns (uint256)",
+  "function withdrawal() view returns (address requestedBy, uint128 amount, uint64 readyAt)",
+  "function requestWithdrawal(uint128 amount)",
+  "function withdraw()",
+  "function owner() view returns (address)",
+]);
+
+function Rescue({ account, clients, sendTx, setError }: {
+  account: Address;
+  clients: () => { wallet: WalletClient; pub: PublicClient };
+  sendTx: (label: string, fn: (w: WalletClient, from: Address) => Promise<Hash>) => Promise<unknown>;
+  setError: (s: string | null) => void;
+}) {
+  const [addr, setAddr] = useState("");
+  const [info, setInfo] = useState<{ bal: bigint; free: bigint; req: bigint; readyAt: number; owner: Address } | null>(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+
+  const load = async () => {
+    setError(null); setInfo(null);
+    try {
+      const a = addr.trim() as Address;
+      const pub = clients().pub;
+      const [bal, free, w, owner] = await Promise.all([
+        pub.getBalance({ address: a }),
+        pub.readContract({ address: a, abi: OLD_ABI, functionName: "withdrawable" }),
+        pub.readContract({ address: a, abi: OLD_ABI, functionName: "withdrawal" }),
+        pub.readContract({ address: a, abi: OLD_ABI, functionName: "owner" }),
+      ]);
+      setInfo({ bal, free, req: w[1], readyAt: Number(w[2]) * 1000, owner });
+    } catch { setError("That address isn't an old (10-minute) test agent wallet, or it can't be read right now."); }
+  };
+  const request = async () => {
+    if (!info) return;
+    try { await sendTx(`Requesting ${Number(formatEther(info.free))} ETH from the old agent wallet`, (w, from) => w.writeContract({ address: addr.trim() as Address, abi: OLD_ABI, functionName: "requestWithdrawal", args: [info.free], account: from, chain })); await load(); }
+    catch (e) { setError(reason(e)); }
+  };
+  const withdraw = async () => {
+    try { await sendTx("Withdrawing from the old agent wallet", (w, from) => w.writeContract({ address: addr.trim() as Address, abi: OLD_ABI, functionName: "withdraw", account: from, chain })); await load(); }
+    catch (e) { setError(reason(e)); }
+  };
+  const mine = info && info.owner.toLowerCase() === account.toLowerCase();
+  const wait = info ? Math.max(0, Math.ceil((info.readyAt - now) / 1000)) : 0;
+  const goodReq = info && info.req > 0n && info.req <= info.free;
+
+  return (
+    <section className="tn-card">
+      <details className="tn-details">
+        <summary className="mono">Get ETH back from an old test agent wallet (first testnet version)</summary>
+        <div className="tn-col" style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+          <p>Paste the agent wallet address of a Trencher from the first test deployment. Its own deposits can come back in two steps, 10 minutes apart (the new version is instant). The starter balance stays locked.</p>
+          <div className="tn-row"><input className="tn-in tn-wide mono" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x… agent wallet" /><button type="button" className="tn-btn" onClick={load}>Check</button></div>
+          {info && (
+            <>
+              <p className="mono tn-small">Balance {Number(formatEther(info.bal))} ETH · withdrawable {Number(formatEther(info.free))} ETH{info.req > 0n ? ` · requested ${Number(formatEther(info.req))} ETH` : ""}</p>
+              {!mine ? <p className="tn-hint">Switch to the wallet that owns this Trencher.</p> : info.free === 0n ? <p className="tn-hint">Nothing withdrawable: only the locked starter balance is left.</p> : goodReq ? (
+                <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={withdraw} disabled={wait > 0}>{wait > 0 ? `Withdraw in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, "0")}` : `Withdraw ${Number(formatEther(info.req))} ETH`}</button></div>
+              ) : (
+                <div className="tn-row"><button type="button" className="tn-btn tn-primary" onClick={request}>Step 1: request {Number(formatEther(info.free))} ETH</button><span className="tn-hint">Then wait 10 minutes and come back here.</span></div>
+              )}
+            </>
+          )}
+        </div>
+      </details>
+    </section>
   );
 }

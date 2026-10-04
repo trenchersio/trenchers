@@ -178,7 +178,7 @@ describe("AgentStarterFund", () => {
     const ctx = await deploy();
     const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
     const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
-      ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ctx.treasury.address, ethers.parseEther("0.01")
+      ctx.safe.address, await ctx.nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01")
     );
     await fund.connect(ctx.safe).setAccount(ctx.bob.address /* any non-zero implementation */, ethers.ZeroHash);
     await mintAs(ctx.nft, ctx.treasury, 20); // ids 6..25
@@ -217,11 +217,11 @@ describe("AgentStarterFund", () => {
     expect(await ethers.provider.getBalance(w)).to.equal(ethers.parseEther("0.01"));
   });
 
-  it("only the current holder can claim; the treasury and house agents never can", async () => {
+  it("only the current holder can claim, any wallet including the team's; house agents never can", async () => {
     const { fund, nft, alice, bob, treasury, team, register } = await setup();
     await register(6); await register(7); await register(1);
     await expect(fund.connect(bob).claim(6)).to.be.revertedWithCustomError(fund, "NotHolder");
-    await expect(fund.connect(treasury).claim(7)).to.be.revertedWithCustomError(fund, "TreasuryCannotClaim");
+    await fund.connect(treasury).claim(7); // a team wallet that bought a Trencher can awaken it
     await expect(fund.connect(team).claim(1)).to.be.revertedWithCustomError(fund, "NotEligible");
     // resold before claiming: the new holder can claim
     await nft.connect(alice).transferFrom(alice.address, bob.address, 6);
@@ -262,7 +262,7 @@ describe("Dormant / awake metadata", () => {
   it("serves dormant metadata until the starter balance is claimed, then awake, and signals a refresh", async () => {
     const { nft, safe, treasury, alice, deployer } = await deploy();
     const registry = await (await ethers.getContractFactory("MockRegistry")).deploy();
-    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), treasury.address, ethers.parseEther("0.01"));
+    const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"));
     await fund.connect(safe).setAccount(alice.address, ethers.ZeroHash);
     await mintAs(nft, treasury, 5);
     await nft.connect(treasury).transferFrom(treasury.address, alice.address, 6);

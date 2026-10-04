@@ -137,7 +137,7 @@ Every Trencher is minted for 0.02 ETH through `TrenchersNFT.mint`. The mint send
 | 0.01 ETH per Trencher, funded by its mint, claimable once, ever | `claimed[tokenId]` in `AgentStarterFund` |
 | Only the current holder can claim | `ownerOf(tokenId) == msg.sender` |
 | Paid to the agent wallet, never to a person | The fund computes the ERC-6551 account address, deploys it through the canonical registry if needed, and pays only that address |
-| The team wallet and house agents #1 to #5 can't claim | Explicit checks in `claim` |
+| House agents #1 to #5 have no starter balance; every other Trencher can be claimed by whoever holds it, team wallets included | Explicit check in `claim` |
 | A Trencher resold before its claim can still be claimed | The claim follows the token, not the first buyer |
 | The fund can always pay every unclaimed Trencher | Only ETH above `0.01 × unclaimed` can leave, and only to the buyback vault |
 | The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): it can pay for a coin launch or trades, but withdrawals are limited to the balance above it. After 180 days, what's left becomes withdrawable |

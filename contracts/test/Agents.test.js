@@ -23,7 +23,7 @@ async function setup() {
   const router = await (await ethers.getContractFactory("MockRouter")).deploy();
   const launcher = await (await ethers.getContractFactory("MockRouter")).deploy();
   const config = await (await ethers.getContractFactory("AgentConfig")).deploy(safe.address);
-  const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), treasury.address, ethers.parseEther("0.01"));
+  const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(safe.address, await nft.getAddress(), await registry.getAddress(), ethers.parseEther("0.01"));
   await config.connect(safe).propose(0, engine.address);
   await config.connect(safe).propose(1, await router.getAddress());
   await config.connect(safe).propose(2, await launcher.getAddress());

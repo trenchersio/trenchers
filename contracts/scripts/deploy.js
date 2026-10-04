@@ -59,7 +59,7 @@ async function main() {
   console.log(`  transfer validator: ${await nft.getTransferValidator()}`);
 
   const fund = await (await ethers.getContractFactory("AgentStarterFund")).deploy(
-    safe, await nft.getAddress(), ERC6551_REGISTRY, team, mintPrice / 2n
+    safe, await nft.getAddress(), ERC6551_REGISTRY, mintPrice / 2n
   );
   await fund.waitForDeployment();
   console.log(`AgentStarterFund ${await fund.getAddress()}`);
