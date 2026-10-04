@@ -1624,3 +1624,80 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .live-version { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .live-empty-gate { margin: 40px auto; }
 @media (max-width: 700px) { .live-funds { grid-template-columns: 1fr; } .live-ap .panel-card { padding: 16px; } }
+
+/* Guide your agent: strategy → limits → start trading */
+.gf { border: 1px solid var(--line); border-radius: 16px; background: radial-gradient(ellipse 60% 40% at 0% 0%, rgba(57,255,136,.06), transparent 70%), var(--panel); overflow: hidden; }
+.gf-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+.gf-kick { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--green); margin-bottom: 4px; }
+.gf-head h3 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+.gf-state { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--quiet); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: rgba(0,0,0,.25); }
+.gf-state i { width: 8px; height: 8px; border-radius: 50%; background: #4E5753; }
+.gf-state.on { color: var(--green); border-color: rgba(57,255,136,.45); }
+.gf-state.on i { background: var(--green); box-shadow: 0 0 10px var(--green); animation: livepulse 1.6s ease-in-out infinite; }
+.gf-locked { margin: 14px 24px 0; padding: 10px 12px; border: 1px solid rgba(255,176,32,.45); border-radius: 10px; color: var(--amber); font-size: 13px; background: rgba(255,176,32,.05); }
+.gf-steps { list-style: none; margin: 0; padding: 8px 24px 24px; }
+.gf-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 18px; padding-top: 20px; position: relative; }
+.gf-step:not(:last-child)::before { content: ""; position: absolute; left: 16px; top: 54px; bottom: -14px; width: 1px; background: linear-gradient(var(--line), transparent); }
+.gf-step.gf-done:not(:last-child)::before { background: linear-gradient(rgba(57,255,136,.55), var(--line)); }
+.gf-n { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; border: 1px solid var(--line); color: var(--quiet); background: var(--black); }
+.gf-now .gf-n { border-color: var(--green); color: var(--green); box-shadow: 0 0 0 4px rgba(57,255,136,.08); }
+.gf-done .gf-n { background: var(--green); border-color: var(--green); color: var(--black); font-weight: 700; }
+.gf-body { min-width: 0; padding-bottom: 6px; }
+.gf-body h4 { margin: 6px 0 6px; font-size: 17px; }
+.gf-todo .gf-body h4 { color: var(--quiet); }
+.gf-lede { margin: 0 0 14px; color: var(--quiet); font-size: 14px; line-height: 1.55; max-width: 64ch; }
+.gf-rule { border: 1px solid rgba(57,255,136,.35); background: linear-gradient(90deg, rgba(57,255,136,.08), rgba(57,255,136,.02)); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 4px; }
+.gf-rule > span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); }
+.gf-rule > p { margin: 0; font-size: 15px; line-height: 1.45; }
+.gf-rule > small { color: var(--amber); font-size: 12px; }
+.gf-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, 1fr); gap: 14px; align-items: start; }
+.gf-chat { min-width: 0; }
+.gf-chat .chat { margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--black); }
+.gf-tpls { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.gf-sub { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--quiet); margin: 2px 0 3px; }
+.gf-tpl { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 11px; align-items: start; text-align: left; background: var(--black); border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; color: var(--fog); cursor: pointer; font: inherit; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.gf-tpl:hover:not(:disabled) { border-color: #3A4741; transform: translateY(-1px); }
+.gf-tpl:disabled { cursor: default; }
+.gf-tpl:disabled:not(.on) { opacity: .55; }
+.gf-tpl.on { border-color: rgba(57,255,136,.6); background: rgba(57,255,136,.06); }
+.gf-radio { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 1px solid #4E5753; display: block; }
+.gf-tpl.on .gf-radio { border-color: var(--green); background: radial-gradient(circle, var(--green) 45%, transparent 50%); }
+.gf-tpl-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gf-tpl-txt b { font-size: 14px; }
+.gf-tpl-txt small { color: var(--quiet); font-size: 12px; line-height: 1.4; }
+.gf-tag { font-size: 10px; color: var(--quiet); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.gf-tag.on { color: var(--green); border-color: rgba(57,255,136,.5); }
+.gf-limits { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.gf-limit { display: flex; flex-direction: column; gap: 7px; }
+.gf-limit > span { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
+.gf-limit-in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--black); padding: 0 12px; transition: border-color .15s ease; }
+.gf-limit-in:focus-within { border-color: var(--green); }
+.gf-limit-in input { width: 120px; background: none; border: 0; color: var(--fog); font-size: 17px; padding: 11px 0; outline: none; }
+.gf-limit-in em { font-style: normal; color: var(--quiet); font-size: 12px; }
+.gf-btn { font: 600 13px var(--mono); border-radius: 10px; padding: 11px 18px; cursor: pointer; border: 1px solid var(--line); background: none; color: var(--fog); transition: transform .15s ease, box-shadow .15s ease, background .15s ease; white-space: nowrap; }
+.gf-btn:disabled { opacity: .45; cursor: default; }
+.gf-btn.ghost:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.gf-btn.go { background: var(--green); border-color: var(--green); color: #0B0D0C; box-shadow: 0 8px 30px rgba(57,255,136,.25); }
+.gf-btn.go:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 36px rgba(57,255,136,.35); }
+.gf-btn.stop { border-color: rgba(255,92,92,.55); color: #FF8A8A; }
+.gf-btn.stop:hover:not(:disabled) { background: rgba(255,92,92,.1); }
+.gf-go { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--black); }
+.gf-go.on { border-color: rgba(57,255,136,.45); background: radial-gradient(ellipse at left, rgba(57,255,136,.1), transparent 60%), var(--black); }
+.gf-orb { width: 16px; height: 16px; border-radius: 50%; background: #2E3532; box-shadow: inset 0 0 0 3px #1A1F1D; }
+.gf-go.on .gf-orb { background: var(--green); box-shadow: 0 0 0 5px rgba(57,255,136,.15), 0 0 18px var(--green); animation: livepulse 1.6s ease-in-out infinite; }
+.gf-go-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gf-go-txt b { font-size: 16px; }
+.gf-go-txt small { color: var(--quiet); font-size: 13px; line-height: 1.45; }
+.gf-go-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) { .gf-state.on i, .gf-go.on .gf-orb { animation: none; } }
+@media (max-width: 860px) { .gf-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .gf-head { padding: 16px; } .gf-steps { padding: 4px 16px 18px; }
+  .gf-step { grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
+  .gf-n { width: 28px; height: 28px; font-size: 12px; } .gf-step:not(:last-child)::before { left: 13px; top: 50px; }
+  .gf-go { grid-template-columns: auto minmax(0, 1fr); } .gf-go-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .gf-limit-in input { width: 100px; }
+}
+.live-max { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--green); font-size: 11px; padding: 3px 8px; cursor: pointer; margin-left: 8px; }
+.live-max:disabled { opacity: .4; cursor: default; }
+.live-funds .gf-limit-in input { width: 120px; }

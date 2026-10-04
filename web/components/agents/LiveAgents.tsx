@@ -4,7 +4,7 @@ import { formatEther, keccak256, parseEther, toHex, zeroHash, type Address } fro
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { PnlCardButton } from "@/components/PnlCard";
 import { TextButton } from "@/components/TextButton";
-import { AgentChat } from "./AgentChat";
+import { GuideFlow } from "./GuideFlow";
 import { cardFromLive } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, chain } from "@/lib/constants";
@@ -27,7 +27,7 @@ type Agent = {
 type EngineAgent = Parameters<typeof cardFromLive>[0];
 type Task = { label: string; phase: "check" | "sign" | "chain" | "done" | "error"; note?: string };
 
-const TEMPLATES = STRATEGIES.filter((s) => s.name !== "Custom").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.` }));
+const TEMPLATES = STRATEGIES.filter((s) => s.name !== "Custom").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.`, house: s.houseAgent }));
 const LOCK_DAYS = 180;
 const EXPLORER = chain.blockExplorers?.default.url ?? "";
 const fmt = (v?: bigint, d = 5) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(d).replace(/\.?0+$/, "") || "0");
@@ -301,39 +301,24 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           </section>
         )}
 
-        <section className="panel-card">
-          <div className="panel-card-head">
-            <h3>Guide your agent</h3>
-            {trading
-              ? <TextButton onClick={() => setTrading(false)} disabled={busy}>Pause trading</TextButton>
-              : a.ruleVersion ? <TextButton onClick={() => setTrading(true)} disabled={busy}>Switch trading on</TextButton> : null}
-          </div>
-          <div className="live-rule">
-            <span className="mono">{a.ruleVersion ? `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}` : "No rule yet"}</span>
-            <p>{a.ruleVersion ? (a.ruleText ?? "Rule applied.") : "Pick a house strategy or tell your agent how to trade. It trades the rule you apply, 24/7, within your limits."}</p>
-            {live?.ruleWarning && <p className="live-warn">{live.ruleWarning}</p>}
-            {!trading && !!a.ruleVersion && <p className="muted-note">Paused: the agent isn&apos;t trading until you switch it back on.</p>}
-          </div>
-
-          <div className="live-tpls">
-            {TEMPLATES.map((t) => (
-              <button key={t.name} type="button" className={`tn-tpl${a.ruleText === t.text ? " on" : ""}`} disabled={busy} onClick={() => applyText(t.text, `Applying ${t.name} to Trencher #${a.id}`)}>
-                <b>{t.name}</b><small>{t.text}</small>
-              </button>
-            ))}
-          </div>
-
-          <div className="live-chat">
-            <AgentChat id={a.id} rule={currentRule} chat={chat} onChat={saveChat} onApply={applyRule} disabled={busy} />
-          </div>
-
-          <div className="live-limits">
-            <label className="field"><span>Max per trade (ETH)</span><input className="mono" inputMode="decimal" value={perTrade} onChange={(e) => setPerTrade(e.target.value)} disabled={busy} /></label>
-            <label className="field"><span>Max per day (ETH)</span><input className="mono" inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value)} disabled={busy} /></label>
-            {!!a.ruleVersion && <TextButton onClick={saveLimits} disabled={busy}>Save limits</TextButton>}
-            <p className="muted-note">Hard limits, enforced by the agent wallet itself: the trading engine can never spend more than this, and can never withdraw.</p>
-          </div>
-        </section>
+        <GuideFlow
+          id={a.id} busy={busy}
+          rule={a.ruleVersion ? { label: `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}`, text: a.ruleText ?? "Rule applied." } : null}
+          warning={live?.ruleWarning}
+          chat={{ rule: currentRule, msgs: chat, onChat: saveChat, onApply: applyRule }}
+          templates={TEMPLATES}
+          activeTemplate={tpl}
+          onTemplate={(t) => applyText(t.text, `Applying ${t.name} to Trencher #${a.id}`)}
+          limits={[
+            { id: "pt", label: "Max per trade", unit: "ETH", value: perTrade, onChange: setPerTrade },
+            { id: "pd", label: "Max per day", unit: "ETH", value: daily, onChange: setDaily },
+          ]}
+          onSaveLimits={saveLimits}
+          trading={trading}
+          onStart={() => setTrading(true)}
+          onPause={() => setTrading(false)}
+          arenaHref="/arena#live"
+        />
 
         <section className="panel-card">
           <h3>Funds</h3>
@@ -341,16 +326,15 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
             <div>
               <span className="mono live-lbl">Deposit</span>
               <div className="live-row-in">
-                <input className="mono" inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} disabled={busy} aria-label="Deposit amount (ETH)" />
-                <TextButton onClick={deposit} disabled={busy || !dep}>Deposit</TextButton>
+                <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} disabled={busy} aria-label="Deposit amount (ETH)" /><em className="mono">ETH</em></span>
+                <button type="button" className="gf-btn go" onClick={deposit} disabled={busy || !dep}>Deposit</button>
               </div>
             </div>
             <div>
-              <span className="mono live-lbl">Withdraw · instant</span>
+              <span className="mono live-lbl">Withdraw · instant · {fmt(a.free)} ETH available</span>
               <div className="live-row-in">
-                <input className="mono" inputMode="decimal" value={wd} placeholder="0.0" onChange={(e) => setWd(e.target.value)} disabled={busy} aria-label="Withdraw amount (ETH)" />
-                <button type="button" className="tbtn" onClick={() => setWd(formatEther(a.free ?? 0n))} disabled={busy || !a.free}>Max {fmt(a.free)}</button>
-                <TextButton onClick={withdraw} disabled={busy || !wd || !a.free}>Withdraw</TextButton>
+                <span className="gf-limit-in"><input className="mono" inputMode="decimal" value={wd} placeholder="0.0" onChange={(e) => setWd(e.target.value)} disabled={busy} aria-label="Withdraw amount (ETH)" /><button type="button" className="live-max mono" onClick={() => setWd(formatEther(a.free ?? 0n))} disabled={busy || !a.free}>Max</button></span>
+                <button type="button" className="gf-btn ghost" onClick={withdraw} disabled={busy || !wd || !a.free}>Withdraw</button>
               </div>
             </div>
           </div>

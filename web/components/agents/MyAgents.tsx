@@ -2,6 +2,7 @@
 import { AgentLinks } from "@/components/AgentLinks";
 import { PnlCardButton } from "@/components/PnlCard";
 import { LiveAgents } from "./LiveAgents";
+import { GuideFlow } from "./GuideFlow";
 import { DEPLOYMENT } from "@/lib/chain";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
@@ -236,7 +237,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         {([
           ["register", "1", "Awaken", a.registered && a.starterClaimed ? "done" : ""],
           ["coin", "2", a.token ? `Coin $${a.token.symbol}` : "Coin launchpad", a.token ? "done" : a.fundingMode === "self" ? "skip" : "opt"],
-          ["strategy", "3", "Guide your agent", a.live ? "done" : ""],
+          ["strategy", "3", "Guide & start trading", a.live ? "done" : ""],
         ] as const).map(([k, n, label, state]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`seg${tab === k ? " seg-on" : ""}${state === "done" ? " seg-done" : ""}`} onClick={() => setTab(k)}>
             <span className="seg-n mono">{state === "done" ? "✓" : n}</span>
@@ -302,65 +303,39 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         </Step>
       </ol>}
 
-      {tab === "strategy" && <ol className="steps-v">
-        <Step n={1} title="Talk to your agent" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
-          <p>This is where your edge comes from. Tell your agent how to trade in plain English and keep guiding it as the market changes. Every message becomes a rule you confirm; the agent then executes it 24/7, without fear or greed.</p>
-          <div className="guide-grid">
-            <div className="guide-chat">
-              <AgentChat id={a.id} rule={a.strategy?.custom ?? null} chat={a.chat ?? []} disabled={!a.registered || a.balance <= 0 || !!busy}
-                onChat={(c) => onChange({ ...a, chat: c })}
-                onApply={(rule, c) => applyRule(rule, c)} />
-              {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
-              <details className="alt-ways">
-                <summary className="mono">Edit the rule as a form</summary>
-                <div className="alt-body">
-                  <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? a.strategy?.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, preset: "Custom", custom: r })} disabled={!!busy} />
-                  <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy || draft.preset !== "Custom"}>Save this rule</TextButton>
-                </div>
-              </details>
-            </div>
-            <aside className="tpl" aria-label="House templates">
-              <span className="mono ap-kick">House templates</span>
-              <p>Start from a strategy the team runs in public, then talk your agent into something better. Templates never adapt on their own.</p>
-              <ul>
-                {(Object.keys(PRESETS) as Preset[]).filter((k) => k !== "Custom").map((k) => {
-                  const on = a.strategy?.preset === k;
-                  return (
-                    <li key={k} className={on ? "on" : undefined}>
-                      <div className="tpl-top"><b>{k}</b><span className="mono">#{PRESETS[k].house}</span></div>
-                      <p>{PRESETS[k].line}. {PRESETS[k].rules.join(" · ")}.</p>
-                      <TextButton onClick={() => applyTemplate(k)} disabled={!a.registered || a.balance <= 0 || !!busy}>{on ? "Active" : "Start from this"}</TextButton>
-                    </li>
-                  );
-                })}
-              </ul>
-            </aside>
-          </div>
-        </Step>
-
-        <Step n={2} title="Set its limits" state={!a.strategy ? "todo" : "done"}>
-          <p>Hard caps enforced by the agent wallet itself. Whatever you tell the agent, the trading engine can never spend more than this, or withdraw.</p>
-          <div className="limits">
-            <NumField id={`pb-${a.id}`} label="ETH per buy" value={draft.perBuy} onChange={(v) => setDraft({ ...draft, perBuy: v ?? 0 })} />
-            <NumField id={`dc-${a.id}`} label="Daily cap" unit="ETH" value={draft.dailyCap} onChange={(v) => setDraft({ ...draft, dailyCap: v ?? 0 })} />
-            <NumField id={`mp-${a.id}`} label="Max open positions" value={draft.maxPositions} onChange={(v) => setDraft({ ...draft, maxPositions: v === null ? 0 : Math.round(v) })} />
-          </div>
-          {a.strategy && <TextButton onClick={saveStrategy} disabled={!!busy}>Update limits</TextButton>}
-        </Step>
-
-        <Step n={3} title="Enter the Arena" state={a.live ? "done" : step === 6 ? "now" : "todo"}>
-          {a.live ? (<>
-            <p>Trading. Your agent is competing in this week&apos;s PnL race. Keep talking to it whenever you want it to trade differently.</p>
-            <div className="actions">
-              <TextButton href={ROUTES.arena}>View in the Arena</TextButton>
-              <TextButton onClick={pause} disabled={!!busy}>Pause trading</TextButton>
-            </div>
-          </>) : (<>
-            <p>Switch trading on. Your agent starts following your guidance and appears on the live leaderboard. Pause any time.</p>
-            <TextButton onClick={enter} disabled={step < 6 || !!busy}>Enter the Arena</TextButton>
-          </>)}
-        </Step>
-      </ol>}
+      {tab === "strategy" && (
+        <GuideFlow
+          id={a.id} busy={!!busy}
+          locked={!a.registered || a.balance <= 0 ? "Awaken your Trencher and claim its starter balance first (section 1)." : null}
+          rule={a.strategy ? {
+            label: a.strategy.preset === "Custom" ? `Current rule · v${Math.max(1, versions)}` : `Current rule · template · ${a.strategy.preset}`,
+            text: a.strategy.preset === "Custom" && a.strategy.custom ? describe(a.strategy.custom) : `${PRESETS[a.strategy.preset].line}. ${PRESETS[a.strategy.preset].rules.join(" · ")}.`,
+          } : null}
+          chat={{ rule: a.strategy?.custom ?? null, msgs: a.chat ?? [], onChat: (c) => onChange({ ...a, chat: c }), onApply: (rule, c) => applyRule(rule, c) }}
+          chatExtra={
+            <details className="alt-ways">
+              <summary className="mono">Edit the rule as a form</summary>
+              <div className="alt-body">
+                <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? a.strategy?.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, preset: "Custom", custom: r })} disabled={!!busy} />
+                <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy || draft.preset !== "Custom"}>Save this rule</TextButton>
+              </div>
+            </details>
+          }
+          templates={(Object.keys(PRESETS) as Preset[]).filter((k) => k !== "Custom").map((k) => ({ name: k, text: `${PRESETS[k].line}. ${PRESETS[k].rules.join(" · ")}.`, house: PRESETS[k].house }))}
+          activeTemplate={a.strategy && a.strategy.preset !== "Custom" ? a.strategy.preset : undefined}
+          onTemplate={(t) => applyTemplate(t.name as Preset)}
+          limits={[
+            { id: `pb-${a.id}`, label: "Max per buy", unit: "ETH", value: String(draft.perBuy), onChange: (v) => setDraft({ ...draft, perBuy: Number(v) || 0 }) },
+            { id: `dc-${a.id}`, label: "Max per day", unit: "ETH", value: String(draft.dailyCap), onChange: (v) => setDraft({ ...draft, dailyCap: Number(v) || 0 }) },
+            { id: `mp-${a.id}`, label: "Max open positions", value: String(draft.maxPositions), onChange: (v) => setDraft({ ...draft, maxPositions: Math.round(Number(v) || 0) }) },
+          ]}
+          onSaveLimits={saveStrategy}
+          trading={a.live}
+          onStart={enter}
+          onPause={pause}
+          arenaHref={ROUTES.arena}
+        />
+      )}
 
       {tab === "activity" && (
         <div className="panel-block">
