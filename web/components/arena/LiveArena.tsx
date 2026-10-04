@@ -5,7 +5,7 @@ import { PnlCardButton } from "@/components/PnlCard";
 import type { PnlCardData } from "@/lib/pnl-card";
 import { ENGINE_URL } from "@/lib/constants";
 import { short } from "@/lib/wallet";
-import { LineChart } from "./LineChart";
+import { LineChart, RangeTabs } from "./LineChart";
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
 type LiveTrade = { agent: number; wallet: string; token: string; symbol?: string; side: "buy" | "sell"; eth: string; time: number; tx: string; pnlPct?: number };
@@ -94,7 +94,7 @@ export function LiveArena() {
               return (
                 <li key={a.id}>
                   <button type="button" className={`live-row${sel?.id === a.id ? " active" : ""}`} onClick={() => setSelected(a.id)}>
-                    <span className={`mono rank${a.rank <= 3 ? ` rank-top rank-${a.rank}` : ""}`}>{a.rank}</span>
+                    <span className={`mono rank${a.rank <= 3 ? ` rank-top rank-${a.rank}` : ""}`}>{a.rank <= 3 ? `0${a.rank}` : a.rank}</span>
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
@@ -137,9 +137,22 @@ export function LiveArena() {
   );
 }
 
+const LIVE_RANGES = ["1H", "6H", "24H", "All"] as const;
+function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
+  const [range, setRange] = useState<(typeof LIVE_RANGES)[number]>("24H");
+  const span = range === "1H" ? 3600 : range === "6H" ? 21600 : range === "24H" ? 86400 : Infinity;
+  const end = history.at(-1)?.t ?? 0;
+  const pts = history.filter((h) => end - h.t <= span);
+  return (
+    <div className="panel-block">
+      <div className="lc-head"><h3>Value</h3><RangeTabs value={range} options={LIVE_RANGES} onChange={setRange} /></div>
+      <LineChart data={pts.map((h) => h.v)} times={pts.map((h) => h.t * 1000)} height={170} baseline={pts[0]?.v} />
+    </div>
+  );
+}
+
 function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explorer: string; now: number }) {
   const winRate = a.closed ? (a.wins / a.closed) * 100 : null;
-  const hist = a.history.map((h) => h.v);
   return (
     <div className="detail-inner">
       <header className="detail-head">
@@ -162,12 +175,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
         <div><dt>Biggest trade</dt><dd className={`mono ${a.biggest ? (a.biggest.pct >= 0 ? "up" : "down") : ""}`}>{a.biggest ? `${signed(a.biggest.pct, 0)} $${a.biggest.symbol}` : "—"}</dd></div>
       </dl>
 
-      {hist.length > 1 && (
-        <div className="panel-block">
-          <h3>Value since the engine last started</h3>
-          <LineChart data={hist} height={150} baseline={hist[0]} />
-        </div>
-      )}
+      <LiveValueChart history={a.history} />
 
       <div className="panel-block">
         <h3>Strategy · {a.rule ? `rule v${a.ruleVersion}, guided by its holder` : "none yet"}</h3>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cardBlob, renderPnlCard, type PnlCardData } from "@/lib/pnl-card";
 
 /** "PnL card" button: opens a preview of the agent's card with Download and Copy image. */
@@ -43,7 +44,8 @@ function PnlCardModal({ data, prefix, onClose }: { data: PnlCardData; prefix: st
   };
   const share = `https://x.com/intent/post?text=${encodeURIComponent(`Trencher #${data.id}: ${data.returnPct >= 0 ? "+" : ""}${data.returnPct.toFixed(1)}% ${data.period ? data.period.toLowerCase() : ""} 🟩\nSelf-funding trading agents with an identity\ntrenchers.io`)}`;
 
-  return (
+  // Rendered at the end of <body>, so nothing on the page (leaderboard rows, sticky headers) can sit on top of it.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pnl-modal" role="dialog" aria-modal="true" aria-label={`PnL card for Trencher #${data.id}`}>
         <div className="modal-head"><h2>PnL card · Trencher #{data.id}</h2><button type="button" className="tbtn" onClick={onClose}>Close</button></div>
@@ -57,6 +59,7 @@ function PnlCardModal({ data, prefix, onClose }: { data: PnlCardData; prefix: st
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

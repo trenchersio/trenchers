@@ -6,7 +6,8 @@ import { AgentLinks } from "@/components/AgentLinks";
 import { short } from "@/lib/wallet";
 import { useEffect, useRef, useState } from "react";
 import { createSim, step, pct, ago, signalLabel, type Agent, type Sim } from "@/lib/arena-sim";
-import { LineChart } from "./LineChart";
+import { LineChart, RangeTabs } from "./LineChart";
+import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { useWallet } from "@/lib/wallet";
 import { liveAgentIds } from "@/lib/agents-store";
 
@@ -101,9 +102,9 @@ export function Arena() {
           </div>
           <div className="podium" aria-label="Top 3">
             {[0, 1, 2].map((rk) => { const a = sim.agents.find((x) => x.rank === rk)!; const pr = pct(a); return (
-              <button key={rk} type="button" className={`pod pod-${rk + 1}${sel?.id === a.id ? " on" : ""}`} onClick={() => choose(a.id)}>
-                <span className="pod-rank mono">{rk + 1}</span>
-                <img src={`nft/${a.id}.webp`} alt="" width={44} height={44} />
+              <button key={rk} type="button" className={`pod pod-${rk + 1}${sel?.id === a.id ? " on" : ""}`} onClick={() => choose(a.id)} aria-label={`Rank ${rk + 1}: Trencher #${a.id}, ${signed(pr)}`}>
+                <span className="pod-rank mono">0{rk + 1}</span>
+                <span className="pod-art"><ArtCanvas id={a.id} size={42} /></span>
                 <span className="pod-txt"><b>#{a.id}</b><span className={`mono ${pr >= 0 ? "up" : "down"}`}>{signed(pr)}</span></span>
               </button>
             ); })}
@@ -156,7 +157,7 @@ function Row({ a, slot, now, active, mine, onClick }: { a: Agent; slot: number; 
       style={{ transform: `translateY(${slot * ROW_H}px)` }}
     >
       <button type="button" onClick={onClick} aria-label={`Trencher #${a.id}, rank ${a.rank + 1}, ${signed(r)}`}>
-        <span className={`mono rank${a.rank < 3 ? ` rank-top rank-${a.rank + 1}` : ""}`}>{a.rank + 1}{moved !== 0 && a.rank >= 3 && <i className={moved > 0 ? "up" : "down"}>{moved > 0 ? "▲" : "▼"}</i>}</span>
+        <span className={`mono rank${a.rank < 3 ? ` rank-top rank-${a.rank + 1}` : ""}`}>{a.rank < 3 ? `0${a.rank + 1}` : a.rank + 1}{moved !== 0 && a.rank >= 3 && <i className={moved > 0 ? "up" : "down"}>{moved > 0 ? "▲" : "▼"}</i>}</span>
         <span className="who">
           <img src={`nft/${a.id}.webp`} alt="" width={34} height={34} />
           <span className="who-txt">
@@ -181,6 +182,37 @@ function cardData(a: Agent, sim: Sim): PnlCardData {
     strategy: a.rule ? "Guided by its holder" : a.strategy,
     rank: { pos: a.rank + 1, of: sim.agents.length }, period: "This week",
   };
+}
+
+const RANGES = ["5M", "1H", "24H", "7D"] as const;
+type Range = (typeof RANGES)[number];
+
+/** The value chart's series for a time frame. 5M is the live sample market; longer frames are a
+ *  deterministic sample history (seeded by the agent) that starts at the week's opening value. */
+function series(a: Agent, range: Range, now: number): { data: number[]; times: number[] } {
+  if (range === "5M") return { data: a.history, times: a.history.map((_, i) => now - (a.history.length - 1 - i) * 1000) };
+  const [n, step] = range === "1H" ? [60, 60_000] : range === "24H" ? [96, 900_000] : [168, 3_600_000];
+  const end = a.history[0] ?? a.nav;
+  const start = range === "7D" ? a.epochStart : end + (a.epochStart - end) * (range === "24H" ? 0.35 : 0.06);
+  let seed = a.id * 9301 + n * 49297;
+  const rnd = () => { seed = (seed * 233280 + 49297) % 2147483647; return seed / 2147483647 - 0.5; };
+  const walk: number[] = [0];
+  for (let i = 1; i < n; i++) walk.push(walk[i - 1] + rnd());
+  const vol = Math.abs(end) * (range === "7D" ? 0.02 : range === "24H" ? 0.012 : 0.005);
+  const data = walk.map((w, i) => start + (end - start) * (i / (n - 1)) + (w - (i / (n - 1)) * walk[n - 1]) * vol);
+  const t0 = now - a.history.length * 1000;
+  return { data: [...data, ...a.history], times: [...data.map((_, i) => t0 - (n - 1 - i) * step), ...a.history.map((_, i) => now - (a.history.length - 1 - i) * 1000)] };
+}
+
+function ValueChart({ a, now }: { a: Agent; now: number }) {
+  const [range, setRange] = useState<Range>("7D");
+  const { data, times } = series(a, range, now);
+  return (
+    <div className="panel-block">
+      <div className="lc-head"><h3>Value</h3><RangeTabs value={range} options={RANGES} onChange={setRange} /></div>
+      <LineChart data={data} times={times} height={170} baseline={data[0]} />
+    </div>
+  );
 }
 
 function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
@@ -214,10 +246,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
         <div><dt>Cash</dt><dd className="mono">{a.cash.toFixed(3)} ETH</dd></div>
       </dl>
 
-      <div className="panel-block">
-        <h3>Value, last {Math.round(a.history.length / 60)} minutes</h3>
-        <LineChart data={a.history} height={150} baseline={a.epochStart} />
-      </div>
+      <ValueChart a={a} now={now} />
 
       <div className="panel-block selffund">
         <h3>Self-funding</h3>
