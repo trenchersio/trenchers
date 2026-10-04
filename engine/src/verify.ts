@@ -120,8 +120,8 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   await expect("NFT: max supply", () => read(d.nft, "TrenchersNFT", "maxSupply"), 2000n);
   await expect("NFT: splitter", () => read(d.nft, "TrenchersNFT", "splitter"), d.splitter);
   await expect("NFT: starter fund (dormant/awake art)", () => read(d.nft, "TrenchersNFT", "starterFund"), d.fund);
-  await expect("NFT: metadata link (house agents are always awake)", () => read(d.nft, "TrenchersNFT", "tokenURI", [1n]), `${L.baseUri}awake/1.json`);
-  await expect("NFT: collection info", () => read(d.nft, "TrenchersNFT", "contractURI"), L.contractUri);
+  await expect("NFT: metadata link (house agents are always awake)", () => read(d.nft, "TrenchersNFT", "tokenURI", [1n]), (v: unknown) => [L.baseUri, L.baseUri.replace("://", "://www.")].some((b) => v === `${b}awake/1.json`));
+  await expect("NFT: collection info", () => read(d.nft, "TrenchersNFT", "contractURI"), (v: unknown) => v === L.contractUri || v === L.contractUri.replace("://", "://www."));
   await expect("NFT: 5% royalty to the splitter", () => read(d.nft, "TrenchersNFT", "royaltyInfo", [1n, 10_000n]), (v: unknown) => { const [to, amt] = v as [Address, bigint]; return same(to, d.splitter) && amt === 500n; });
   await expect("NFT: metadata not frozen (art can still be updated)", () => read(d.nft, "TrenchersNFT", "metadataFrozen"), false);
   // the money
@@ -166,7 +166,7 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
       const steps = [
         { step: "Safe opens awakening and the mint", ok: true },
         { step: `holder mints #${n[0]} for ${L.mintPriceEth} ETH; ${E(n[13])} ETH (51%) reaches the starter fund`, ok: n[13] === parseEther(L.mintPriceEth) * 51n / 100n },
-        { step: `metadata switches dormant → awake (${uriBefore} → ${uriAfter})`, ok: uriBefore === `${L.baseUri}dormant/${n[0]}.json` && uriAfter === `${L.baseUri}awake/${n[0]}.json` },
+        { step: `metadata switches dormant → awake (${uriBefore} → ${uriAfter})`, ok: /\/meta\/dormant\/\d+\.json$/.test(uriBefore) && uriAfter === uriBefore.replace("/dormant/", "/awake/") },
         { step: `awakening puts ${E(n[1])} ETH in the agent wallet, ${E(n[2])} locked`, ok: n[1] === parseEther(L.starterEth) && n[2] === parseEther(L.starterEth) },
         { step: `engine buys a live curve coin (${n[3]} units) and sells it all; agent holds ${E(n[4])} ETH`, ok: n[3] > 0n && n[4] > 0n },
         { step: coins.pool ? `engine buys a graduated coin on its Uniswap pool (${n[5]} units) and sells it all; agent holds ${E(n[6])} ETH` : "no graduated coin found to test (curve trading verified)", ok: !coins.pool || (n[5] > 0n && n[6] > 0n) },

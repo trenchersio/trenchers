@@ -11,7 +11,7 @@ type Row = [string, string, string, string, string, number, number, number, numb
 let art: Row[] | null = null;
 const loadArt = () => (art ??= JSON.parse(readFileSync(join(process.cwd(), "public", "collection", "art.json"), "utf8")) as Row[]);
 
-export const SITE = "https://trenchers.io";
+export const SITE = "https://www.trenchers.io";
 export const TESTNET_STARTER_ETH = "0.0001";
 
 export function parseId(file: string) {

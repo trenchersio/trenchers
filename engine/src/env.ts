@@ -48,10 +48,10 @@ export const ENV = {
   /** Live Telegram channel for mints and sales (optional): the bot's token and the channel (@name). */
   TELEGRAM_BOT_TOKEN: clean(process.env.TELEGRAM_BOT_TOKEN) || null,
   TELEGRAM_CHAT: clean(process.env.TELEGRAM_CHAT) || null,
-  SITE_URL: opt("SITE_URL", "https://trenchers.io").replace(/\/$/, ""),
+  SITE_URL: opt("SITE_URL", "https://www.trenchers.io").replace(/\/$/, ""),
   EXPLORER_URL: opt("EXPLORER_URL", Number(opt("CHAIN_ID", "46630")) === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robin.etherscan.io").replace(/\/$/, ""),
   /** Where the Trenchers' PNG art is served: {IMAGE_BASE}{awake|dormant}/{id}.png */
-  IMAGE_BASE: opt("IMAGE_BASE", "https://trenchers.io/testnet-meta/png/"),
+  IMAGE_BASE: opt("IMAGE_BASE", "https://www.trenchers.io/testnet-meta/png/"),
   /** DRY_RUN=1 decides and logs trades without sending them. */
   DRY_RUN: opt("DRY_RUN", "0") === "1",
 };

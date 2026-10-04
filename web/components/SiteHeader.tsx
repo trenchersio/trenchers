@@ -2,7 +2,7 @@ import { WalletMenu } from "./WalletMenu";
 import { ConnectModal } from "./ConnectModal";
 import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
-import { GITHUB_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection";
 
@@ -36,6 +36,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           <a href={ROUTES.collection} className={`tbtn${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
           <NavDropdown label="Community" items={community} />
+          {OPENSEA_URL && <a href={OPENSEA_URL} target="_blank" rel="noreferrer" className="tbtn">OpenSea ↗</a>}
           <span className="nav-sep" aria-hidden="true" />
           <WalletMenu />
         </nav>

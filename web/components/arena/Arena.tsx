@@ -232,8 +232,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
           <h2>Trencher #{a.id}</h2>
           <p className="mono who-line">Holder {a.owner.startsWith("0x") ? short(a.owner) : a.owner}</p>
           <p className="mono who-line">Agent wallet {short(a.wallet)}</p>
-          <AgentLinks wallet={a.wallet} />
-          <PnlCardButton data={cardData(a, sim)} />
+          <div className="agent-actions"><PnlCardButton data={cardData(a, sim)} /><AgentLinks wallet={a.wallet} /></div>
         </div>
       </header>
 

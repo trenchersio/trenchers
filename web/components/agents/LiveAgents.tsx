@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatEther, keccak256, parseEther, toHex, zeroHash, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { PnlCardButton } from "@/components/PnlCard";
+import { AgentLinks } from "@/components/AgentLinks";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { cardFromLive } from "@/components/arena/LiveArena";
@@ -291,8 +292,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           ) : !a.awake ? (
             <p className="ap-wallet-line">Dormant: awaken it to give it its own wallet and its {fmt(claim)} ETH starter balance.</p>
           ) : null}
-          <p className="mono ap-wallet-line"><a href={openseaItem(a.id)} target="_blank" rel="noreferrer">View Trencher #{a.id} on OpenSea ↗</a></p>
-          {a.deployed && <PnlCardButton data={card} />}
+          <div className="agent-actions">{a.deployed && <PnlCardButton data={card} />}{a.deployed && <AgentLinks wallet={a.wallet} />}<span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
           {a.deployed && (
             <dl className="ap-kpis">
               <div><dt className="mono">Balance</dt><dd className="mono">{fmt(a.bal)} <small>ETH</small></dd>{(a.locked ?? 0n) > 0n && <span className="mono kpi-note">{fmt(a.locked)} starter, locked{unlock ? ` until ${unlock}` : ""}</span>}</div>
@@ -411,7 +411,12 @@ function BuyModal({ onClose }: { onClose: () => void }) {
       <div className="modal buy-modal" role="dialog" aria-modal="true" aria-label="Get another Trencher">
         <div className="modal-head"><h2>Get another Trencher</h2><button type="button" className="tbtn" onClick={onClose}>Close</button></div>
         <MintPanel />
-        <p className="muted-note">Or buy one that&apos;s already trading, with its record, on {OPENSEA_URL ? <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea ↗</a> : "OpenSea"}. New Trenchers show up in your agents after you close this.</p>
+        <div className="buy-or mono"><span>or</span></div>
+        <a className="buy-os" href={OPENSEA_URL || "https://opensea.io"} target="_blank" rel="noreferrer">
+          <b>Buy one on OpenSea ↗</b>
+          <small>Pick a Trencher that&apos;s already awake and trading, with its wallet and track record.</small>
+        </a>
+        <p className="muted-note">New Trenchers show up in your agents after you close this.</p>
       </div>
     </div>,
     document.body,

@@ -29,7 +29,7 @@ const eth = (v: bigint) => Number(formatEther(v)).toString();
 const RESCUE_DELAY = 600;
 const CANONICAL_REGISTRY = "0x000000006551c19487814612e58FE06813775758" as Address;
 const PONS_ROUTER = "0xe33e9e479df8802cb0866d5d05258bec4cf62948" as Address;
-const META = "https://trenchers.io/testnet-meta/";
+const META = "https://www.trenchers.io/testnet-meta/";
 const STORE = "trenchers-testnet-deployment";
 
 type Dep = {

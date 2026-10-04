@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { PnlCardButton } from "@/components/PnlCard";
+import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
-import { ENGINE_URL } from "@/lib/constants";
+import { ENGINE_URL, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
 
@@ -166,7 +167,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
           <h2>Trencher #{a.id}</h2>
           {a.owner && <p className="mono who-line">Holder {short(a.owner)}</p>}
           <p className="mono who-line">Agent wallet <a href={`${explorer}/address/${a.wallet}`} target="_blank" rel="noreferrer">{short(a.wallet)} ↗</a></p>
-          <PnlCardButton data={cardFromLive(a, of)} />
+          <div className="agent-actions"><PnlCardButton data={cardFromLive(a, of)} /><AgentLinks wallet={a.wallet} /><span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
         </div>
       </header>
 
