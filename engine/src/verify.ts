@@ -114,8 +114,8 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   // the NFT
   await expect("NFT: name", () => read(d.nft, "TrenchersNFT", "name"), "Trenchers");
   await expect("NFT: mint price 0.02 ETH", () => read(d.nft, "TrenchersNFT", "mintPrice"), parseEther(L.mintPriceEth));
-  await expect("NFT: mint still closed (the Safe opens it)", () => read(d.nft, "TrenchersNFT", "mintOpen"), false);
-  await expect("NFT: 5 house agents minted", () => read(d.nft, "TrenchersNFT", "totalSupply"), 5n);
+  await expect("NFT: mint open?", () => read(d.nft, "TrenchersNFT", "mintOpen"), (v: unknown) => typeof v === "boolean");
+  await expect("NFT: minted so far (5 house agents + sales)", () => read(d.nft, "TrenchersNFT", "totalSupply"), (v: unknown) => typeof v === "bigint" && v >= 5n);
   for (let id = 1; id <= 5; id++) await expect(`NFT: house agent #${id} held by the Deployer`, () => read(d.nft, "TrenchersNFT", "ownerOf", [BigInt(id)]), R.deployer);
   await expect("NFT: max supply", () => read(d.nft, "TrenchersNFT", "maxSupply"), 2000n);
   await expect("NFT: splitter", () => read(d.nft, "TrenchersNFT", "splitter"), d.splitter);
@@ -130,7 +130,7 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   await expect("splitter: dev share goes to the Safe", () => read(d.splitter, "RevenueSplitter", "destination", [1]), R.safe);
   await expect("splitter: 51% starter share", () => read(d.splitter, "RevenueSplitter", "PRIMARY_STARTER_BPS"), 5100n);
   await expect("starter fund: 0.01 ETH per agent", () => read(d.fund, "AgentStarterFund", "CLAIM"), parseEther(L.starterEth));
-  await expect("starter fund: awakening still closed (the Safe opens it)", () => read(d.fund, "AgentStarterFund", "accountImplementation"), zeroAddress);
+  await expect("starter fund: awakening (closed, or open with the agent wallet code)", () => read(d.fund, "AgentStarterFund", "accountImplementation"), (v: unknown) => same(v, zeroAddress) || same(v, d.impl));
   await expect("starter fund: NFT", () => read(d.fund, "AgentStarterFund", "nft"), d.nft);
   await expect("starter fund: ERC-6551 registry", () => read(d.fund, "AgentStarterFund", "registry"), L.registry);
   await expect("starter fund: 48h safety-net delay", () => read(d.fund, "AgentStarterFund", "rescueDelay"), BigInt(L.rescueDelay));

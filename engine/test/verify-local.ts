@@ -68,6 +68,14 @@ async function main() {
   const good = await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } });
   console.log(JSON.stringify({ code: good.code, rehearsal: good.rehearsal, problems: good.problems }, null, 2));
   if (!good.ok) { fails++; console.log("✗ expected every check to pass"); } else console.log("✓ correct deployment: every check passes");
+  // after the Safe opens awakening (and a house agent wallet exists and holds ETH), it still passes
+  const safeWal = createWalletClient({ account: safe, chain, transport: http(RPC) });
+  await pub.waitForTransactionReceipt({ hash: await safeWal.writeContract({ address: fund, abi: art("AgentStarterFund").abi, functionName: "setAccount", args: [impl, zeroHash] }) });
+  await call(L.registry, "MockERC6551Registry", "createAccount", [impl, zeroHash, 4663n, nft, 1n]);
+  const house = (await pub.readContract({ address: fund, abi: art("AgentStarterFund").abi, functionName: "agentWallet", args: [1n] })) as Address;
+  await pub.waitForTransactionReceipt({ hash: await wal.sendTransaction({ to: house, value: parseEther("0.02") }) });
+  const opened = await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } });
+  if (!opened.ok) { fails++; console.log("✗ after opening awakening:", opened.problems); } else console.log("✓ after the Safe opens awakening: every check still passes");
   const bad = await verifyDeployment(RPC, d, { ...R, engine: guardian.address === R.engine ? safe.address : deployer.address }, L, { coins: { curve, pool } });
   if (bad.ok) { fails++; console.log("✗ a wrong engine wallet was not caught"); } else console.log(`✓ wrong setting caught: ${(bad.problems as string[])[0]}`);
   const nope = await verifyDeployment(RPC, { ...d, logic: impl }, R, L, { coins: { curve, pool } });

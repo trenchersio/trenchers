@@ -15,6 +15,7 @@ interface IRhFund {
     function setAccount(address impl, bytes32 salt) external;
     function claim(uint256 id) external;
     function agentWallet(uint256 id) external view returns (address);
+    function accountImplementation() external view returns (address);
 }
 interface IRhRegistry {
     function createAccount(address impl, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) external returns (address);
@@ -101,7 +102,8 @@ contract LaunchRehearsal {
     /// 1. The Safe's two transactions, then a holder (here: this address) mints one and awakens it.
     function _mintAndAwaken(A calldata a, uint256[] memory n) internal returns (address agent, string memory uriBefore, string memory uriAfter) {
         IRhNft nft = IRhNft(a.nft);
-        _do("Safe: open awakening", address(this), a.fund, 0, abi.encodeCall(IRhFund.setAccount, (a.impl, bytes32(0))));
+        if (IRhFund(a.fund).accountImplementation() == address(0)) _do("Safe: open awakening", address(this), a.fund, 0, abi.encodeCall(IRhFund.setAccount, (a.impl, bytes32(0))));
+        else if (IRhFund(a.fund).accountImplementation() != a.impl) revert Failed("awakening opened with the wrong wallet code", "");
         _do("Safe: open the mint", address(this), a.nft, 0, abi.encodeCall(IRhNft.setMintOpen, (true)));
         uint256 id = nft.totalSupply() + 1;
         uint256 fundBefore = a.fund.balance;
@@ -131,6 +133,7 @@ contract LaunchRehearsal {
     function _house(A calldata a, uint256[] memory n) internal {
         IRhRegistry(a.registry).createAccount(a.impl, bytes32(0), block.chainid, a.nft, 1);
         address house = IRhFund(a.fund).agentWallet(1);
+        if (house.balance > 0) _do("house: withdraw existing", a.deployer, house, 0, abi.encodeCall(IRhAgent.withdraw, (IRhAgent(house).withdrawable())));
         _do("fund house agent", address(this), house, 0.01 ether, "");
         _do("house: set limits", a.deployer, house, 0, abi.encodeCall(IRhAgent.setPolicy, (0.005 ether, 0.02 ether, true, keccak256("house"), "house")));
         (n[9], ) = _roundTrip("house agent", a, house, a.curveCoin, 0.004 ether);
