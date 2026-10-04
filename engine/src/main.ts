@@ -11,6 +11,14 @@ const engine = PROBLEMS.length ? null : new Engine(log);
 let status = PROBLEMS.length ? "settings need fixing" : "starting: reading the chain's history";
 let lastTick = 0;
 let lastLive: { t: number; body: string } | null = null;
+let liveRunning = false;
+function runLiveCheck() {
+  liveRunning = true;
+  liveCheck(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com")
+    .catch((e) => ({ ok: false, error: (e as Error).message }))
+    .then((r) => { lastLive = { t: Date.now(), body: JSON.stringify(r, null, 2) }; })
+    .finally(() => { liveRunning = false; });
+}
 let lastError: string | null = null;
 
 async function loop() {
@@ -32,8 +40,9 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, telegram: engine.telegram ? { posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
-      if (!lastLive || Date.now() - lastLive.t > 300_000) lastLive = { t: Date.now(), body: JSON.stringify(await liveCheck(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com").catch((e) => ({ ok: false, error: (e as Error).message })), null, 2) };
-      res.end(lastLive.body);
+      // Runs in the background (it scans a lot of history); this returns the latest finished result.
+      if (!liveRunning && (!lastLive || Date.now() - lastLive.t > 600_000)) runLiveCheck();
+      res.end(lastLive?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));
