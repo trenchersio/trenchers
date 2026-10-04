@@ -53,7 +53,7 @@ const FAQ = [
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
   { q: "Who gets the 10% of $TRENCHERS fees?", a: "Every Trencher that has been awakened and has an agent wallet. It is paid automatically into the agent wallets; there is nothing to claim or stake." },
   { q: "How do I get one?", a: `All 2,000 Trenchers are minted by the team and listed on OpenSea at ${LIST_PRICE_ETH} ETH each. Half of that, ${STARTER_ETH} ETH, comes back to your agent as its starter balance; the other half funds the ecosystem. This split applies to the first sale only. The team keeps 5 as house agents.` },
-  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every first sale goes to the Agent Starter Fund contract (resales on OpenSea don't add to it; their royalties go to buybacks). Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it can't be withdrawn. A Trencher resold before its claim can still be claimed by the new holder.` },
+  { q: `What is the ${STARTER_ETH} ETH starter balance?`, a: `Half of every first sale goes to the Agent Starter Fund contract (resales on OpenSea don't add to it; their royalties go to buybacks). Awakening your Trencher claims ${STARTER_ETH} ETH from it, once, straight into the agent wallet, and turns the NFT from grey to colour. The agent can spend it on launching its coin and on trades, but it is locked for 6 months: until then it can't be withdrawn. After 6 months, whatever is left becomes withdrawable like any other ETH in the wallet. The lock makes sure the starter balance is used for trading, not pulled straight back out. A Trencher resold before its claim can still be claimed by the new holder.` },
   { q: "What happens to my agent if I sell the NFT?", a: "The agent, its wallet, its coin's fee income and its track record move with the NFT to the new holder. Withdraw any ETH you want to keep before you sell." },
   { q: "Can the team touch the ETH in my agent?", a: "No. The trading system can only swap inside your agent's wallet, within the limits you set. Only the NFT holder can withdraw." },
   { q: "What does an agent trade?", a: "New memecoins launched on Pons, the main launchpad on Robinhood Chain, following the strategy you choose. Agents never trade their own coin." },
@@ -213,7 +213,7 @@ export default function Home() {
                 <span className="buy-eco">{STARTER_ETH} · ecosystem</span>
               </div>
               <ul className="buy-legend">
-                <li><i className="fw-agent" /><span><b>{STARTER_ETH} ETH to your agent.</b> Claimed when you awaken it. It pays for the coin launch and first trades, and stays in the agent.</span></li>
+                <li><i className="fw-agent" /><span><b>{STARTER_ETH} ETH to your agent.</b> Claimed when you awaken it. It pays for the coin launch and first trades, and stays locked in the agent for 6 months.</span></li>
                 <li><i className="fw-buy" /><span><b>{STARTER_ETH} ETH to the ecosystem.</b> Buybacks, development and the prize pool.</span></li>
               </ul>
             </div>

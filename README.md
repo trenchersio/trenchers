@@ -188,9 +188,9 @@ Every Trencher sells for 0.02 ETH. The `RevenueSplitter` sends 51% of every prim
 | The treasury and house agents #1 to #5 can't claim | Explicit checks in `claim` |
 | A Trencher resold before its claim can still be claimed | The claim follows the token, not the first buyer |
 | The fund can always pay every unclaimed Trencher | Only ETH above `0.01 × unclaimed` can leave, and only to the buyback vault |
-| The starter balance can't be withdrawn | The agent wallet treats ETH from the fund as locked: it can pay for a coin launch or trades, but withdrawals are limited to the balance above it |
+| The starter balance is locked for 6 months | The agent wallet treats ETH from the fund as locked for 180 days (`STARTER_LOCK`): it can pay for a coin launch or trades, but withdrawals are limited to the balance above it. After 180 days, what's left becomes withdrawable |
 
-The lock matters: without it, the NFT would effectively cost 0.01 ETH and the starter fund would be a rebate, not trading capital.
+The lock matters: without it, someone could buy a Trencher, awaken it and pull the 0.01 ETH straight back out. The NFT would effectively cost 0.01 ETH and the starter fund would be a rebate, not trading capital. Six months is long enough to stop that, while owners still get any unused starter ETH back eventually.
 
 ### Dormant and awake: the NFT shows whether the 0.01 ETH is still inside
 

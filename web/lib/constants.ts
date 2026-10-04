@@ -22,6 +22,8 @@ export const GITHUB_URL = "https://github.com/trenchersio/trenchers";
 export const LIST_PRICE_ETH = "0.02";
 /** Half of every primary (first) sale: claimable once per Trencher into its agent wallet (AgentStarterFund). */
 export const STARTER_ETH = "0.01";
+/** The starter balance can only be spent by the agent (coin launch, trades) for this long, then becomes withdrawable. */
+export const STARTER_LOCK_DAYS = 180;
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {

@@ -8,7 +8,7 @@ import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { AgentChat } from "./AgentChat";
 import { AGENT_FEE_SHARE_PCT, tokenFees, trenchersShare, type TokenDraft } from "@/lib/agent-token";
 import { DEFAULT_RULE, describe, validate, type CustomRule } from "@/lib/custom-strategy";
-import { OPENSEA_URL, ROUTES, SAMPLE_MODE, STARTER_ETH, chain } from "@/lib/constants";
+import { OPENSEA_URL, ROUTES, SAMPLE_MODE, STARTER_ETH, STARTER_LOCK_DAYS, chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 import {
   PRESETS, agentWalletFor, identityFor, tokenAddressFor, loadAgent, ownedIds, saveAgent, statusOf, wait,
@@ -95,6 +95,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
   const st = statusOf(a);
   const locked = Math.min(a.locked ?? 0, a.balance);
   const withdrawable = +(a.balance - locked).toFixed(4);
+  const unlockDate = new Date((a.registeredAt ?? Date.now()) + STARTER_LOCK_DAYS * 86_400_000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const step = !a.registered ? 1 : !a.starterClaimed && a.balance <= 0 ? 2 : !a.strategy ? 5 : 6;
 
   const log = (x: AgentState, text: string): AgentState => ({ ...x, log: [{ t: Date.now(), text }, ...x.log].slice(0, 20) });
@@ -201,7 +202,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           )}
           <AgentLinks wallet={a.agentWallet} />
           <dl className="ap-kpis">
-            <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked</span>}</div>
+            <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked until {unlockDate}</span>}</div>
             <SelfFundedKpi a={a} />
             <div><dt className="mono">Guidance</dt><dd className="mono">{versions ? `v${versions}` : "—"}</dd><span className="mono kpi-note">{versions ? `${versions} rule${versions > 1 ? "s" : ""} applied` : "Talk to it in section 3"}</span></div>
             <div><dt className="mono">Arena</dt><dd className="mono">{a.live ? <span className="up">Live</span> : a.strategy ? "Ready" : "—"}</dd><span className="mono kpi-note">{a.live ? "Competing this week" : "Not entered"}</span></div>
@@ -244,13 +245,13 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       {tab === "register" && <ol className="steps-v">
         <Step n={1} title="Awaken your Trencher" state={a.registered && a.starterClaimed ? "done" : "now"}>
           {a.registered && a.starterClaimed ? (
-            <p>Awake. Your Trencher has its own wallet, an on-chain identity and {STARTER_ETH} ETH of starter balance. All of it stays with the NFT if you sell it.</p>
+            <p>Awake. Your Trencher has its own wallet, an on-chain identity and {STARTER_ETH} ETH of starter balance, locked for trading until {unlockDate}. All of it stays with the NFT if you sell it.</p>
           ) : a.registered ? (<>
             <p>The wallet exists but the {STARTER_ETH} ETH starter balance is still waiting in the Agent Starter Fund.</p>
             <TextButton onClick={claimStarter} disabled={!!busy}>{`Claim ${STARTER_ETH} ETH`}</TextButton>
           </>) : (<>
             <p>One transaction does it all: it creates your Trencher&apos;s own wallet, claims the <b>{STARTER_ETH} ETH</b> set aside from your purchase straight into it, and gives it an on-chain identity. The art turns from grey to full colour on OpenSea and its traits change from Dormant to Awake.</p>
-            <p className="muted-note">The starter balance stays in the agent: it can pay for a coin launch or trades, but can&apos;t be withdrawn.</p>
+            <p className="muted-note">The starter balance is locked in the agent for 6 months: it can pay for a coin launch or trades, but can&apos;t be withdrawn until then. Anything you deposit yourself stays withdrawable at any time.</p>
             <TextButton onClick={awaken} disabled={!!busy}>{`Awaken · claim ${STARTER_ETH} ETH`}</TextButton>
           </>)}
         </Step>
@@ -269,9 +270,9 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         </Step>
 
         <Step n={3} title="Top up (optional)" state={!a.registered ? "todo" : a.balance > Number(STARTER_ETH) || (!a.starterClaimed && a.balance > 0) ? "done" : "todo"}>
-          <p>Add your own ETH whenever you want more trading capital. Anything you deposit stays withdrawable.</p>
+          <p>Add your own ETH whenever you want more trading capital. Anything you deposit stays withdrawable; only the starter balance is locked, for 6 months.</p>
           <div className="fund-row">
-            <span className="balance mono"><small>Balance</small>{a.balance.toFixed(4)} ETH{locked > 0 && <em className="locked-note">{locked.toFixed(4)} starter, locked</em>}</span>
+            <span className="balance mono"><small>Balance</small>{a.balance.toFixed(4)} ETH{locked > 0 && <em className="locked-note">{locked.toFixed(4)} starter, locked until {unlockDate}</em>}</span>
             <label className="field">
               <span>Amount (ETH)</span>
               <input id={`amt-${a.id}`} className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!a.registered || !!busy} />
