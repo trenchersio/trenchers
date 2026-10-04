@@ -1544,3 +1544,16 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .tn-safe-row > div:first-child { display: flex; flex-direction: column; gap: 3px; }
 .tn-buckets { list-style: none; margin: 0; padding: 0 0 0 4px; display: grid; gap: 6px; font-size: 12.5px; }
 .tn-buckets li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+/* Agent PnL card */
+.pnl-btn { margin-top: 10px; }
+.modal.pnl-modal { width: min(880px, 100%); }
+.pnl-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+.pnl-canvas { width: 100%; aspect-ratio: 1200 / 675; border-radius: 10px; border: 1px solid var(--line); background: #0B0D0C; opacity: 0; transition: opacity .3s ease; }
+.pnl-canvas.ready { opacity: 1; }
+.pnl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pnl-actions .tbtn { text-decoration: none; }
+.pnl-primary { background: var(--green); color: #0B0D0C; border: 0; border-radius: 6px; padding: 9px 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.pnl-primary:disabled { opacity: .5; cursor: default; }
+.pnl-msg { font-size: 12px; color: var(--quiet, #8A938E); }
+@media (max-width: 600px) { .pnl-body { padding: 12px; } .pnl-actions > * { flex: 1 1 auto; text-align: center; } }

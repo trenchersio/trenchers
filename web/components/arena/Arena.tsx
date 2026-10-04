@@ -1,4 +1,6 @@
 "use client";
+import { PnlCardButton } from "@/components/PnlCard";
+import type { PnlCardData } from "@/lib/pnl-card";
 import { gmgnToken } from "@/lib/constants";
 import { AgentLinks } from "@/components/AgentLinks";
 import { short } from "@/lib/wallet";
@@ -171,6 +173,16 @@ function Row({ a, slot, now, active, mine, onClick }: { a: Agent; slot: number; 
   );
 }
 
+function cardData(a: Agent, sim: Sim): PnlCardData {
+  const best = a.trades.filter((t) => t.side === "SELL" && t.pnlPct != null).sort((x, y) => (y.pnlPct ?? 0) - (x.pnlPct ?? 0))[0];
+  return {
+    id: a.id, returnPct: pct(a), pnlEth: a.nav - a.epochStart, balanceEth: a.nav,
+    biggest: best ? { sym: best.sym, pct: best.pnlPct ?? 0 } : null,
+    strategy: a.rule ? "Guided by its holder" : a.strategy,
+    rank: { pos: a.rank + 1, of: sim.agents.length }, period: "This week",
+  };
+}
+
 function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
   const r = pct(a);
   const winRate = a.closed ? (a.wins / a.closed) * 100 : 0;
@@ -189,6 +201,7 @@ function Detail({ a, sim, now }: { a: Agent; sim: Sim; now: number }) {
           <p className="mono who-line">Holder {a.owner.startsWith("0x") ? short(a.owner) : a.owner}</p>
           <p className="mono who-line">Agent wallet {short(a.wallet)}</p>
           <AgentLinks wallet={a.wallet} />
+          <PnlCardButton data={cardData(a, sim)} />
         </div>
       </header>
 

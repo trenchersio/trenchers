@@ -1,5 +1,6 @@
 "use client";
 import { AgentLinks } from "@/components/AgentLinks";
+import { PnlCardButton } from "@/components/PnlCard";
 import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
@@ -201,6 +202,10 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             <p className="ap-wallet-line">Dormant: awaken it below to give it a wallet, an identity and its 0.01 ETH.</p>
           )}
           <AgentLinks wallet={a.agentWallet} />
+          {a.agentWallet && <PnlCardButton data={{
+            id: a.id, returnPct: 0, pnlEth: 0, balanceEth: a.balance, biggest: null, period: "All time",
+            strategy: a.strategy ? (a.strategy.preset === "Custom" ? `Guided · rule v${Math.max(1, versions)}` : a.strategy.preset) : "No strategy yet",
+          }} />}
           <dl className="ap-kpis">
             <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked until {unlockDate}</span>}</div>
             <SelfFundedKpi a={a} />
