@@ -2,7 +2,9 @@ import { robinhood, robinhoodTestnet } from "viem/chains";
 import type { Address } from "viem";
 
 export const chain = process.env.NEXT_PUBLIC_CHAIN === "robinhood" ? robinhood : robinhoodTestnet;
-export const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS ||
+const MAINNET_NFT = "0xe4b9a60b78c90fca0dcb79d8f1cbca43ef33c83e";
+/** On mainnet always the mainnet Trenchers contract; elsewhere NEXT_PUBLIC_NFT_ADDRESS (empty: sample mode). */
+export const NFT_ADDRESS = (process.env.NEXT_PUBLIC_CHAIN === "robinhood" ? MAINNET_NFT : process.env.NEXT_PUBLIC_NFT_ADDRESS ||
   "0x0000000000000000000000000000000000000000") as Address;
 /** Block explorer for wallets, tokens and transactions: Etherscan's Robinhood Chain explorer on mainnet,
  *  the chain's Blockscout on testnet. NEXT_PUBLIC_EXPLORER_URL / _NAME override both. */

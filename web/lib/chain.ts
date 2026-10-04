@@ -5,6 +5,7 @@ import {
 } from "viem";
 import { chain } from "./constants";
 import { TESTNET_DEPLOYMENT } from "./testnet/deployment";
+import { MAINNET_DEPLOYMENT } from "./mainnet/deployment";
 import { waitForWallet } from "./eip6963";
 
 /**
@@ -12,10 +13,10 @@ import { waitForWallet } from "./eip6963";
  * public RPC; writes go through the wallet the visitor connected (the same one the header shows).
  */
 
-/** The live deployment for the site's chain (testnet today; mainnet addresses go in when deployed). */
+/** The live deployment for the site's chain (NEXT_PUBLIC_CHAIN=robinhood: mainnet; otherwise testnet). */
 /** NEXT_PUBLIC_DEPLOYMENT (a deployment code) overrides it, e.g. for a staging copy or local testing. */
 const OVERRIDE = (() => { try { return process.env.NEXT_PUBLIC_DEPLOYMENT ? JSON.parse(process.env.NEXT_PUBLIC_DEPLOYMENT) : null; } catch { return null; } })();
-export const DEPLOYMENT: typeof TESTNET_DEPLOYMENT = OVERRIDE ?? (chain.id === TESTNET_DEPLOYMENT?.chainId ? TESTNET_DEPLOYMENT : null);
+export const DEPLOYMENT: typeof TESTNET_DEPLOYMENT = OVERRIDE ?? (chain.id === MAINNET_DEPLOYMENT.chainId ? MAINNET_DEPLOYMENT : chain.id === TESTNET_DEPLOYMENT?.chainId ? TESTNET_DEPLOYMENT : null);
 
 export const ABI = {
   nft: parseAbi([
