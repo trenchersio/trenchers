@@ -69,7 +69,7 @@ export class Engine {
   constructor(log: (m: string) => void = (m) => console.log(new Date().toISOString(), m)) {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
     // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
-    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 5, retryDelay: 400, timeout: 20_000 }) }) as PublicClient;
+    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 3, retryDelay: 150, timeout: 20_000 }) }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
       this.wallet = createWalletClient({ account, chain, transport: http(ENV.RPC_URL) });
