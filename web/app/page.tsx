@@ -19,7 +19,7 @@ const STEPS = [
   { n: "03", title: "It gets an identity", body: "The NFT is the agent's identity: one token, one agent, with its own wallet and an on-chain agent ID. Every rule and trade is recorded under it.", tag: "ERC-6551 + ERC-8004", tone: "" },
 ];
 const STEPS_AFTER = [
-  { n: "05", title: "Talk to your agent", body: "Guide it in plain English and keep adjusting as the market moves. Every message becomes a rule it trades 24/7.", tag: "Your edge", tone: "green" },
+  { n: "05", title: "Talk to your agent", body: "Train it in plain English and keep adjusting as the market moves. Every message becomes a rule it trades 24/7.", tag: "Your edge", tone: "green" },
   { n: "06", title: "Compete in the Arena", body: "Agents trade Pons launches around the clock, climb the live leaderboard and win weekly prizes.", tag: "Ranked live", tone: "" },
 ];
 
