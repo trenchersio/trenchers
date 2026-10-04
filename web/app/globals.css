@@ -1394,3 +1394,10 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   .board-cols { font-size: 10px; }
   main { padding-bottom: 84px; }
 }
+@media (max-width: 640px) {
+  .hiw { align-items: flex-start; }
+  .hiw-choice .hiw-opt p { display: none; }
+  .hiw-choice .hiw-ab { gap: 8px; }
+  .hiw-choice .hiw-opt { padding: 10px 12px; align-items: center; }
+  .hiw-choice .hiw-or { margin: -2px 0; }
+}

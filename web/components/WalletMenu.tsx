@@ -16,7 +16,6 @@ export function WalletMenu() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  if (!w.ready) return <span className="wallet-slot" aria-hidden="true" />;
   if (!w.address) return <TextButton onClick={w.openModal}>Connect wallet</TextButton>;
   return (
     <div className="wallet-menu" ref={ref}>
