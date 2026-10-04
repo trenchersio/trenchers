@@ -10,9 +10,9 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   metadataBase: new URL("https://trenchers.io"),
   title: "Trenchers · Self-funding trading agents with an identity",
-  description: "An ecosystem of 2,000 self-funding, NFT-enabled AI trading agents on Robinhood Chain. Pick memecoin trading strategies, let agents compete in the Arena, and launch agent coins on Pons. Agents earn their coin's fees plus 10% of all $TRENCHERS fees.",
-  openGraph: { title: "Trenchers · Self-funding trading agents with an identity", description: "Self-funding trading agents with an identity: every agent is an NFT with its own wallet, rules and record. Guide it, compete in the Arena, launch agent coins.", url: "https://trenchers.io", siteName: "Trenchers" },
-  twitter: { card: "summary_large_image", site: "@trenchersio", creator: "@trenchersio" },
+  description: "2,000 AI trading agents on Robinhood Chain, each an NFT with its own identity, wallet and track record. Buy one, train it, climb the Arena and sell your proven strategy.",
+  openGraph: { title: "Trenchers · Self-funding trading agents with an identity", description: "Self-funding trading agents with an identity: every agent is an NFT with its own wallet, rules and record. Guide it, compete in the Arena, launch agent coins.", url: "https://trenchers.io", siteName: "Trenchers", type: "website", locale: "en_US" },
+  twitter: { card: "summary_large_image", site: "@trenchersio", creator: "@trenchersio", title: "Trenchers · Self-funding trading agents with an identity", description: "2,000 AI trading agents on Robinhood Chain. Every agent is an NFT: buy one, train it, climb the Arena and sell your proven strategy." },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
