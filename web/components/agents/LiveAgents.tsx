@@ -61,15 +61,26 @@ async function loadAgent(id: number): Promise<Agent> {
         out.ruleText = ((hit?.args as { ruleUri?: string } | undefined)?.ruleUri) || null;
       })
     : Promise.resolve();
-  await ruleText;
   try {
-    const [version, original, offered, offers] = await Promise.all([
+    const [version, original, offered, offers] = await Promise.all([ruleText,
       c.readContract({ ...a, functionName: "agentLogic" }), c.readContract({ ...a, functionName: "ORIGINAL_VERSION" }),
       c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogic" }), c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogicVersions" }),
-    ]);
+    ]).then(([, ...rest]) => rest);
     Object.assign(out, { version, original, offered, offers: Number(offers) });
-  } catch { /* older wallet without versions */ }
+  } catch { await ruleText; /* older wallet without versions */ }
   return out;
+}
+
+/** The agents as last seen in this browser, shown instantly on the next visit while the chain is read again. */
+const agentsKey = (me: string) => `trenchers:agents:${DEPLOYMENT?.nft}:${me.toLowerCase()}`;
+function cachedAgents(me: string): Record<number, Agent> {
+  try {
+    const v = localStorage.getItem(agentsKey(me));
+    return v ? JSON.parse(v, (_k, x) => (typeof x === "string" && /^\d+n$/.test(x) ? BigInt(x.slice(0, -1)) : x)) : {};
+  } catch { return {}; }
+}
+function saveAgents(me: string, agents: Record<number, Agent>) {
+  try { localStorage.setItem(agentsKey(me), JSON.stringify(agents, (_k, x) => (typeof x === "bigint" ? `${x}n` : x))); } catch { /* private mode */ }
 }
 
 export function LiveAgents() {
@@ -95,7 +106,7 @@ export function LiveAgents() {
   }, [me, ids]);
 
   useEffect(() => {
-    setAgents({});
+    setAgents(cachedAgents(me));
     // Show the Trenchers found last time straight away (and start reading them), then check the chain again.
     const cached = cachedOwned(me);
     setIds(cached);
@@ -104,6 +115,7 @@ export function LiveAgents() {
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [me]);
   const [buying, setBuying] = useState(false);
+  useEffect(() => { if (Object.keys(agents).length) saveAgents(me, agents); }, [agents, me]);
   useEffect(() => { reader().readContract({ address: DEPLOYMENT!.fund, abi: ABI.fund, functionName: "CLAIM" }).then(setClaim).catch(() => {}); }, []);
   useEffect(() => {
     let alive = true;

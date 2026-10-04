@@ -7,6 +7,12 @@ import type { PnlCardData } from "@/lib/pnl-card";
 import { ENGINE_URL, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
+import { STRATEGIES } from "@/lib/strategies";
+
+/** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
+const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
+export const strategyName = (rule: string | null, version: number) =>
+  !rule ? "No strategy yet" : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
 type LiveTrade = { agent: number; wallet: string; token: string; symbol?: string; side: "buy" | "sell"; eth: string; time: number; tx: string; pnlPct?: number };
@@ -49,7 +55,7 @@ export function cardFromLive(a: LiveAgent, of: number): PnlCardData {
   return {
     id: a.id, returnPct: a.pnlPct, pnlEth: a.pnlEth, balanceEth: a.nav,
     biggest: a.biggest ? { sym: a.biggest.symbol, pct: a.biggest.pct } : null,
-    strategy: a.rule ? (a.rule.length > 34 ? `Guided · rule v${a.ruleVersion}` : a.rule) : "No rule yet",
+    strategy: strategyName(a.rule, a.ruleVersion),
     rank: { pos: a.rank, of }, period: "This week",
   };
 }
@@ -104,7 +110,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
                         <b>Trencher #{a.id}</b>
-                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{a.rule ? ` · rule v${a.ruleVersion}` : " · no rule yet"}</small>
+                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}</small>
                       </span>
                     </span>
                     <span className="col-num"><em className={`pnl mono ${a.pnlPct >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(a.pnlPct)}</em></span>
@@ -183,7 +189,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
       <LiveValueChart history={a.history} />
 
       <div className="panel-block">
-        <h3>Strategy · {a.rule ? `rule v${a.ruleVersion}, guided by its holder` : "none yet"}</h3>
+        <h3>Strategy · {strategyName(a.rule, a.ruleVersion)}</h3>
         {a.rule ? <blockquote className="guide"><span className="mono">Its rule, as stored on-chain</span>“{a.rule}”</blockquote> : <p className="empty">The holder hasn&apos;t given this agent a rule yet.</p>}
         {a.understood.length > 0 && <div className="tags">{a.understood.map((u) => <span key={u} className="mono">{u}</span>)}</div>}
         {a.ruleWarning && <p className="live-warn">{a.ruleWarning}</p>}
