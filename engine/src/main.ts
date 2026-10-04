@@ -3,7 +3,10 @@ import { Engine } from "./engine";
 import { ENV, PROBLEMS } from "./env";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
-const engine = PROBLEMS.length ? null : new Engine();
+/** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
+const recent: string[] = [];
+const log = (m: string) => { const line = `${new Date().toISOString().slice(11, 19)} ${m}`; console.log(line); recent.push(line); if (recent.length > 25) recent.shift(); };
+const engine = PROBLEMS.length ? null : new Engine(log);
 let status = PROBLEMS.length ? "settings need fixing" : "starting: reading the chain's history";
 let lastTick = 0;
 let lastError: string | null = null;
@@ -23,7 +26,7 @@ const server = createServer(async (req, res) => {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(JSON.stringify({ ok: healthy, status: healthy ? "running" : status, block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN }));
+      res.end(JSON.stringify({ ok: healthy, status: healthy ? "running" : status, block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, recent }, null, 2));
     } else if (req.url === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));

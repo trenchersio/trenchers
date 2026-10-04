@@ -43,6 +43,7 @@ export class Engine {
   realized: { wallet: Address; time: number; pnl: bigint }[] = [];
   entries: Entry[] = [];
   busy = new Set<string>();
+  skipNoted = new Map<Address, number>();
   cursor = 0n;
   liveFrom = 0n;
   blockTimes = new Map<bigint, number>();
@@ -166,6 +167,7 @@ export class Engine {
       }
       case "Claimed": {
         const w = lc(a.agentWallet);
+        if (live) { this.lastAgentRefresh = 0; this.log(`Agent #${Number(a.tokenId)} awakened (wallet ${w})`); }
         if (!this.agents.has(w)) this.agents.set(w, { id: Number(a.tokenId), wallet: w, live: false, perTrade: 0n, dailyCap: 0n, ruleVersion: 0, ruleText: null, rule: null, balance: 0n, spentDay: 0n, spentToday: 0n });
         break;
       }
@@ -174,6 +176,7 @@ export class Engine {
         ag.ruleVersion = Number(a.version); ag.ruleText = (a.ruleUri as string) || null;
         ag.rule = ag.ruleText ? parse(ag.ruleText).rule : null;
         this.log(`Agent #${ag.id} rule v${ag.ruleVersion}: ${ag.ruleText ?? "(no text)"}`);
+        if (live) this.lastAgentRefresh = 0; // read its new limits and on/off switch straight away
         break;
       }
       case "Bought": {
@@ -211,9 +214,10 @@ export class Engine {
 
   // ------------------------------------------------------------------ agents
 
-  private async refreshAgents(first: boolean) {
-    this.lastAgentRefresh = Date.now();
+  private async refreshAgents(first: boolean, only?: Set<Address>) {
+    if (!only) this.lastAgentRefresh = Date.now();
     for (const ag of this.agents.values()) {
+      if (only && !only.has(ag.wallet)) continue;
       try {
         const [pol, owner, coin, balance, spentDay, spentToday] = await Promise.all([
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "policy" }),
@@ -240,7 +244,8 @@ export class Engine {
     if (tok.graduated && kind !== "graduation") return;
     for (const ag of this.agents.values()) {
       const r = ag.rule;
-      if (!r || r.trigger !== kind || !this.tradable(ag)) continue;
+      // Live/limits are checked again with fresh on-chain data when the entry is due (runEntries).
+      if (!r || r.trigger !== kind || (!this.tradable(ag) && kind !== "launch")) continue;
       if (kind === "volume") {
         const th = (r.threshold ?? 50_000) / ENV.ETH_USD;
         if (!extra || !(extra.before < th && extra.after >= th)) continue;
@@ -274,9 +279,11 @@ export class Engine {
     const ts = this.now();
     const due = this.entries.filter((e) => e.notBefore <= ts);
     this.entries = this.entries.filter((e) => e.notBefore > ts && ts - e.notBefore < 600);
+    if (due.length) await this.refreshAgents(false, new Set(due.map((e) => e.wallet)));
     for (const e of due) {
       const ag = this.agents.get(e.wallet); const tok = this.tokens.get(e.token);
-      if (!ag || !tok || !this.tradable(ag) || tok.graduated) continue;
+      if (!ag || !tok || tok.graduated) continue;
+      if (!this.tradable(ag)) { if (Date.now() - (this.skipNoted.get(ag.wallet) ?? 0) > 3_600_000) { this.skipNoted.set(ag.wallet, Date.now()); this.log(`Agent #${ag.id} skipped ${tok.token}: ${!ag.live || ag.setBy !== ag.owner ? "trading is switched off" : ag.perTrade === 0n ? "no per-trade limit set" : "no rule"}`); } continue; }
       const r = ag.rule!;
       if (ag.coin && ag.coin === tok.token) continue;
       const book = this.book(ag.wallet);
