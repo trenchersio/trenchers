@@ -24,11 +24,15 @@ interface IPonsV2Factory {
     function getLaunchedToken(address token) external view returns (LaunchedToken memory);
     function poolManager() external view returns (address);
     function memeHook() external view returns (address);
+    /// @dev Both graduation steps are permissionless on PonsV2LaunchFactory.
+    function graduate(address token) external;
+    function createGraduatedPool(address token) external returns (uint256 positionId);
 }
 
 interface IPonsV2Curve {
     function buy(uint256 quoteIn, uint256 minTokensOut, address recipient) external payable returns (uint256 tokensOut);
     function sell(uint256 tokensIn, uint256 minQuoteOut, address recipient) external returns (uint256 quoteOut);
+    function readyToGraduate() external view returns (bool);
 }
 
 /// @dev Uniswap v4 PoolManager (v4-core), only what a single exact-input swap needs.
@@ -67,6 +71,7 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
     uint160 internal constant MIN_SQRT_PRICE = 4295128739;
     uint160 internal constant MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342;
     uint8 internal constant NOT_GRADUATED = 0;
+    uint8 internal constant SWEPT = 1;
     uint8 internal constant POOL_CREATED = 2;
 
     event Bought(address indexed agent, address indexed token, uint256 ethIn, uint256 tokensOut, uint256 refund);
@@ -94,6 +99,7 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
     /// @notice Buys `token` with all ETH sent; tokens and any refund go to the caller (the agent wallet).
     function buy(address token, uint256 minTokensOut) external payable nonReentrant returns (uint256 tokensOut) {
         if (msg.value == 0) revert ZeroAmount();
+        _finishGraduation(token);
         IPonsV2Factory.LaunchedToken memory t = _launch(token);
         uint256 before = address(this).balance - msg.value;
         if (t.phase == NOT_GRADUATED) {
@@ -109,6 +115,7 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
     /// @notice Sells `tokensIn` of `token` from the caller (who approved this adapter); ETH goes to the caller.
     function sell(address token, uint256 tokensIn, uint256 minEthOut) external nonReentrant returns (uint256 ethOut) {
         if (tokensIn == 0) revert ZeroAmount();
+        _finishGraduation(token);
         IPonsV2Factory.LaunchedToken memory t = _launch(token);
         IERC20(token).safeTransferFrom(msg.sender, address(this), tokensIn);
         if (t.phase == NOT_GRADUATED) {
@@ -126,11 +133,17 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
 
     /// @notice The v4 pool price of a graduated coin (Uniswap's sqrtPriceX96, coins per ETH), for valuing positions.
     function poolPrice(address token) external view returns (uint160 sqrtPriceX96) {
+        (sqrtPriceX96, ) = poolState(token);
+    }
+
+    /// @notice A graduated coin's v4 pool price and active liquidity (for price-impact-aware valuation).
+    function poolState(address token) public view returns (uint160 sqrtPriceX96, uint128 liquidity) {
         IPonsV2Factory.LaunchedToken memory t = _launch(token);
         if (t.phase != POOL_CREATED) revert NotTradable();
-        bytes32 id = keccak256(abi.encode(_key(t)));
-        bytes32 data = IPoolManagerV4(factory.poolManager()).extsload(keccak256(abi.encodePacked(id, bytes32(uint256(6)))));
-        sqrtPriceX96 = uint160(uint256(data));
+        bytes32 slot = keccak256(abi.encodePacked(keccak256(abi.encode(_key(t))), bytes32(uint256(6))));
+        IPoolManagerV4 pm = IPoolManagerV4(factory.poolManager());
+        sqrtPriceX96 = uint160(uint256(pm.extsload(slot)));
+        liquidity = uint128(uint256(pm.extsload(bytes32(uint256(slot) + 3))));
     }
 
     // ------------------------------------------------------------------ Uniswap v4
@@ -183,6 +196,23 @@ contract PonsAdapter is ReentrancyGuard, InstantRescue {
     }
 
     // ------------------------------------------------------------------ checks
+
+    /// @dev A coin that sold out its curve can't trade until Pons's two permissionless graduation steps
+    ///      have run (graduate: curve -> Swept, usually inside the crossing buy; createGraduatedPool:
+    ///      Swept -> PoolCreated, always a separate call). Runs whichever is pending so the trade can go to
+    ///      the v4 pool. Failures are ignored: _launch then reverts NotTradable as before.
+    function _finishGraduation(address token) internal {
+        IPonsV2Factory.LaunchedToken memory t = factory.getLaunchedToken(token);
+        if (t.token != token || t.curve == address(0) || t.pairToken != address(0)) return;
+        if (t.phase == NOT_GRADUATED) {
+            try IPonsV2Curve(t.curve).readyToGraduate() returns (bool ready) { if (!ready) return; } catch { return; }
+            try factory.graduate(token) {} catch { return; }
+            t = factory.getLaunchedToken(token);
+        }
+        if (t.phase == SWEPT) {
+            try factory.createGraduatedPool(token) {} catch {}
+        }
+    }
 
     /// @dev A genuine, ETH-paired Pons launch that trades on its curve or its v4 pool, and never the
     ///      calling agent's own coin.

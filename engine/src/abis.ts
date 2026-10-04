@@ -43,6 +43,7 @@ export const ADAPTER_ABI = parseAbi([
   "function buy(address token, uint256 minTokensOut) payable returns (uint256)",
   "function sell(address token, uint256 tokensIn, uint256 minEthOut) returns (uint256)",
   "function poolPrice(address token) view returns (uint160)",
+  "function poolState(address token) view returns (uint160 sqrtPriceX96, uint128 liquidity)",
   "event Bought(address indexed agent, address indexed token, uint256 ethIn, uint256 tokensOut, uint256 refund)",
   "event Sold(address indexed agent, address indexed token, uint256 tokensIn, uint256 ethOut)",
 ]);
@@ -57,3 +58,5 @@ export const ERC20_ABI = parseAbi([
 
 export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)"]);
 export const NFT_TRANSFER = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"])[0];
+/** Pons factory: graduation step 1 (curve sold out and drained). Step 2, the pool, emits PoolGraduated. */
+export const LAUNCH_SWEPT = parseAbi(["event LaunchSwept(address indexed token, uint256 quoteOut, uint256 tokenOut)"])[0];

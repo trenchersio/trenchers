@@ -22,6 +22,10 @@ contract MockPonsCurve {
 
     function getReserves() external view returns (uint256, uint256) { return (quoteReserve, tokenReserve); }
     function setGraduated() external { graduated = true; }
+    /// @dev Like Pons: true once the curve's real ETH reaches the graduation threshold.
+    uint256 public graduationThreshold = type(uint256).max;
+    function setThreshold(uint256 t) external { graduationThreshold = t; }
+    function readyToGraduate() external view returns (bool) { return !graduated && trackedQuote >= graduationThreshold; }
     /// @dev Graduation: hands the curve's ETH and tokens to the factory, which seeds the pool.
     function drain(address payable to) external returns (uint256 eth, uint256 tokens) {
         graduated = true;
@@ -29,14 +33,22 @@ contract MockPonsCurve {
         eth = address(this).balance; (bool ok, ) = to.call{value: eth}(""); require(ok);
     }
 
+    uint256 public launchedAt;
+    uint256 public snipeSeconds;   // Pons-style anti-snipe tax: 99% at launch, falling to 0 over this window
     function init(address token_, uint256 supply, uint256 maxSpend_) external {
-        token = token_; tokenReserve = supply; maxSpend = maxSpend_;
+        token = token_; tokenReserve = supply; maxSpend = maxSpend_; launchedAt = block.timestamp;
+    }
+    function setSnipe(uint256 s) external { snipeSeconds = s; }
+    function snipeTaxBps() public view returns (uint256) {
+        uint256 e = block.timestamp - launchedAt;
+        return e >= snipeSeconds ? 0 : 9900 * (snipeSeconds - e) / snipeSeconds;
     }
 
     function buy(uint256 quoteIn, uint256 minTokensOut, address recipient) external payable returns (uint256 out) {
         require(msg.value == quoteIn && quoteIn > 0, "quote");
         uint256 spent = quoteIn > maxSpend ? maxSpend : quoteIn;
         uint256 net = spent - spent * FEE_BPS / 10_000;
+        net -= net * snipeTaxBps() / 10_000;
         out = tokenReserve * net / (quoteReserve + net);
         require(out >= minTokensOut, "slippage");
         require(!graduated, "graduated");
@@ -68,25 +80,44 @@ contract MockPonsFactory {
     mapping(address => LaunchedToken) internal launched;
     event TokenLaunched(address indexed token, address indexed curve, address indexed deployer, address pairToken, uint256 launchConfigId, uint256 graduationThreshold);
     event PoolGraduated(address indexed token, uint256 positionId, uint256 tokenAmount, uint256 pairTokenAmount);
+    event LaunchSwept(address indexed token, uint256 quoteOut, uint256 tokenOut);
 
     MockPoolManager public immutable poolManager = new MockPoolManager();
     address public constant memeHook = address(0x40c0);
 
-    /// @dev Moves the curve's reserves into a Uniswap-v4-style pool and marks the launch PoolCreated (2).
+    /// @dev Graduation in Pons's two permissionless steps: graduate() drains the curve (phase Swept = 1),
+    ///      createGraduatedPool() seeds the Uniswap-v4-style pool (phase PoolCreated = 2).
+    mapping(address => uint256[2]) internal swept;
     function graduate(address token) external {
+        require(launched[token].phase == 0, "phase");
         (uint256 eth, uint256 tokens) = MockPonsCurve(payable(launched[token].curve)).drain(payable(address(this)));
+        swept[token] = [eth, tokens];
+        launched[token].phase = 1;
+        emit LaunchSwept(token, eth, tokens);
+    }
+    function createGraduatedPool(address token) external returns (uint256) {
+        require(launched[token].phase == 1, "phase");
+        (uint256 eth, uint256 tokens) = (swept[token][0], swept[token][1]);
         ERC20(token).transfer(address(poolManager), tokens);
         poolManager.seed{value: eth}(token, tokens, launched[token].poolFee, launched[token].tickSpacing, memeHook);
         launched[token].phase = 2;
         emit PoolGraduated(token, 1, tokens, eth);
+        return 1;
     }
+    /// @dev Both steps at once (test convenience).
+    function graduateAll(address token) external { this.graduate(token); this.createGraduatedPool(token); }
+    function setThreshold(address token, uint256 t) external { MockPonsCurve(payable(launched[token].curve)).setThreshold(t); }
     receive() external payable {}
 
     /// @dev Launches a coin with an ETH curve; the curve gets some ETH so sells can pay out.
+    uint256 public snipeSeconds;
+    function setSnipeSeconds(uint256 s) external { snipeSeconds = s; }
+
     function launch(string calldata name, uint256 maxSpend) external payable returns (address token, address curve) {
         MockPonsCurve c = new MockPonsCurve();
         MockPonsToken t = new MockPonsToken(name, address(c), 1_000_000_000 ether);
         c.init(address(t), 1_000_000_000 ether, maxSpend);
+        if (snipeSeconds > 0) c.setSnipe(snipeSeconds);
         if (msg.value > 0) { (bool ok, ) = address(c).call{value: msg.value}(""); require(ok); }
         token = address(t); curve = address(c);
         launched[token] = LaunchedToken(token, curve, msg.sender, msg.sender, address(0), 4.2 ether, 10000, 200, 0, false, 0);
@@ -117,15 +148,20 @@ contract MockPoolManager {
     address internal synced; uint256 internal syncedBalance;
 
     mapping(bytes32 => address) internal tokenOfSlot;
+    mapping(bytes32 => address) internal liquidityOfSlot;
 
     function seed(address token, uint256 tokens, uint24 fee, int24 tickSpacing, address hooks) external payable {
         pools[token] = Pool(msg.value, tokens, fee, tickSpacing, hooks);
         bytes32 poolId = keccak256(abi.encode(Key(address(0), token, fee, tickSpacing, hooks)));
-        tokenOfSlot[keccak256(abi.encodePacked(poolId, bytes32(uint256(6))))] = token;
+        bytes32 st = keccak256(abi.encodePacked(poolId, bytes32(uint256(6))));
+        tokenOfSlot[st] = token;
+        liquidityOfSlot[bytes32(uint256(st) + 3)] = token;
     }
 
     /// @dev Like v4's extsload on a pool's state slot: sqrtPriceX96 in the low 160 bits.
     function extsload(bytes32 slot) external view returns (bytes32) {
+        address lt = liquidityOfSlot[slot];
+        if (lt != address(0)) return bytes32(_sqrt(pools[lt].eth * pools[lt].tokens)); // constant-product L
         address token = tokenOfSlot[slot];
         if (token == address(0)) return bytes32(0);
         return bytes32(uint256(sqrtPriceX96(token)));

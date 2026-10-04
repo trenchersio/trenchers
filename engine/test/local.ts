@@ -171,6 +171,27 @@ async function main() {
   const gAll = engine.trades.filter((t) => t.agent === 7).slice(g0);
   check(gAll.length === 2 && gAll[1].side === "sell" && (await read<bigint>(coin, "MockPonsToken", "balanceOf", [w7])) === 0n, "agent #7 sold it on the pool after its hold, ETH back in its wallet");
 
+  // Anti-snipe tax: a launch taxed 99% at first, falling to 0 over 12 seconds. #7 (now "buy every launch")
+  // must not buy into the tax: it waits and buys once the price is close to fair.
+  const flip = "Buy every new launch, sell after 30 seconds.";
+  await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.05"), parseEther("0.5"), true, keccak256(toHex(flip)), flip], 0n, alice);
+  await sleep(3000);
+  await call(pons, "MockPonsFactory", "setSnipeSeconds", [12n]);
+  const s0 = engine.trades.filter((t) => t.agent === 7).length;
+  const taxedTx = await call(pons, "MockPonsFactory", "launch", ["TAXED", parseEther("100")], parseEther("1"), dev);
+  const taxed = (parseEventLogs({ abi: artifact("MockPonsFactory").abi, logs: taxedTx.logs, eventName: "TokenLaunched" })[0] as unknown as { args: { token: Address; curve: Address } }).args;
+  // A real chain makes a block every fraction of a second; the local node only mines on transactions,
+  // so mine one per second here (the tax is read from the latest block's time).
+  const miner = setInterval(() => { fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "evm_mine", params: [] }) }).catch(() => {}); }, 1000);
+  await sleep(5000);
+  check(engine.trades.filter((t) => t.agent === 7).length === s0 && logs.some((l) => l.includes("still taxed")), "agent #7 waited instead of buying into the anti-snipe tax");
+  await sleep(14000);
+  clearInterval(miner);
+  const tb = engine.trades.filter((t) => t.agent === 7).slice(s0)[0];
+  const taxAtBuy = Number(await read<bigint>(taxed.curve, "MockPonsCurve", "snipeTaxBps"));
+  check(tb?.side === "buy", `agent #7 bought once the tax had dropped (tax now ${taxAtBuy / 100}%)`);
+  await call(pons, "MockPonsFactory", "setSnipeSeconds", [0n]);
+
   // Telegram: a mint of 2 and a sale on a marketplace are posted; a plain transfer is not.
   const market = await deploy("MockMarket");
   const n0 = posts.length;

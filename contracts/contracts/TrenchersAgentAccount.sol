@@ -248,7 +248,12 @@ contract TrenchersAgentAccount is IERC165, IERC1271, IERC6551Account, IERC6551Ex
         spentToday = spent + value;
         _state++;
         emit Traded(value, bytes4(data[:4]));
-        return _call(router, value, data);
+        uint256 before = address(this).balance;
+        bytes memory result = _call(router, value, data);
+        // Count only what the trade really spent: a partly filled buy refunds the rest (its ETH comes back).
+        uint256 back = address(this).balance + value - before;
+        if (back > 0) spentToday -= back > value ? value : back;
+        return result;
     }
 
     /// @notice Lets the router pull a token the agent is selling. Never the agent's own coin.

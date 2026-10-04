@@ -1,13 +1,13 @@
 import {
-  createPublicClient, createWalletClient, encodeFunctionData, formatEther, http, defineChain,
-  type Address, type Hash, type Log, type PublicClient, type WalletClient,
+  createPublicClient, createWalletClient, decodeAbiParameters, encodeFunctionData, formatEther, http, defineChain,
+  type Address, type Hash, type Hex, type Log, type PublicClient, type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
+  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -151,7 +151,7 @@ export class Engine {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
       const to = from + ENV.LOG_RANGE - 1n < head ? from + ENV.LOG_RANGE - 1n : head;
-      const [launches, grads, buys, sells, claims, bought, sold, nftMoves] = await Promise.all([
+      const [launches, grads, buys, sells, claims, bought, sold, nftMoves, swepts] = await Promise.all([
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.PONS_FACTORY, event: POOL_GRADUATED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ event: CURVE_BUY, fromBlock: from, toBlock: to }),
@@ -160,10 +160,11 @@ export class Engine {
         this.pub.getLogs({ address: ENV.ADAPTER, event: BOUGHT, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.ADAPTER, event: SOLD, fromBlock: from, toBlock: to }),
         live && this.telegram ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
+        this.pub.getLogs({ address: ENV.PONS_FACTORY, event: LAUNCH_SWEPT, fromBlock: from, toBlock: to }),
       ]);
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
       const rules = wallets.length ? await this.pub.getLogs({ address: wallets, event: RULE_APPLIED, fromBlock: from, toBlock: to }) : [];
-      const all = [...launches, ...grads, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
+      const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
       if (nftMoves.length && this.telegram) this.telegram.onTransfers(nftMoves).catch(() => {});
@@ -182,10 +183,13 @@ export class Engine {
         if (live) this.signal("launch", tok, t);
         break;
       }
-      case "PoolGraduated": {
+      // Graduation: the curve sells out (LaunchSwept), then anyone creates the Uniswap pool (PoolGraduated).
+      // The trading route completes the pool step itself if needed, so agents can act on the first signal.
+      case "LaunchSwept": case "PoolGraduated": {
         const tok = this.tokens.get(lc(a.token)); if (!tok) return;
+        const first = !tok.graduated;
         tok.graduated = true;
-        if (live) this.signal("graduation", tok, t);
+        if (live && first) this.signal("graduation", tok, t);
         break;
       }
       case "CurveBuy": case "CurveSell": {
@@ -317,24 +321,45 @@ export class Engine {
     if (kind === "mcap") this.mcapCheck(tok, t);
   }
 
-  /** Coins a buy of `eth` would get now (before slippage): on the bonding curve, or on the v4 pool once graduated. */
+  /** True once the coin's curve has sold out (graduation may still be completing). */
+  private async onPool(tok: Token) {
+    if (tok.graduated) return true;
+    const done = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "graduated" }).catch(() => false);
+    if (done) tok.graduated = true;
+    return done;
+  }
+
+  /** The v4 pool's virtual reserves (Pons seeds a full-range position, so it behaves like x * y = k). */
+  private async poolReserves(tok: Token) {
+    const [sp, L] = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolState", args: [tok.token] });
+    if (sp === 0n || L === 0n) throw new Error("pool not ready");
+    return { eth: (L << 96n) / sp, coins: (L * sp) >> 96n };
+  }
+
+  /** Fee-free estimate of the coins a buy of `eth` gets now, including price impact (curve or pool). */
   private async quoteBuy(tok: Token, eth: bigint): Promise<bigint> {
-    if (!tok.graduated) {
+    if (!(await this.onPool(tok))) {
       const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
       return (k * eth) / (q + eth);
     }
-    const sp = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolPrice", args: [tok.token] });
-    return ((eth * sp * sp) >> 192n) * 98n / 100n; // pool price, less the pool fee and the hook's tax
+    const r = await this.poolReserves(tok);
+    return (r.coins * eth) / (r.eth + eth);
   }
 
-  /** ETH a sale of `coins` would bring now (before slippage). */
+  /** Estimate of the ETH a sale of `coins` brings now, including price impact and ~2% fees (curve or pool). */
   private async quoteSell(tok: Token, coins: bigint): Promise<bigint> {
-    if (!tok.graduated) {
+    if (!(await this.onPool(tok))) {
       const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
       return (q * coins) / (k + coins);
     }
-    const sp = await this.pub.readContract({ address: ENV.ADAPTER, abi: ADAPTER_ABI, functionName: "poolPrice", args: [tok.token] });
-    return sp > 0n ? ((coins << 192n) / (sp * sp)) * 98n / 100n : 0n;
+    const r = await this.poolReserves(tok);
+    return ((r.eth * coins) / (r.coins + coins)) * 98n / 100n;
+  }
+
+  /** Exact result of a trade, by simulating the agent wallet's own call from the engine (minOut 0). */
+  private async simulateTrade(wallet: Address, value: bigint, data: Hex): Promise<bigint> {
+    const { result } = await this.pub.simulateContract({ address: wallet, abi: AGENT_ABI, functionName: "trade", args: [value, data], account: this.wallet?.account ?? this.engineAddress! });
+    return decodeAbiParameters([{ type: "uint256" }], result as Hex)[0];
   }
 
   private mcapPrev = new Map<Address, number>();
@@ -387,8 +412,16 @@ export class Engine {
       if (spent + size > ag.dailyCap) size = ag.dailyCap > spent ? ag.dailyCap - spent : 0n;
       if (size > ag.balance) size = ag.balance;
       if (size < 10_000_000_000n) return; // below 0.00000001 ETH: nothing worth trading
-      const expected = await this.quoteBuy(tok, size);
-      const minOut = (expected * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
+      // What the trade would really get right now (fees, snipe tax, price impact, graduation all included).
+      const sim = await this.simulateTrade(ag.wallet, size, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, 0n] }));
+      const fair = await this.quoteBuy(tok, size).catch(() => 0n);
+      if (fair > 0n && sim * 100n < fair * 70n) {
+        // Much worse than the fee-free price: most likely Pons's anti-snipe tax. Try again shortly.
+        if (this.now() - tok.launchedAt < 120) { this.entries.push({ wallet: ag.wallet, token: tok.token, notBefore: this.now() + 3, reason }); this.log(`Agent #${ag.id} waits: ${tok.token} is still taxed (${Number(sim * 100n / fair)}% of fair)`); }
+        else this.log(`Agent #${ag.id} skipped ${tok.token}: price ${Number(sim * 100n / fair)}% of fair`);
+        return;
+      }
+      const minOut = (sim * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
       const data = encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, minOut] });
       this.log(`Agent #${ag.id} BUY ${tok.token} for ${formatEther(size)} ETH (${reason})`);
       const hash = await this.send(ag.wallet, "trade", [size, data]);
@@ -424,10 +457,12 @@ export class Engine {
     try {
       const held = await this.pub.readContract({ address: tok.token, abi: ERC20_ABI, functionName: "balanceOf", args: [ag.wallet] });
       if (held === 0n) { this.book(ag.wallet).delete(tok.token); return; }
-      const minOut = (value * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
-      this.log(`Agent #${ag.id} SELL ${tok.token} (${why}), ~${Number(formatEther(value)).toPrecision(4)} ETH`);
       const ok = await this.send(ag.wallet, "approveRouter", [tok.token, held]);
       if (!ok) return;
+      // The exact proceeds right now (simulated after the approval), so slippage is measured from reality.
+      const sim = await this.simulateTrade(ag.wallet, 0n, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "sell", args: [tok.token, held, 0n] })).catch(() => value);
+      const minOut = (sim * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
+      this.log(`Agent #${ag.id} SELL ${tok.token} (${why}), ~${Number(formatEther(sim)).toPrecision(4)} ETH`);
       await this.send(ag.wallet, "trade", [0n, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "sell", args: [tok.token, held, minOut] })]);
     } catch (e) { this.log(`Agent #${ag.id} sell failed: ${(e as Error).message.split("\n")[0]}`); }
     finally { this.busy.delete(key); }

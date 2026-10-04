@@ -57,6 +57,7 @@ describe("PonsAdapter", () => {
     const w = await acct.getAddress();
     await expect(acct.connect(engine).trade(E("0.05"), buyData(await token.getAddress()))).to.changeEtherBalance(w, -E("0.02"));
     expect(await ethers.provider.getBalance(await adapter.getAddress())).to.equal(0n);
+    expect(await acct.spentToday()).to.equal(E("0.02")); // the daily limit counts only what was really spent
   });
 
   it("refuses coins that are not genuine Pons launches, or not paired with ETH", async () => {
@@ -102,13 +103,16 @@ describe("PonsAdapter", () => {
     // the agent holds some from before graduation
     await acct.connect(engine).trade(E("0.05"), buyData(t));
     const held = await token.balanceOf(w);
-    await pons.graduate(t);
-    expect(await adapter.venue(t)).to.equal(2n);
-    expect(await adapter.poolPrice(t)).to.be.gt(0n);
+    await pons.graduate(t); // step 1 only (curve drained, phase Swept): nobody has created the pool yet
+    await expect(adapter.venue(t)).to.be.revertedWithCustomError(adapter, "NotTradable");
     // it can still sell what it held: ETH comes back to the agent
     await acct.connect(engine).approveRouter(t, held);
     const before = await ethers.provider.getBalance(w);
-    await acct.connect(engine).trade(0, sellData(t, held));
+    await acct.connect(engine).trade(0, sellData(t, held)); // the adapter creates the pool first, then sells on it
+    expect(await adapter.venue(t)).to.equal(2n);
+    expect(await adapter.poolPrice(t)).to.be.gt(0n);
+    const [sp, liq] = await adapter.poolState(t);
+    expect(sp).to.be.gt(0n); expect(liq).to.be.gt(0n);
     expect(await token.balanceOf(w)).to.equal(0n);
     expect((await ethers.provider.getBalance(w)) - before).to.be.gt(E("0.045"));
     // and buy again, on the pool
@@ -122,9 +126,19 @@ describe("PonsAdapter", () => {
     const { engine, acct, adapter, pons, launch, buyData } = await setup();
     const { token } = await launch("SLIP");
     const t = await token.getAddress();
-    await pons.graduate(t);
+    await pons.graduateAll(t);
     const err = adapter.interface.encodeErrorResult("Slippage", []);
     await expect(acct.connect(engine).trade(E("0.01"), buyData(t, E("1000000000")))).to.be.revertedWithCustomError(acct, "CallFailed").withArgs(err);
     await expect(adapter.unlockCallback("0x")).to.be.revertedWithCustomError(adapter, "NotPoolManager");
+  });
+
+  it("a buy on a curve that's ready to graduate first completes the graduation, then buys on the pool", async () => {
+    const { engine, acct, adapter, pons, launch, buyData } = await setup();
+    const { token } = await launch("FULL");
+    const t = await token.getAddress(), w = await acct.getAddress();
+    await pons.setThreshold(t, 0); // the curve has reached its graduation threshold
+    await acct.connect(engine).trade(E("0.02"), buyData(t));
+    expect(await adapter.venue(t)).to.equal(2n);
+    expect(await token.balanceOf(w)).to.be.gt(0n);
   });
 });
