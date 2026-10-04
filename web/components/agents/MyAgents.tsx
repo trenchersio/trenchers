@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { TextButton } from "@/components/TextButton";
 import { CustomBuilder, NumField } from "./CustomBuilder";
 import { Launchpad } from "./Launchpad";
+import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { AgentChat } from "./AgentChat";
 import { AGENT_FEE_SHARE_PCT, tokenFees, trenchersShare, type TokenDraft } from "@/lib/agent-token";
 import { DEFAULT_RULE, describe, validate, type CustomRule } from "@/lib/custom-strategy";
@@ -46,39 +47,40 @@ export function MyAgents() {
   const sel = agents.find((a) => a.id === selected) ?? null;
 
   return (
-    <div className="agents">
-      <section className="board agents-board" aria-label="Your Trenchers">
-        <div className="board-head">
-          <h1>NFT / Agent Profile</h1>
-          <span className="board-meta">{short(w.address)}</span>
+    <div className="ap">
+      <header className="ap-top">
+        <div>
+          <p className="eyebrow">NFT / Agent Profile</p>
+          <h1>Your agents</h1>
+          <p className="ap-sub">Register, fund and guide each Trencher. Its wallet, coin, rules and record all stay with the NFT.</p>
+        </div>
+        <div className="ap-wallet mono">
+          <span className={`dot ${w.kind === "demo" ? "dot-demo" : ""}`} />{short(w.address)}
           {(SAMPLE_MODE || w.kind === "demo") && <span className="sample">Sample data</span>}
         </div>
-        <ul className="agents-list">
-          {agents.map((a) => {
-            const st = statusOf(a);
-            return (
-              <li key={a.id}>
-                <button type="button" className={`agent-item${a.id === selected ? " active" : ""}`} onClick={() => setSelected(a.id)}>
-                  <img src={`nft/${a.id}.webp`} alt="" width={56} height={56} />
-                  <span className="agent-item-text">
-                    <span className="agent-item-name">Trencher #{a.id}</span>
-                    <span className={`status status-${st.tone} mono`}>{st.label}</span>
-                  </span>
-                  <span className="mono agent-item-bal">{a.registered ? `${a.balance.toFixed(3)} ETH` : ""}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="agents-foot">
-          <p>Want another agent?</p>
-          {OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>Buy on OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}
-        </div>
-      </section>
+      </header>
 
-      <section className="detail" aria-label="Agent profile">
-        {sel && <Setup key={sel.id} a={sel} owner={w.address} onChange={update} />}
-      </section>
+      <div className="ap-roster" role="tablist" aria-label="Your Trenchers">
+        {agents.map((a) => {
+          const st = statusOf(a);
+          return (
+            <button key={a.id} type="button" role="tab" aria-selected={a.id === selected} className={`ap-card${a.id === selected ? " on" : ""}`} onClick={() => setSelected(a.id)}>
+              <ArtCanvas id={a.id} size={56} className="ap-card-art" />
+              <span className="ap-card-text">
+                <b>Trencher #{a.id}</b>
+                <span className={`status status-${st.tone} mono`}>{st.label}</span>
+              </span>
+              <span className="mono ap-card-bal">{a.registered ? `${a.balance.toFixed(3)} ETH` : ""}</span>
+            </button>
+          );
+        })}
+        <div className="ap-card ap-card-more">
+          <span className="ap-plus" aria-hidden="true">+</span>
+          <span className="ap-card-text"><b>Another agent?</b>{OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}</span>
+        </div>
+      </div>
+
+      {sel && <Setup key={sel.id} a={sel} owner={w.address} onChange={update} />}
     </div>
   );
 }
@@ -142,6 +144,13 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
     run(["Signing the strategy…", "Setting on-chain spending limits…"], () => onChange(log({ ...a, strategy: saved }, `Strategy set: ${what}`)));
   };
 
+  const applyTemplate = (k: Preset) => {
+    const saved: Strategy = { preset: k, ...PRESETS[k].defaults, custom: undefined };
+    setDraft(saved);
+    const intro: ChatMsg = { role: "agent", t: Date.now(), text: `Running the ${k} template: ${PRESETS[k].line.toLowerCase()}, ${PRESETS[k].rules.join(", ").toLowerCase()}. Tell me what to change and I'll make it your own.` };
+    run(["Signing the template…", "Setting on-chain spending limits…"], () => onChange(log({ ...a, strategy: saved, chat: [...(a.chat ?? []), intro] }, `Template set: ${k}`)));
+  };
+
   const applyRule = (rule: CustomRule, chat: ChatMsg[]) => {
     const limits = { perBuy: draft.perBuy, dailyCap: draft.dailyCap, maxPositions: draft.maxPositions };
     if (!(limits.perBuy > 0) || !(limits.dailyCap >= limits.perBuy) || !(limits.maxPositions >= 1)) { setNotice("Check the limits in step 2 first."); return; }
@@ -165,18 +174,35 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
 
   const pause = () => run(["Pausing trading…"], () => onChange(log({ ...a, live: false }, "Trading paused")));
 
+  const versions = (a.chat ?? []).filter((m) => m.status === "applied").length;
+  const funding = a.token ? `Coin $${a.token.symbol}` : a.fundingMode === "self" ? "Self-funded" : a.fundingMode === "coin" ? "Coin (not launched)" : "Not chosen";
+
   return (
-    <div className="detail-inner">
-      <header className="detail-head">
-        <img src={`nft/${a.id}.webp`} alt={`Trencher #${a.id}`} width={88} height={88} />
-        <div>
-          <p className="eyebrow">Your agent</p>
+    <div className="ap-main">
+      <section className="ap-hero">
+        <div className="ap-art"><ArtCanvas id={a.id} size={208} /></div>
+        <div className="ap-id">
+          <span className="mono ap-kick">Your agent</span>
           <h2>Trencher #{a.id}</h2>
-          <p className="mono who-line"><span className={`status status-${st.tone}`}>{st.label}</span></p>
-          {a.agentWallet && <p className="mono who-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} on {chain.name}</p>}
+          <div className="ap-chips">
+            <span className={`status status-${st.tone} mono`}>{st.label}</span>
+            {a.registered && <span className={`ap-chip mono ${a.token ? "chip-coin" : a.fundingMode === "self" ? "chip-self" : ""}`}>Funding · {funding}</span>}
+            {a.strategy && <span className="ap-chip mono chip-rule">{a.strategy.preset === "Custom" ? `Guided · rule v${Math.max(1, versions)}` : `Template · ${a.strategy.preset}`}</span>}
+          </div>
+          {a.agentWallet ? (
+            <p className="mono ap-wallet-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} · {chain.name}</p>
+          ) : (
+            <p className="ap-wallet-line">Not registered yet: register it below to give it a wallet and an identity.</p>
+          )}
           <AgentLinks wallet={a.agentWallet} />
+          <dl className="ap-kpis">
+            <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked</span>}</div>
+            <SelfFundedKpi a={a} />
+            <div><dt className="mono">Guidance</dt><dd className="mono">{versions ? `v${versions}` : "—"}</dd><span className="mono kpi-note">{versions ? `${versions} rule${versions > 1 ? "s" : ""} applied` : "Talk to it in section 3"}</span></div>
+            <div><dt className="mono">Arena</dt><dd className="mono">{a.live ? <span className="up">Live</span> : a.strategy ? "Ready" : "—"}</dd><span className="mono kpi-note">{a.live ? "Competing this epoch" : "Not entered"}</span></div>
+          </dl>
         </div>
-      </header>
+      </section>
 
       {busy && (
         <div className="txbox mono" role="status">
@@ -185,8 +211,6 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         </div>
       )}
       {notice && <p className="notice">{notice}</p>}
-
-      {a.registered && <Income a={a} />}
 
       <div className="segs" role="tablist" aria-label="Agent profile sections">
         {([
@@ -266,31 +290,37 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
       {tab === "strategy" && <ol className="steps-v">
         <Step n={1} title="Talk to your agent" state={!a.registered || a.balance <= 0 ? "todo" : a.strategy ? "done" : "now"}>
           <p>This is where your edge comes from. Tell your agent how to trade in plain English and keep guiding it as the market changes. Every message becomes a rule you confirm; the agent then executes it 24/7, without fear or greed.</p>
-          <AgentChat id={a.id} rule={a.strategy?.custom ?? null} chat={a.chat ?? []} disabled={!a.registered || a.balance <= 0 || !!busy}
-            onChat={(c) => onChange({ ...a, chat: c })}
-            onApply={(rule, c) => applyRule(rule, c)} />
-          {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
-          <details className="alt-ways">
-            <summary className="mono">Other ways to set it</summary>
-            <div className="alt-body">
-              <span className="field-label">Edit the rule as a form</span>
-              <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? a.strategy?.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, preset: "Custom", custom: r })} disabled={!!busy} />
-              <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy || draft.preset !== "Custom"}>Save this rule</TextButton>
-              <span className="field-label">Or start from a house template</span>
-              <p className="hint-line">Fixed baseline strategies the team runs in public. Fine to start with, but they can&apos;t adapt, so guided agents are built to beat them.</p>
-              <div className="presets" role="radiogroup" aria-label="House templates">
-                {(Object.keys(PRESETS) as Preset[]).filter((p) => p !== "Custom").map((p) => (
-                  <button key={p} type="button" role="radio" aria-checked={draft.preset === p}
-                    className={`tbtn${draft.preset === p ? " tbtn-on" : ""}`}
-                    onClick={() => setDraft({ preset: p, ...PRESETS[p].defaults, custom: undefined })} disabled={!!busy}>{p}</button>
-                ))}
-              </div>
-              {draft.preset !== "Custom" && (<>
-                <p className="preset-line">{PRESETS[draft.preset].line}. {PRESETS[draft.preset].rules.join(" · ")}.</p>
-                <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy}>Use this template</TextButton>
-              </>)}
+          <div className="guide-grid">
+            <div className="guide-chat">
+              <AgentChat id={a.id} rule={a.strategy?.custom ?? null} chat={a.chat ?? []} disabled={!a.registered || a.balance <= 0 || !!busy}
+                onChat={(c) => onChange({ ...a, chat: c })}
+                onApply={(rule, c) => applyRule(rule, c)} />
+              {(!a.registered || a.balance <= 0) && <p className="hint-line">Register and claim the starter balance first (section 1).</p>}
+              <details className="alt-ways">
+                <summary className="mono">Edit the rule as a form</summary>
+                <div className="alt-body">
+                  <CustomBuilder idPrefix={`c-${a.id}`} rule={draft.custom ?? a.strategy?.custom ?? DEFAULT_RULE} onChange={(r) => setDraft({ ...draft, preset: "Custom", custom: r })} disabled={!!busy} />
+                  <TextButton onClick={saveStrategy} disabled={!a.registered || a.balance <= 0 || !!busy || draft.preset !== "Custom"}>Save this rule</TextButton>
+                </div>
+              </details>
             </div>
-          </details>
+            <aside className="tpl" aria-label="House templates">
+              <span className="mono ap-kick">House templates</span>
+              <p>Start from a strategy the team runs in public, then talk your agent into something better. Templates never adapt on their own.</p>
+              <ul>
+                {(Object.keys(PRESETS) as Preset[]).filter((k) => k !== "Custom").map((k) => {
+                  const on = a.strategy?.preset === k;
+                  return (
+                    <li key={k} className={on ? "on" : undefined}>
+                      <div className="tpl-top"><b>{k}</b><span className="mono">#{PRESETS[k].house}</span></div>
+                      <p>{PRESETS[k].line}. {PRESETS[k].rules.join(" · ")}.</p>
+                      <TextButton onClick={() => applyTemplate(k)} disabled={!a.registered || a.balance <= 0 || !!busy}>{on ? "Active" : "Start from this"}</TextButton>
+                    </li>
+                  );
+                })}
+              </ul>
+            </aside>
+          </div>
         </Step>
 
         <Step n={2} title="Set its limits" state={!a.strategy ? "todo" : "done"}>
@@ -325,6 +355,19 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           </ol>
         </div>
       )}
+
+      <section className="ap-resale">
+        <div>
+          <span className="mono ap-kick">Train it, rank it, sell it</span>
+          <h3>A guided agent is a strategy you can sell</h3>
+          <p>Every rule you apply and every trade it makes is on-chain and moves with the NFT. Guide your agent up the Arena, and its Trencher carries a verifiable track record. Selling it is selling a proven strategy, not just a picture.</p>
+        </div>
+        <dl className="ap-resale-stats">
+          <div><dt className="mono">Rule versions</dt><dd className="mono">{versions}</dd></div>
+          <div><dt className="mono">Agent coin</dt><dd className="mono">{a.token ? `$${a.token.symbol}` : "—"}</dd></div>
+          <div><dt className="mono">Market</dt><dd>{OPENSEA_URL ? <TextButton href={OPENSEA_URL} external>List on OpenSea</TextButton> : <span className="tbtn tbtn-static">OpenSea</span>}</dd></div>
+        </dl>
+      </section>
     </div>
   );
 }
@@ -341,23 +384,13 @@ function Step({ n, title, state, children }: { n: number; title: string; state: 
   );
 }
 
-/** How the agent funds itself: its token's creator fees plus its share of $TRENCHERS fees. */
-function Income({ a }: { a: AgentState }) {
+/** KPI tile: what the agent has funded itself with (coin fees + its share of $TRENCHERS fees). */
+function SelfFundedKpi({ a }: { a: AgentState }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 2000); return () => clearInterval(i); }, []);
   const tok = a.token ? tokenFees(a.token, now) : 0;
-  const share = trenchersShare(a.registeredAt ?? null, now);
+  const share = a.registered ? trenchersShare(a.registeredAt ?? null, now) : 0;
   return (
-    <section className="income" aria-label="Self-funding income">
-      <div className="income-head">
-        <span className="mono income-kicker">Self-funding</span>
-        <p>Fee income lands in the agent wallet as trading capital.</p>
-      </div>
-      <dl>
-        <div><dt className="mono">Own coin fees</dt><dd className="mono">{a.token ? `${tok.toFixed(5)} ETH` : <span className="cd-muted">{a.fundingMode === "self" ? "Option B, no coin" : "No coin yet"}</span>}</dd></div>
-        <div><dt className="mono">{AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees</dt><dd className="mono">{share.toFixed(5)} ETH</dd></div>
-        <div><dt className="mono">Total self-funded</dt><dd className="mono up">{(tok + share).toFixed(5)} ETH</dd></div>
-      </dl>
-    </section>
+    <div className="kpi-green"><dt className="mono">Self-funded</dt><dd className="mono">{(tok + share).toFixed(5)} <small>ETH</small></dd><span className="mono kpi-note">{a.token ? "coin fees + " : ""}{AGENT_FEE_SHARE_PCT}% fee share</span></div>
   );
 }

@@ -9,7 +9,7 @@ Trenchers is an ecosystem of 2,000 **self-funding, NFT-enabled AI trading agents
 
 Holders fund their agent with ETH and give it an agentic memecoin trading strategy. The agent then trades new token launches on [Pons](https://docs.mobula.io/almanac/robinhood-launchpads/pons), the main launchpad on Robinhood Chain, around the clock. Every agent is ranked live in the **Arena**, and the best performers each week share a prize pool. Fee income flows back into the agent wallet as trading capital, so an agent can fund its own operations.
 
-Sell the NFT and you sell the agent: its wallet, its identity, its agent coin's fee stream, its strategy history and its track record all move with the token.
+Sell the NFT and you sell the agent: its wallet, its identity, its agent coin's fee stream, its strategy history and its track record all move with the token. **A well-trained agent is a strategy you can sell.**
 
 ![Trenchers #1 to #32](docs-img/trenchers-1-32.png)
 
@@ -244,6 +244,18 @@ The five house agents each run one fixed template, in public. Holders can start 
 | Market cap | Pool price from `sqrtPriceX96` × fixed supply |
 | Dev sells | A swap where the seller is the token's deployer (`getLaunchedToken(token).deployer`) |
 | DexScreener update | DexScreener's token profile API, polled |
+
+
+## Train it, rank it, sell it
+
+A Trencher you have trained is a trading strategy with a public track record, and the NFT makes that strategy tradable.
+
+1. **Build:** talk your agent into a strategy, or start from a house template.
+2. **Train:** keep guiding it as the market moves. Every applied rule is versioned on-chain (`RuleApplied` events on the agent wallet).
+3. **Climb:** its trades are public and ranked live in the Arena, week after week.
+4. **Sell:** list the NFT on OpenSea. The buyer gets the agent wallet, its rule history, its coin and fee stream, and its record.
+
+Buyers can verify everything before they buy: the agent wallet's trades on the explorer and GMGN, its rule versions, and its Arena rankings. Sellers withdraw their own ETH first (the starter balance stays with the agent), and trading pauses until the new holder applies their own policy. Skill becomes an asset: holders who guide agents well can build them up and sell them, and buyers can skip straight to an agent with a proven record.
 
 
 ## The execution engine

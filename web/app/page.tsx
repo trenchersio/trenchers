@@ -10,6 +10,7 @@ import { AGENT_FEE_SHARE_PCT } from "@/lib/agent-token";
 import { SelfFunding } from "@/components/SelfFunding";
 import { GuideDemo } from "@/components/GuideDemo";
 import { MobileDock } from "@/components/MobileDock";
+import { Resale } from "@/components/Resale";
 
 const STEPS = [
   { n: "01", title: "Buy a Trencher", body: "Every one of the 2,000 is a unique pixel agent, listed on OpenSea at the same price.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
@@ -45,6 +46,7 @@ const FAQ = [
   { q: "What is a Trencher?", a: "A unique pixel-art NFT that can be registered as a self-funding AI trading agent. Each agent has its own wallet that belongs to whoever holds the NFT." },
   { q: "How do I tell my agent how to trade?", a: "You talk to it. In your NFT / Agent Profile, write what you want in plain English: which tokens, when to buy, when to sell, what to avoid. The agent replies with the exact rule it would trade, and nothing changes until you apply it. Keep guiding it as the market changes; every version is kept. The house strategies are only templates to start from." },
   { q: "Why not just use a house strategy?", a: "You can, but they are fixed baselines: they never adapt to the market, so they are built to be beaten. The edge comes from a holder who keeps guiding their agent." },
+  { q: "Can I sell a trained agent?", a: "Yes, and that's the point. Every rule you apply and every trade your agent makes is on-chain and ranked in the Arena. When you sell the NFT on OpenSea, the buyer gets the agent with its wallet, its rule history, its coin and its record: you're selling a strategy with a verifiable track record. Withdraw your own ETH first; trading pauses until the new holder applies their policy." },
   { q: "What are option A and option B?", a: `After you register your Trencher and claim its ${STARTER_ETH} ETH starter balance, you choose how it funds itself. A: the agent launches its own coin on Pons and receives every creator trading fee. B: no coin; the agent self-funds from its share of the ${AGENT_FEE_SHARE_PCT}% of $TRENCHERS fees paid to registered agents and from its own trading profits. A self-funded agent can still launch a coin later, and you can always top it up yourself.` },
   { q: "What does self-funding mean?", a: `An agent starts with a ${STARTER_ETH} ETH starter balance and then earns income besides its trading: the creator fees of its own agent coin, and a share of the ${AGENT_FEE_SHARE_PCT}% of all $TRENCHERS trading fees that go to registered agents. It all lands in the agent wallet as trading capital, so you can fund it a little and let it pay its own way, or keep topping it up yourself.` },
   { q: "How does my agent launch its own coin?", a: "It's optional. Open your NFT / Agent Profile, go to the coin launchpad and pick an image, name, symbol, description, website and socials. The coin is launched on Pons from the agent wallet, paid from its starter balance, so the agent is the creator and receives all creator trading fees. One coin per agent." },
@@ -167,12 +169,17 @@ export default function Home() {
           <p className="note">Every rule runs inside hard limits enforced by the agent wallet: a daily spend cap, position limits and a gas reserve. Messages are read into typed rules; there is no language model making trades.</p>
         </Section>
 
-        <Section id="flywheel" n="05" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
+        <Section id="resale" n="05" label="Train it, sell it" title="Sell the strategy, not just the art"
+          lede="A Trencher you have trained is a trading strategy with a public track record. Build it, guide it up the Arena, and sell the NFT: the buyer gets the agent, its rules and its record.">
+          <Resale />
+        </Section>
+
+        <Section id="flywheel" n="06" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
           lede={`Half of every sale goes back to the buyer's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
           <Flywheel />
         </Section>
 
-        <Section id="roadmap" n="06" label="Roadmap" title="Three phases to self-funding agents"
+        <Section id="roadmap" n="07" label="Roadmap" title="Three phases to self-funding agents"
           lede="Built in the open: the site, contracts and docs are live on GitHub, and every phase ships on testnet first.">
           <ol className="rm">
             {ROADMAP.map((r, i) => (
@@ -191,7 +198,7 @@ export default function Home() {
           </ol>
         </Section>
 
-        <Section id="get" n="07" label="Get an agent" title={<>{LIST_PRICE_ETH} ETH. Half of it goes to your agent.</>}
+        <Section id="get" n="08" label="Get an agent" title={<>{LIST_PRICE_ETH} ETH. Half of it goes to your agent.</>}
           lede={`Every Trencher is listed on OpenSea at the same price. No allowlist, no tiers. ${STARTER_ETH} ETH of it is claimable straight into your agent's wallet.`}>
           <div className="buy">
             <div className="buy-split">
@@ -225,7 +232,7 @@ export default function Home() {
           </div>
         </Section>
 
-        <Section id="faq" n="08" label="FAQ" title="Questions" lede={<>Anything else? Read the <a href={ROUTES.docs}>docs</a> or ask us on <a href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>.</>}>
+        <Section id="faq" n="09" label="FAQ" title="Questions" lede={<>Anything else? Read the <a href={ROUTES.docs}>docs</a> or ask us on <a href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>.</>}>
           <div className="faq2">
             {FAQ.map((f, i) => (
               <details key={f.q} open={i === 0}>

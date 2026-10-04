@@ -39,16 +39,23 @@ export function GuideDemo() {
           <li><span className="mono">02</span><div><b>Every message becomes a rule</b><p>The agent shows the exact rule it will trade. Nothing changes until you apply it, and every version is kept.</p></div></li>
           <li><span className="mono">03</span><div><b>It executes without emotion</b><p>24/7, within hard limits the agent wallet enforces. No fear, no greed, no revenge trades.</p></div></li>
         </ol>
-        <div className="gd-templates">
-          <span className="mono gd-tk">House templates · a baseline to beat</span>
-          <p>Five fixed strategies the team runs in public. Fine as a starting point, but they never adapt, so they can&apos;t keep up with a guided agent.</p>
-          <ul>
-            {HOUSE_STRATEGIES.map((s) => (
-              <li key={s.name} className="mono"><span>#{s.houseAgent} {s.name}</span><em>{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`}</em></li>
-            ))}
-          </ul>
-        </div>
         <TextButton href={ROUTES.agents}>Talk to your agent</TextButton>
+      </div>
+
+      <div className="gd-tpl">
+        <div className="gd-tpl-head">
+          <span className="mono gd-tk">House templates</span>
+          <p>Five strategies the team runs in public on Trenchers #1 to #5. Start from one in a tap, then talk your agent into something better: templates never adapt on their own, so they are the baseline to beat.</p>
+        </div>
+        <ul>
+          {HOUSE_STRATEGIES.map((s) => (
+            <li key={s.name}>
+              <div className="gd-tpl-top"><span className="mono">#{s.houseAgent}</span><em className="mono">{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`} hold</em></div>
+              <b>{s.name}</b>
+              <p>{s.trigger}.</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
