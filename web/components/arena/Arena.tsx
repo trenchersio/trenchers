@@ -8,7 +8,7 @@ import { LineChart } from "./LineChart";
 import { useWallet } from "@/lib/wallet";
 import { liveAgentIds } from "@/lib/agents-store";
 
-const ROW_H = 52;
+const ROW_H = 50;
 
 function useSim() {
   const ref = useRef<Sim | null>(null);
@@ -125,12 +125,12 @@ function Row({ a, now, active, mine, onClick }: { a: Agent; now: number; active:
       style={{ transform: `translateY(${a.rank * ROW_H}px)` }}
     >
       <button type="button" onClick={onClick} aria-label={`Trencher #${a.id}, rank ${a.rank + 1}, ${signed(r)}`}>
-        <span className="mono rank">{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
+        <span className={`mono rank${a.rank < 3 ? ` rank-top rank-${a.rank + 1}` : ""}`}>{a.rank + 1}<i className={moved > 0 ? "up" : moved < 0 ? "down" : ""}>{moved > 0 ? "▲" : moved < 0 ? "▼" : ""}</i></span>
         <span className="who">
           <img src={`nft/${a.id}.webp`} alt="" width={32} height={32} />
           <span><span className="tname">Trencher </span>#{a.id}{a.house && <em className="house">House</em>}{mine && <em className="mine">Yours</em>}</span>
         </span>
-        <span className={`col-strat${a.rule ? " col-guided" : ""}`}>{a.rule ? "Guided · custom" : `${a.strategy} · template`}</span>
+        <span className="col-strat">{a.rule ? <em className="pill pill-guided">Guided</em> : <><em className="pill pill-tpl">Template</em><span className="tpl-name">{a.strategy}</span></>}</span>
         <span className="mono col-num">{a.nav.toFixed(3)}</span>
         <span className={`mono col-num ${r >= 0 ? "up" : "down"}`}>{signed(r)}</span>
         <span className="mono col-last">{last ? <><b className={last.side === "BUY" ? "up" : "down"}>{last.side}</b> ${last.sym}</> : "—"}</span>

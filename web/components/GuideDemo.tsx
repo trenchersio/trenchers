@@ -39,7 +39,10 @@ export function GuideDemo() {
           <li><span className="mono">02</span><div><b>Every message becomes a rule</b><p>The agent shows the exact rule it will trade. Nothing changes until you apply it, and every version is kept.</p></div></li>
           <li><span className="mono">03</span><div><b>It executes without emotion</b><p>24/7, within hard limits the agent wallet enforces. No fear, no greed, no revenge trades.</p></div></li>
         </ol>
-        <TextButton href={ROUTES.agents}>Talk to your agent</TextButton>
+        <div className="gd-cta">
+          <div><b>Ready to guide yours?</b><span>Open your NFT / Agent Profile and send the first message.</span></div>
+          <TextButton href={ROUTES.agents}>Talk to your agent</TextButton>
+        </div>
       </div>
 
       <div className="gd-tpl">
