@@ -5,7 +5,7 @@ import type { CustomRule } from "@/lib/custom-strategy";
 import type { ChatMsg } from "@/lib/agents-store";
 
 /**
- * "Guide your agent" in three steps: choose its strategy (talk to it, or start from a house template),
+ * "Train your agent" in three steps: choose its strategy (talk to it, or start from a house template),
  * set its hard limits, then start or pause trading. Used by the live profile and the demo walkthrough.
  */
 export type GuideTemplate = { name: string; text: string; house?: number | null };
@@ -35,10 +35,10 @@ export function GuideFlow(p: {
   const s1 = p.rule ? "done" : "now";
   const s3 = p.trading ? "done" : p.rule ? "now" : "todo";
   return (
-    <section className="gf" aria-label="Guide your agent">
+    <section className="gf" aria-label="Train your agent">
       <header className="gf-head">
         <div>
-          <span className="mono gf-kick">Guide your agent</span>
+          <span className="mono gf-kick">Train your agent</span>
           <h3>Strategy, limits, go</h3>
         </div>
         <span className={`gf-state mono ${p.trading ? "on" : ""}`}><i />{p.trading ? "Trading" : p.rule ? "Paused" : "Not started"}</span>

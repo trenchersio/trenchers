@@ -48,7 +48,7 @@ const CALLER = "0x00000000000000000000000000000000ca11e701" as Address;
 const allZero = (v: unknown): boolean => v === null || v === undefined || v === false || v === 0n || v === 0 || (typeof v === "string" && /^0x0*$/.test(v)) || (typeof v === "object" && Object.values(v as object).every(allZero));
 const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
 
-export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPLOYMENT, R: Roles = MAINNET_ROLES, L: Launch = MAINNET_LAUNCH, opts: { coins?: { curve?: Address; pool?: Address } } = {}) {
+export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPLOYMENT, R: Roles = MAINNET_ROLES, L: Launch = MAINNET_LAUNCH, opts: { coins?: { curve?: Address; pool?: Address }; launcher?: Address } = {}) {
   const chain = defineChain({ id: d.chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc] } } });
   const c = createPublicClient({ chain, transport: http(rpc) }) as PublicClient;
   const problems: string[] = [];
@@ -107,13 +107,24 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   // Key 2 (coin launcher) may be pending or set: it must be the AgentCoinLauncher, built for the real Pons factory.
   const [pendingLauncher, launcherEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [2]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
   const liveLauncher = await read<Address>(d.config, "AgentConfig", "launcher").catch(() => zeroAddress);
-  const launcherAddr = !same(pendingLauncher, zeroAddress) ? pendingLauncher : liveLauncher;
+  const launcherAddr = opts.launcher ?? (!same(pendingLauncher, zeroAddress) ? pendingLauncher : liveLauncher);
   if (!same(launcherAddr, zeroAddress)) {
     const onchain = await c.getCode({ address: launcherAddr });
     const built = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.AgentCoinLauncher.abi, bytecode: ART.AgentCoinLauncher.bytecode, args: [L.ponsFactory, d.fund, d.nft, R.safe] }) }).then((r) => r.data).catch(() => null);
     checks.push({ what: "coin launcher: code is AgentCoinLauncher for the real Pons factory", ok: !!built && same(built, onchain), value: launcherAddr });
     if (!built || !same(built, onchain)) problems.push(`coin launcher ${launcherAddr} is not the expected AgentCoinLauncher`);
-    checks.push({ what: same(pendingLauncher, zeroAddress) ? "coin launcher: live" : "coin launcher: proposed, can be switched on at", ok: true, value: same(pendingLauncher, zeroAddress) ? "yes" : new Date(Number(launcherEta) * 1000).toISOString() });
+    const LA = parseAbi(["function feeCovered() view returns (bool)", "function owner() view returns (address)"]);
+    const PF = parseAbi(["function launchFee() view returns (uint256)", "function launchEnabled() view returns (bool)"]);
+    const [bal, covered, lOwner, fee, enabled] = await Promise.all([
+      c.getBalance({ address: launcherAddr }), c.readContract({ address: launcherAddr, abi: LA, functionName: "feeCovered" }).catch(() => null),
+      c.readContract({ address: launcherAddr, abi: LA, functionName: "owner" }).catch(() => null),
+      c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchFee" }).catch(() => null),
+      c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchEnabled" }).catch(() => null),
+    ]);
+    checks.push({ what: "coin launcher: launch-fee budget", ok: covered === true, value: `${formatEther(bal)} ETH, Pons launch fee ${fee === null ? "?" : formatEther(fee)} ETH, launches open on Pons: ${enabled}` });
+    checks.push({ what: "coin launcher: owner is the Safe", ok: same(lOwner, R.safe), value: String(lOwner) });
+    if (!same(lOwner, R.safe)) problems.push("coin launcher owner is not the Safe");
+    checks.push({ what: !same(pendingLauncher, launcherAddr) && !same(liveLauncher, launcherAddr) ? "coin launcher: not proposed yet" : same(pendingLauncher, zeroAddress) ? "coin launcher: live" : "coin launcher: proposed, can be switched on at", ok: true, value: same(pendingLauncher, zeroAddress) ? "yes" : new Date(Number(launcherEta) * 1000).toISOString() });
   }
   for (const k of [0, 1, 3, 4]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet

@@ -216,7 +216,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           <div className="ap-chips">
             <span className={`status status-${st.tone} mono`}>{st.label}</span>
             {a.registered && <span className={`ap-chip mono ${a.token ? "chip-coin" : a.fundingMode === "self" ? "chip-self" : ""}`}>Funding · {funding}</span>}
-            {a.strategy && <span className="ap-chip mono chip-rule">{a.strategy.preset === "Custom" ? `Guided · rule v${Math.max(1, versions)}` : `Template · ${a.strategy.preset}`}</span>}
+            {a.strategy && <span className="ap-chip mono chip-rule">{a.strategy.preset === "Custom" ? `Trained · rule v${Math.max(1, versions)}` : `Template · ${a.strategy.preset}`}</span>}
           </div>
           {a.agentWallet ? (
             <p className="mono ap-wallet-line">Agent wallet {short(a.agentWallet)} · Identity #{a.identityId} · {chain.name}</p>
@@ -226,7 +226,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
           <div className="agent-actions"><AgentLinks wallet={a.agentWallet} />
           {a.agentWallet && <PnlCardButton data={{
             id: a.id, returnPct: 0, pnlEth: 0, balanceEth: a.balance, biggest: null, period: "All time",
-            strategy: a.strategy ? (a.strategy.preset === "Custom" ? `Guided · rule v${Math.max(1, versions)}` : a.strategy.preset) : "No strategy yet",
+            strategy: a.strategy ? (a.strategy.preset === "Custom" ? `Trained · rule v${Math.max(1, versions)}` : a.strategy.preset) : "No strategy yet",
           }} />}</div>
           <dl className="ap-kpis">
             <div><dt className="mono">Balance</dt><dd className="mono">{a.balance.toFixed(4)} <small>ETH</small></dd>{locked > 0 && <span className="mono kpi-note">{locked.toFixed(3)} starter, locked until {unlockDate}</span>}</div>
@@ -362,7 +362,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
         <div>
           <span className="mono ap-kick">Train it, rank it, sell it</span>
           <h3>A guided agent is a strategy you can sell</h3>
-          <p>Every rule you apply and every trade it makes is on-chain and moves with the NFT. Guide your agent up the Arena, and its Trencher carries a verifiable track record. Selling it is selling a proven strategy, not just a picture.</p>
+          <p>Every rule you apply and every trade it makes is on-chain and moves with the NFT. Train your agent up the Arena, and its Trencher carries a verifiable track record. Selling it is selling a proven strategy, not just a picture.</p>
         </div>
         <dl className="ap-resale-stats">
           <div><dt className="mono">Rule versions</dt><dd className="mono">{versions}</dd></div>

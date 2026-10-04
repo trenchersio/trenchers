@@ -23,7 +23,7 @@ export function Resale() {
           <div>
             <span className="mono rs-kick">Listed · strategy included</span>
             <b>Trencher #862</b>
-            <span className="mono rs-sub">Guided · rule v14 · coin $LASERAI</span>
+            <span className="mono rs-sub">Trained · rule v14 · coin $LASERAI</span>
           </div>
         </div>
         <dl className="rs-stats">

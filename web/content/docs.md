@@ -95,7 +95,7 @@ The NFT / Agent Profile page follows the same three sections:
 | --- | --- |
 | **1. Awaken** | One transaction creates the agent wallet and claims the 0.01 ETH starter balance (the NFT turns from grey to colour); register the identity, choose option A or B, optionally top up |
 | **2. Coin launchpad** (optional, option A) | Image, name, symbol, description, website, X, Telegram; the agent wallet launches the coin on Pons |
-| **3. Guide your agent** | Talk to the agent in plain English, apply the rules it proposes, set limits, enter the Arena |
+| **3. Train your agent** | Talk to the agent in plain English, apply the rules it proposes, set limits, enter the Arena |
 
 1. **Mint a Trencher.** Anyone mints on trenchers.io at **0.02 ETH**, up to 10 per transaction, no allowlist. Five are minted to the team at deploy as house agents. After the mint, Trenchers trade on OpenSea.
 2. **Awaken it.** Half of the mint price is waiting in the Agent Starter Fund. One claim transaction deploys the agent's wallet (ERC-6551) if it doesn't exist yet, sends the 0.01 ETH straight into it as the agent's starter balance, and flips the NFT's metadata from dormant (grey) to awake (colour).

@@ -38,7 +38,7 @@ type Task = { label: string; phase: "check" | "sign" | "chain" | "done" | "error
 const TEMPLATES = STRATEGIES.filter((s) => s.name !== "Custom").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.`, house: s.houseAgent }));
 const LOCK_DAYS = 180;
 const NAV = [
-  { id: "overview", label: "Overview" }, { id: "funding", label: "Funding" }, { id: "guide", label: "Guide" },
+  { id: "overview", label: "Overview" }, { id: "funding", label: "Funding" }, { id: "guide", label: "Train" },
   { id: "trades", label: "Trades" }, { id: "track", label: "Track all" },
 ];
 const EXPLORER = chain.blockExplorers?.default.url ?? "";
@@ -203,7 +203,7 @@ export function LiveAgents() {
         </div>
       )}
 
-      {sel?.deployed && <SectionNav key={sel.id} items={NAV} />}
+      {sel?.deployed && <SectionNav key={`nav-${sel.id}`} items={NAV} />}
       {sel && <Profile key={sel.id} a={sel} me={me} claim={claim} live={live} engineCount={engine?.agents.length ?? 0} busy={busy} run={run} />}
 
       {ids.length > 0 && (
@@ -287,7 +287,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
 
   const card = live ? cardFromLive(live, engineCount) : {
     id: a.id, returnPct: 0, pnlEth: 0, balanceEth: Number(formatEther(a.bal ?? 0n)), biggest: null, period: "This week",
-    strategy: a.ruleVersion ? `Guided · rule v${a.ruleVersion}` : "No rule yet",
+    strategy: a.ruleVersion ? `Trained · rule v${a.ruleVersion}` : "No rule yet",
   };
 
   return (
@@ -300,7 +300,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           <div className="ap-chips">
             <span className={`status mono ${a.awake ? "status-live" : "status-ready"}`}>{a.awake ? "Awake" : "Dormant"}</span>
             {a.deployed && <span className="ap-chip mono">{trading ? "Trading" : "Paused"}</span>}
-            {!!a.ruleVersion && <span className="ap-chip mono chip-rule">{tpl ? `Template · ${tpl}` : `Guided · rule v${a.ruleVersion}`}</span>}
+            {!!a.ruleVersion && <span className="ap-chip mono chip-rule">{tpl ? `Template · ${tpl}` : `Trained · rule v${a.ruleVersion}`}</span>}
             {a.house && <span className="ap-chip mono">House agent</span>}
           </div>
           {a.wallet && a.deployed ? (
@@ -379,7 +379,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           </div>
         </Fold>
 
-        <Fold id="guide" title="Guide your agent" sub="Strategy, limits, start or pause">
+        <Fold id="guide" title="Train your agent" sub="Strategy, limits, start or pause">
         <GuideFlow
           id={a.id} busy={busy}
           rule={a.ruleVersion ? { label: `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}`, text: a.ruleText ?? "Rule applied." } : null}

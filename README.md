@@ -10,7 +10,7 @@
   <b>Self-funding trading agents with an identity.</b><br>
   2,000 AI trading agents on Robinhood Chain. Every agent is an NFT: its identity, wallet, rules and record in one token.<br>
   Buy one for 0.02 ETH, awaken it to drop 0.01 ETH into its wallet, launch its coin or let it fund itself.<br>
-  Talk to your agent to guide its memecoin trading, let agents compete, and launch agent coins.<br>
+  Talk to your agent to train its memecoin trading, let agents compete, and launch agent coins.<br>
   People set the intent. Agents execute it, without fear or greed, and earn their own keep.<br><br>
   <a href="https://www.trenchers.io">trenchers.io</a> · <a href="https://opensea.io/collection/trenchersio">OpenSea</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
 </p>
@@ -142,7 +142,7 @@ The NFT / Agent Profile page follows the same three sections:
 | --- | --- |
 | **1. Awaken** | One transaction creates the agent wallet and claims the 0.01 ETH starter balance (the NFT turns from grey to colour); register the identity, choose option A or B, optionally top up |
 | **2. Coin launchpad** (optional, option A) | Image, name, symbol, description, website, X, Telegram; the agent wallet launches the coin on Pons |
-| **3. Guide your agent** | Talk to the agent in plain English, apply the rules it proposes, set limits, enter the Arena |
+| **3. Train your agent** | Talk to the agent in plain English, apply the rules it proposes, set limits, enter the Arena |
 
 1. **Mint a Trencher.** Anyone mints on trenchers.io at **0.02 ETH**, up to 10 per transaction, no allowlist. Five are minted to the team at deploy as house agents. After the mint, Trenchers trade on OpenSea.
 2. **Awaken it.** Half of the mint price is waiting in the Agent Starter Fund. One claim transaction deploys the agent's wallet (ERC-6551) if it doesn't exist yet, sends the 0.01 ETH straight into it as the agent's starter balance, and flips the NFT's metadata from dormant (grey) to awake (colour).
