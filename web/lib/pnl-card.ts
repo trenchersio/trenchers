@@ -13,6 +13,8 @@ export type PnlCardData = {
   strategy: string;           // short strategy name, e.g. "Guided · rule v3" or "Launch Flipper"
   rank?: { pos: number; of: number } | null;
   period?: string;            // e.g. "This week"
+  /** Set for a card about one closed trade instead of the agent's whole record. */
+  trade?: { sym: string; pct: number; inEth: number; outEth: number; tx: string; time: number };
 };
 
 export const CARD_W = 1200, CARD_H = 675;
@@ -21,7 +23,7 @@ const SANS = "'Space Grotesk', system-ui, sans-serif";
 const MONO = "'JetBrains Mono', ui-monospace, monospace";
 
 const signed = (v: number, digits = 1) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(digits)}`;
-const ethTxt = (v: number) => (Math.abs(v) >= 1 ? v.toFixed(3) : Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toFixed(6));
+const ethTxt = (v: number) => (Math.abs(v) >= 1 ? v.toFixed(3) : Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toFixed(6).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""));
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
@@ -43,7 +45,9 @@ export async function renderPnlCard(canvas: HTMLCanvasElement, d: PnlCardData, o
   canvas.width = CARD_W * scale; canvas.height = CARD_H * scale;
   const g = canvas.getContext("2d")!;
   g.setTransform(scale, 0, 0, scale, 0, 0);
-  const up = d.returnPct >= 0;
+  const tr = d.trade;
+  const pct = tr ? tr.pct : d.returnPct;
+  const up = pct >= 0;
   const accent = up ? C.green : C.red;
 
   // Background: dark, a faded wall of Trencher art on the right, a green glow.
@@ -69,7 +73,8 @@ export async function renderPnlCard(canvas: HTMLCanvasElement, d: PnlCardData, o
   // Header: logo left, label right.
   if (logo?.naturalWidth) g.drawImage(logo, 64, 56, 288, 32);
   g.font = `500 18px ${MONO}`; g.fillStyle = C.quiet; g.textAlign = "right"; g.textBaseline = "middle";
-  g.fillText(`AGENT PNL · ${(d.period ?? "ALL TIME").toUpperCase()}`, CARD_W - 64, 72);
+  const when = tr ? new Date(tr.time * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase() : "";
+  g.fillText(tr ? `TRADE PNL · ${when}` : `AGENT PNL · ${(d.period ?? "ALL TIME").toUpperCase()}`, CARD_W - 64, 72);
   g.textAlign = "left";
 
   // Agent: art + name + strategy.
@@ -90,13 +95,22 @@ export async function renderPnlCard(canvas: HTMLCanvasElement, d: PnlCardData, o
   // The big number.
   const by = 330;
   g.font = `700 96px ${SANS}`;
-  const big = `${signed(d.returnPct, Math.abs(d.returnPct) >= 100 ? 0 : 1)}%`;
+  const big = `${signed(pct, Math.abs(pct) >= 100 ? 0 : 1)}%`;
   const bw = Math.max(380, g.measureText(big).width + 64);
   g.fillStyle = accent; g.fillRect(64, by, bw, 128);
   g.fillStyle = C.dark; g.fillText(big, 96, by + 68);
+  if (tr) {
+    g.font = `700 52px ${SANS}`; g.fillStyle = C.fog;
+    const sym = `$${tr.sym}`; g.fillText(sym.length > 12 ? `${sym.slice(0, 11)}…` : sym, 64 + bw + 32, by + 50);
+    g.font = `500 18px ${MONO}`; g.fillStyle = C.quiet; g.fillText("one trade · bought and sold", 64 + bw + 34, by + 100);
+  }
 
   // Stats.
-  const rows: [string, string, string?][] = [
+  const rows: [string, string, string?][] = tr ? [
+    ["Bought for", `${ethTxt(tr.inEth)} ETH`],
+    ["Sold for", `${ethTxt(tr.outEth)} ETH`],
+    ["Profit", `${signed(tr.outEth - tr.inEth, 4)} ETH`, accent],
+  ] : [
     ["PnL", `${signed(d.pnlEth, 4)} ETH`, accent],
     ["Balance", `${ethTxt(d.balanceEth)} ETH`],
     ["Biggest trade", d.biggest ? `${signed(d.biggest.pct, 0)}% · $${d.biggest.sym}` : "—", d.biggest ? (d.biggest.pct >= 0 ? C.green : C.red) : undefined],
@@ -108,6 +122,7 @@ export async function renderPnlCard(canvas: HTMLCanvasElement, d: PnlCardData, o
   });
 
   // Footer.
+  if (tr) { g.font = `500 16px ${MONO}`; g.fillStyle = C.quiet; g.fillText(`On-chain · tx ${tr.tx.slice(0, 10)}…${tr.tx.slice(-6)}`, 72, CARD_H - 30); }
   g.font = `500 18px ${MONO}`; g.fillStyle = C.quiet; g.textAlign = "right";
   g.fillText("Self-funding trading agents with an identity", CARD_W - 64, CARD_H - 92);
   g.fillStyle = C.green; g.font = `600 24px ${MONO}`; g.fillText("trenchers.io", CARD_W - 64, CARD_H - 56);

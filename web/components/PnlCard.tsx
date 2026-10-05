@@ -31,7 +31,7 @@ function PnlCardModal({ data, prefix, onClose }: { data: PnlCardData; prefix: st
   const download = async () => {
     const blob = await cardBlob(ref.current!); if (!blob) return;
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `trencher-${data.id}-pnl.png`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = data.trade ? `trencher-${data.id}-${data.trade.sym}-trade.png` : `trencher-${data.id}-pnl.png`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
   const copy = async () => {

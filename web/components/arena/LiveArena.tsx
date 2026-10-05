@@ -64,6 +64,12 @@ export function cardFromLive(a: LiveAgent, of: number): PnlCardData {
   };
 }
 
+/** A card for one closed trade (a sell). The engine's pnlPct is against that position's cost, so the cost follows from it. */
+export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string; eth: string; pnlPct?: number; tx: string; time: number }): PnlCardData {
+  const out = Number(t.eth), pct = t.pnlPct ?? 0;
+  return { ...base, trade: { sym: t.symbol ?? t.token.slice(2, 8), pct, outEth: out, inEth: out / (1 + pct / 100), tx: t.tx, time: t.time } };
+}
+
 /** `only`: show just these Trenchers (the holder's own agents on their profile). */
 export function LiveArena({ only }: { only?: number[] } = {}) {
   const { feed: full, error } = useFeed();
@@ -224,6 +230,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
                 <span className="t-sym">{sym(t)}</span>
                 <span className="t-eth"><a href={`${explorer}/tx/${t.tx}`} target="_blank" rel="noreferrer">{Number(t.eth).toFixed(5)} ETH ↗</a></span>
                 <span className={`t-pnl ${t.pnlPct === undefined ? "" : t.pnlPct >= 0 ? "up" : "down"}`}>{t.pnlPct === undefined ? "" : signed(t.pnlPct)}</span>
+                <span className="t-card">{t.side === "sell" && t.pnlPct !== undefined && <PnlCardButton data={tradeCard(cardFromLive(a, of), t)} label="Card" />}</span>
               </li>
             ))}
           </ol>

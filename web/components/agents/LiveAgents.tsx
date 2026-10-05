@@ -9,7 +9,7 @@ import { GuideFlow } from "./GuideFlow";
 import { CoinLaunch } from "./CoinLaunch";
 import { Fold } from "@/components/Fold";
 import { SectionNav } from "@/components/SectionNav";
-import { cardFromLive } from "@/components/arena/LiveArena";
+import { cardFromLive, tradeCard } from "@/components/arena/LiveArena";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
 import { createPortal } from "react-dom";
@@ -413,10 +413,11 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
                   <span className="t-sym">${t.symbol ?? t.token.slice(2, 8)}</span>
                   <span className="t-eth"><a href={`${EXPLORER}/tx/${t.tx}`} target="_blank" rel="noreferrer">{Number(t.eth).toFixed(5)} ETH ↗</a></span>
                   <span className={`t-pnl ${t.pnlPct === undefined ? "" : t.pnlPct >= 0 ? "up" : "down"}`}>{t.pnlPct === undefined ? "" : signed(t.pnlPct)}</span>
+                  <span className="t-card">{t.side === "sell" && t.pnlPct !== undefined && <PnlCardButton data={tradeCard(card, t)} label="Card" />}</span>
                 </li>
               ))}
             </ol>
-          ) : <p className="empty">No trades yet. Once it has a rule and trading is on, its trades show up here and in the <a href="/arena#live">live Arena</a>.</p>}
+          ) : <p className="empty">No trades yet. Every sell gets its own shareable PnL card here. Once it has a rule and trading is on, its trades show up here and in the <a href="/arena#live">live Arena</a>.</p>}
         </section>
         </Fold>
 
