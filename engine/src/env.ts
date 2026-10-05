@@ -34,7 +34,7 @@ export const ENV = {
   START_BLOCK: BigInt(/^\d+$/.test(opt("START_BLOCK", "0")) ? opt("START_BLOCK", "0") : "0"),
   /** Max blocks per log query, for RPCs that cap ranges. */
   LOG_RANGE: BigInt(opt("LOG_RANGE", "5000")),
-  POLL_MS: Number(opt("POLL_MS", "2000")),
+  POLL_MS: Number(opt("POLL_MS", "3000")),
   /** ETH price in USD, for "volume crosses $X" rules. */
   ETH_USD: Number(opt("ETH_USD", "3000")),
   /** Pons charges a snipe tax in the first seconds after launch (99% decaying to 0 over ~5s); buys wait this long. */

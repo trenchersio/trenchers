@@ -109,6 +109,7 @@ export class Engine {
   async tick() {
     const latest = await this.pub.getBlock({ blockTag: "latest" });
     const head = latest.number!;
+    this.headTime = Number(latest.timestamp);
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
     if (head > this.cursor) await this.sync(head, true);
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
@@ -152,7 +153,11 @@ export class Engine {
     return lo;
   }
 
+  private headTime = 0;
   private async blockTime(n: bigint) {
+    // Live: a block seen this tick is at most a few seconds old, so the head's time is precise enough
+    // (and saves a chain read per block, which public RPCs rate-limit).
+    if (!this.interp && this.headTime && this.lastHead !== undefined && n >= this.lastHead - 100n) return this.headTime;
     if (this.interp) {
       const { a, b, ta, tb } = this.interp;
       return b === a ? ta : Math.round(ta + ((tb - ta) * Number(n - a)) / Number(b - a));
@@ -168,21 +173,23 @@ export class Engine {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
       const to = from + ENV.LOG_RANGE - 1n < head ? from + ENV.LOG_RANGE - 1n : head;
-      if (!live) {
+      // Replay, or catching up after a pause: interpolate block times (two reads per window, not one per block).
+      if (!live || head - from > 100n) {
         const [ba, bb] = await Promise.all([this.pub.getBlock({ blockNumber: from }), this.pub.getBlock({ blockNumber: to })]);
         this.interp = { a: from, b: to, ta: Number(ba.timestamp), tb: Number(bb.timestamp) };
       } else this.interp = null;
-      const [launches, grads, buys, sells, claims, bought, sold, nftMoves, swepts] = await Promise.all([
-        this.pub.getLogs({ address: ENV.PONS_FACTORY, event: TOKEN_LAUNCHED, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: ENV.PONS_FACTORY, event: POOL_GRADUATED, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ event: CURVE_BUY, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ event: CURVE_SELL, fromBlock: from, toBlock: to }),
+      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves] = await Promise.all([
+        this.pub.getLogs({ address: ENV.PONS_FACTORY, events: [TOKEN_LAUNCHED, POOL_GRADUATED, LAUNCH_SWEPT], fromBlock: from, toBlock: to }),
+        this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: this.adapter, event: BOUGHT, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: this.adapter, event: SOLD, fromBlock: from, toBlock: to }),
+        this.pub.getLogs({ address: this.adapter, events: [BOUGHT, SOLD], fromBlock: from, toBlock: to }),
         this.telegram && (live || to >= this.catchUpFrom) ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
-        this.pub.getLogs({ address: ENV.PONS_FACTORY, event: LAUNCH_SWEPT, fromBlock: from, toBlock: to }),
       ]);
+      const launches = factoryLogs.filter((l) => l.eventName === "TokenLaunched");
+      const grads = factoryLogs.filter((l) => l.eventName !== "TokenLaunched");
+      const swepts: typeof grads = [];
+      const buys = curveLogs.filter((l) => l.eventName === "CurveBuy"), sells = curveLogs.filter((l) => l.eventName === "CurveSell");
+      const bought = adapterLogs, sold: typeof adapterLogs = [];
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
       const rules = wallets.length ? await this.pub.getLogs({ address: wallets, events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to }) : [];
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
@@ -428,7 +435,7 @@ export class Engine {
   }
 
   private signal(kind: CustomRule["trigger"], tok: Token, t: number, extra?: { before: number; after: number }) {
-    if (kind !== "volume" || (extra && extra.before < 50_000 / ENV.ETH_USD && extra.after >= 50_000 / ENV.ETH_USD)) {
+    if (kind !== "mcap" && (kind !== "volume" || (extra && extra.before < 50_000 / ENV.ETH_USD && extra.after >= 50_000 / ENV.ETH_USD))) {
       const k = kind === "volume" ? "volume crossed $50k" : kind; const v = (this.seen[k] ??= { n: 0, last: 0 }); v.n++; v.last = Math.max(v.last, t);
     }
     if (tok.graduated && kind !== "graduation" && kind !== "devsell") return; // curve signals stop once a coin graduates
@@ -445,7 +452,8 @@ export class Engine {
       const notBefore = kind === "launch" ? tok.launchedAt + ENV.SNIPE_WAIT_SEC : t;
       this.entries.push({ wallet: ag.wallet, token: tok.token, notBefore, reason: kind });
     }
-    if (kind === "mcap") this.mcapCheck(tok, t);
+    // Market-cap triggers need two chain reads per curve trade: only when an agent actually uses one.
+    if (kind === "mcap" && [...this.agents.values()].some((ag) => ag.rule?.trigger === "mcap" && this.tradable(ag))) this.mcapCheck(tok, t);
   }
 
   /** True once the coin's curve has sold out (graduation may still be completing). */

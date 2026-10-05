@@ -43,6 +43,12 @@ async function loop() {
     const status = x.status ?? x.cause?.status;
     const details = x.details ?? x.cause?.details;
     lastError = [(x.shortMessage ?? x.message).split("\n")[0], method && `(${method})`, status && `status ${status}`, details && String(details).slice(0, 120)].filter(Boolean).join(" ");
+    // A rate-limited RPC: wait the limit out instead of retrying every few seconds (which keeps it tripped).
+    if (/rate ?limit|too many requests|429/i.test(`${lastError} ${x.status ?? ""}`)) {
+      engine.log(`RPC rate limit hit: pausing 65 s before the next update`);
+      setTimeout(loop, 65_000);
+      return;
+    }
     engine.log(`tick failed: ${lastError}`);
   }
   setTimeout(loop, ENV.POLL_MS);
