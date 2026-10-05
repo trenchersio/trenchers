@@ -200,9 +200,15 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
       report.rehearsal = steps;
       for (const s of steps) if (!s.ok) problems.push(`rehearsal: ${s.step}`);
     } catch (e) {
-      const data = (e as { data?: Hex; cause?: { data?: Hex } }).cause?.data ?? (e as { data?: Hex }).data;
+      // The revert data can sit a few levels down viem's error chain.
+      let data: Hex | undefined;
+      for (let x: unknown = e; x && !data; x = (x as { cause?: unknown }).cause) {
+        const d = (x as { data?: unknown }).data;
+        if (typeof d === "string" && d.startsWith("0x")) data = d as Hex;
+        else if (d && typeof (d as { data?: unknown }).data === "string") data = (d as { data: Hex }).data;
+      }
       let msg = (e as { shortMessage?: string }).shortMessage ?? (e as Error).message.split("\n")[0];
-      if (data) try { const de = decodeErrorResult({ abi: REHEARSAL_ABI, data }); msg = `failed at "${(de.args as [string, Hex])[0]}" (reason ${(de.args as [string, Hex])[1]})`; } catch { /* keep */ }
+      if (data) try { const de = decodeErrorResult({ abi: REHEARSAL_ABI, data }); msg = `failed at "${(de.args as [string, Hex])[0]}" (reason ${(de.args as [string, Hex])[1]})`; } catch { msg = `${msg} (revert data ${data.slice(0, 74)})`; }
       report.rehearsal = { error: msg };
       problems.push(`rehearsal: ${msg}`);
     }

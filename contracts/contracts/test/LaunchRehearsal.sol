@@ -122,8 +122,10 @@ contract LaunchRehearsal {
         _do("set limits", address(this), agent, 0, abi.encodeCall(IRhAgent.setPolicy, (0.005 ether, 0.02 ether, true, keccak256("rehearsal"), "rehearsal")));
         (n[3], n[4]) = _roundTrip("curve coin", a, agent, a.curveCoin, 0.004 ether);
         if (a.poolCoin != address(0)) (n[5], n[6]) = _roundTrip("pool coin", a, agent, a.poolCoin, 0.004 ether);
-        _do("top up agent", address(this), agent, 0.003 ether, "");
+        // Top up well above any trading loss, so there is always something above the locked starter.
+        _do("top up agent", address(this), agent, 0.02 ether, "");
         uint256 w = IRhAgent(agent).withdrawable();
+        if (w == 0) revert Failed("nothing withdrawable after a 0.02 ETH top-up", "");
         uint256 mine = address(this).balance;
         _do("holder withdraw", address(this), agent, 0, abi.encodeCall(IRhAgent.withdraw, (w)));
         n[7] = address(this).balance - mine;
