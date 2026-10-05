@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
   createPublicClient, decodeAbiParameters, decodeErrorResult, defineChain, encodeDeployData, encodeFunctionData, formatEther, http, parseAbi, parseEther,
-  zeroAddress, type Abi, type Address, type Hex, type PublicClient,
+  zeroAddress, zeroHash, keccak256, encodeAbiParameters, pad, toHex, type Abi, type Address, type Hex, type PublicClient,
 } from "viem";
 import { FORWARDER_RUNTIME, REHEARSAL_RUNTIME } from "./livecheck-code";
 import { findLiveCoins } from "./selfcheck";
@@ -48,7 +48,7 @@ const CALLER = "0x00000000000000000000000000000000ca11e701" as Address;
 const allZero = (v: unknown): boolean => v === null || v === undefined || v === false || v === 0n || v === 0 || (typeof v === "string" && /^0x0*$/.test(v)) || (typeof v === "object" && Object.values(v as object).every(allZero));
 const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
 
-export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPLOYMENT, R: Roles = MAINNET_ROLES, L: Launch = MAINNET_LAUNCH, opts: { coins?: { curve?: Address; pool?: Address }; launcher?: Address } = {}) {
+export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPLOYMENT, R: Roles = MAINNET_ROLES, L: Launch = MAINNET_LAUNCH, opts: { coins?: { curve?: Address; pool?: Address }; walletV2?: Address } = {}) {
   const chain = defineChain({ id: d.chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc] } } });
   const c = createPublicClient({ chain, transport: http(rpc) }) as PublicClient;
   const problems: string[] = [];
@@ -98,35 +98,79 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   await expect("settings: engine wallet", () => read(d.config, "AgentConfig", "engine"), R.engine);
   await expect("settings: trading route", () => read(d.config, "AgentConfig", "router"), d.adapter);
   await expect("settings: starter fund", () => read(d.config, "AgentConfig", "starterFund"), d.fund);
-  await expect("settings: agent wallet code", () => read(d.config, "AgentConfig", "accountLogic"), d.logic);
-  await expect("settings: one wallet code version so far", () => read(d.config, "AgentConfig", "accountLogicVersions"), 1n);
+  // (agent wallet code: the original, or version 2 once it is switched on; checked below)
   await expect("settings: guardian", () => read(d.config, "AgentConfig", "guardian"), R.guardian);
   await expect("settings: sealed (48h notice for any change)", () => read(d.config, "AgentConfig", "isSealed"), true);
   await expect("settings: not paused", () => read(d.config, "AgentConfig", "paused"), false);
   await expect("settings: 48h notice", () => read(d.config, "AgentConfig", "TIMELOCK"), 172800n);
-  // Key 2 (coin launcher) may be pending or set: it must be the AgentCoinLauncher, built for the real Pons factory.
+  // ---- Agent coins: agent wallet version 2 launches the coin itself, straight on the Pons factory (keys 2 and 4).
+  const [pendingLogic, logicEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [4]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
+  const liveLogic = await read<Address>(d.config, "AgentConfig", "accountLogic").catch(() => zeroAddress);
+  const versions = await read<bigint>(d.config, "AgentConfig", "accountLogicVersions").catch(() => 0n);
+  const v2Runtime = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.TrenchersAgentAccountV2.abi, bytecode: ART.TrenchersAgentAccountV2.bytecode, args: [d.config, d.fund] }) }).then((r) => r.data ?? null).catch(() => null);
+  const v2Addr: Address | null = opts.walletV2 ?? (!same(pendingLogic, zeroAddress) ? pendingLogic : !same(liveLogic, d.logic) && !same(liveLogic, zeroAddress) ? liveLogic : null);
+  checks.push({ what: "settings: agent wallet code is the original or version 2", ok: same(liveLogic, d.logic) || (!!v2Addr && same(liveLogic, v2Addr)), value: liveLogic });
+  checks.push({ what: "settings: wallet code versions offered", ok: versions === 1n || versions === 2n, value: String(versions) });
+  if (!same(liveLogic, d.logic) && !(v2Addr && same(liveLogic, v2Addr))) problems.push(`agent wallet code ${liveLogic} is unexpected`);
+  if (v2Addr) {
+    const onchain = await c.getCode({ address: v2Addr });
+    const ok = !!v2Runtime && same(v2Runtime, onchain);
+    checks.push({ what: "agent wallet version 2: code is TrenchersAgentAccountV2 for these settings", ok, value: v2Addr });
+    if (!ok) problems.push(`agent wallet version 2 at ${v2Addr} is not the expected code`);
+    checks.push({ what: same(pendingLogic, v2Addr) ? "agent wallet version 2: proposed, can be switched on at" : same(liveLogic, v2Addr) ? "agent wallet version 2: offered to holders" : "agent wallet version 2: not proposed yet", ok: true, value: same(pendingLogic, v2Addr) ? new Date(Number(logicEta) * 1000).toISOString() : "—" });
+  } else checks.push({ what: "agent wallet version 2: not deployed yet", ok: true, value: "—" });
+  if (!same(pendingLogic, zeroAddress) && !(v2Addr && same(pendingLogic, v2Addr))) problems.push(`unexpected pending agent wallet code ${pendingLogic}`);
+
   const [pendingLauncher, launcherEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [2]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
   const liveLauncher = await read<Address>(d.config, "AgentConfig", "launcher").catch(() => zeroAddress);
-  const launcherAddr = opts.launcher ?? (!same(pendingLauncher, zeroAddress) ? pendingLauncher : liveLauncher);
-  if (!same(launcherAddr, zeroAddress)) {
-    const onchain = await c.getCode({ address: launcherAddr });
-    const built = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.AgentCoinLauncher.abi, bytecode: ART.AgentCoinLauncher.bytecode, args: [L.ponsFactory, d.fund, d.nft, R.safe] }) }).then((r) => r.data).catch(() => null);
-    checks.push({ what: "coin launcher: code is AgentCoinLauncher for the real Pons factory", ok: !!built && same(built, onchain), value: launcherAddr });
-    if (!built || !same(built, onchain)) problems.push(`coin launcher ${launcherAddr} is not the expected AgentCoinLauncher`);
-    const LA = parseAbi(["function feeCovered() view returns (bool)", "function owner() view returns (address)"]);
-    const PF = parseAbi(["function launchFee() view returns (uint256)", "function launchEnabled() view returns (bool)"]);
-    const [bal, covered, lOwner, fee, enabled] = await Promise.all([
-      c.getBalance({ address: launcherAddr }), c.readContract({ address: launcherAddr, abi: LA, functionName: "feeCovered" }).catch(() => null),
-      c.readContract({ address: launcherAddr, abi: LA, functionName: "owner" }).catch(() => null),
-      c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchFee" }).catch(() => null),
-      c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchEnabled" }).catch(() => null),
-    ]);
-    checks.push({ what: "coin launcher: launch-fee budget", ok: covered === true, value: `${formatEther(bal)} ETH, Pons launch fee ${fee === null ? "?" : formatEther(fee)} ETH, launches open on Pons: ${enabled}` });
-    checks.push({ what: "coin launcher: owner is the Safe", ok: same(lOwner, R.safe), value: String(lOwner) });
-    if (!same(lOwner, R.safe)) problems.push("coin launcher owner is not the Safe");
-    checks.push({ what: !same(pendingLauncher, launcherAddr) && !same(liveLauncher, launcherAddr) ? "coin launcher: not proposed yet" : same(pendingLauncher, zeroAddress) ? "coin launcher: live" : "coin launcher: proposed, can be switched on at", ok: true, value: same(pendingLauncher, zeroAddress) ? "yes" : new Date(Number(launcherEta) * 1000).toISOString() });
+  const PF = parseAbi(["function launchFee() view returns (uint256)", "function launchEnabled() view returns (bool)", "function feeEscrow() view returns (address)"]);
+  const [fee, enabled, escrow] = await Promise.all([
+    c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchFee" }).catch(() => null),
+    c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchEnabled" }).catch(() => null),
+    c.readContract({ address: L.ponsFactory, abi: PF, functionName: "feeEscrow" }).catch(() => null),
+  ]);
+  const launcherState = same(liveLauncher, L.ponsFactory) ? "live" : same(pendingLauncher, L.ponsFactory) ? `proposed, can be switched on at ${new Date(Number(launcherEta) * 1000).toISOString()}` : "not proposed yet";
+  checks.push({ what: "agent coins: launcher is the Pons factory itself", ok: true, value: launcherState });
+  for (const [k, v] of [["live", liveLauncher], ["pending", pendingLauncher]] as const) {
+    if (!same(v, zeroAddress) && !same(v, L.ponsFactory)) problems.push(`coin launcher (${k}) is ${v}, not the Pons factory: propose ${L.ponsFactory} for key 2`);
   }
-  for (const k of [0, 1, 3, 4]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
+  checks.push({ what: "agent coins: Pons launch fee within what the starter may pay (0.002 ETH)", ok: fee !== null && fee <= parseEther("0.002"), value: fee === null ? "?" : `${formatEther(fee)} ETH` });
+  checks.push({ what: "agent coins: launches open on Pons", ok: enabled === true, value: String(enabled) });
+  checks.push({ what: "agent coins: Pons fee escrow (where creator fees are collected)", ok: !!escrow && !same(escrow, zeroAddress), value: String(escrow) });
+
+  // Rehearsal on the live chain (one eth_call, nothing sent): house agent #1's wallet on version 2 launches a coin
+  // straight on the real Pons factory, as its holder. Settings and the wallet's version are set by state overrides.
+  if (v2Runtime) {
+    const fakeV2 = (v2Addr ?? "0x0000000000000000000000000000000000c0ffee") as Address;
+    const slot = (key: Hex | bigint, base: bigint) => keccak256(encodeAbiParameters([{ type: typeof key === "bigint" ? "uint256" : "address" }, { type: "uint256" }], [key as never, base]));
+    const word = (v: Address | bigint) => pad(typeof v === "bigint" ? toHex(v) : v, { size: 32 });
+    const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
+    const holder1 = await read<Address>(d.nft, "TrenchersNFT", "ownerOf", [1n]);
+    const V2ABI = parseAbi([
+      "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }",
+      "struct TokenParams { string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics; }",
+      "function launchCoin(TokenParams params, uint256 launchConfigId) returns (address coin, address curve)",
+    ]);
+    try {
+      const r = await c.call({
+        account: holder1, to: wallet1,
+        data: encodeFunctionData({ abi: V2ABI, functionName: "launchCoin", args: [{ name: "Rehearsal", symbol: "RHSL", logo: "", description: "", socials: { twitter: "", telegram: "", discord: "", website: "", farcaster: "" }, creatorFeeRecipient: zeroAddress, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash }, 0n] }),
+        stateOverride: [
+          ...(v2Addr ? [] : [{ address: fakeV2, code: v2Runtime as Hex }]),
+          { address: d.config, stateDiff: [{ slot: slot(2n, 1n), value: word(L.ponsFactory) }, { slot: slot(fakeV2, 3n), value: word(1n) }] },
+          { address: wallet1, balance: parseEther("0.01"), stateDiff: [{ slot: "0xb7b5a01d4aafd4bfc48752d90fbca5d48b765dd637cd324b455d0308dee35ef8", value: word(fakeV2) }] },
+          { address: holder1, balance: parseEther("1") },
+        ],
+      });
+      const [coin] = decodeAbiParameters([{ type: "address" }, { type: "address" }], r.data!);
+      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 2) deploys a coin on the real Pons factory", ok: !same(coin, zeroAddress), value: coin });
+    } catch (e) {
+      const m = (e as { shortMessage?: string }).shortMessage ?? (e as Error).message.split("\n")[0];
+      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 2) deploys a coin on the real Pons factory", ok: false, value: m });
+      problems.push(`agent coins rehearsal: ${m}`);
+    }
+  }
+  for (const k of [0, 1, 3]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet
   await expect("agent wallet: original code", () => read(d.impl, "TrenchersAgentWallet", "ORIGINAL_VERSION"), d.logic);
   await expect("agent wallet: runs the original code", () => read(d.impl, "TrenchersAgentWallet", "agentLogic"), d.logic);

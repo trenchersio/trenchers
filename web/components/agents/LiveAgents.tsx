@@ -340,10 +340,10 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
       {a.deployed && (<>
         {upgrade && (
           <section className="panel-card tn-upgrade-like">
-            <h3>A fixed version of the agent wallet is available</h3>
-            <p>The team found and fixed an issue in the agent wallet code and offered a new version, announced 48 hours in advance. Your wallet doesn&apos;t change unless you choose to. Upgrading keeps the same address, balance, rules and track record, and you can switch back any time.</p>
+            <h3>A new version of the agent wallet is available</h3>
+            <p>Version 2 lets your agent deploy its own coin itself (the agent wallet becomes the coin&apos;s creator on Pons) and collect its creator fees at any time. It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
             <div className="actions">
-              <TextButton onClick={() => setVersion(a.offered!, `Upgrading #${a.id} to the fixed wallet version`)} disabled={busy}>Upgrade my agent wallet</TextButton>
+              <TextButton onClick={() => setVersion(a.offered!, `Switching #${a.id} to agent wallet version 2`)} disabled={busy}>Switch to version 2</TextButton>
               <TextButton href={`${EXPLORER}/address/${a.offered}#code`} external>View the new code</TextButton>
             </div>
           </section>
@@ -375,7 +375,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
               </div>
               {(a.locked ?? 0n) > 0n && <p className="live-lock">🔒 <b>{fmt(a.locked)} ETH is locked</b>: only the starter balance from awakening, for 6 months{unlock ? <> (until <b>{unlock}</b>)</> : null}. The agent can still trade with it. Your own deposits and any profits can be withdrawn instantly.</p>}
             </section>
-            <CoinLaunch id={a.id} wallet={a.wallet!} me={me} free={a.free ?? 0n} busy={busy} run={run} />
+            <CoinLaunch id={a.id} wallet={a.wallet!} me={me} bal={a.bal ?? 0n} busy={busy} run={run} />
           </div>
         </Fold>
 
@@ -422,7 +422,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         </Fold>
 
         {onCustom && (
-          <p className="muted-note live-version">This wallet runs a fixed version you opted in to. <button type="button" className="tbtn" onClick={() => setVersion(a.original!, `Switching #${a.id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button></p>
+          <p className="muted-note live-version">This wallet runs a newer version you opted in to. <button type="button" className="tbtn" onClick={() => setVersion(a.original!, `Switching #${a.id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button></p>
         )}
       </>)}
     </div>

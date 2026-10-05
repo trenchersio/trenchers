@@ -25,7 +25,7 @@ let verifyRunning = false;
 let verifyLauncher: `0x${string}` | null = null;
 function runVerify() {
   verifyRunning = true;
-  verifyDeployment(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com", undefined, undefined, undefined, verifyLauncher ? { launcher: verifyLauncher } : {})
+  verifyDeployment(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com", undefined, undefined, undefined, verifyLauncher ? { walletV2: verifyLauncher } : {})
     .catch((e) => ({ ok: false, error: (e as Error).message }))
     .then((r) => { lastVerify = { t: Date.now(), body: JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2) }; })
     .finally(() => { verifyRunning = false; });
@@ -66,7 +66,7 @@ const server = createServer(async (req, res) => {
     } else if (path === "/verify") {
       // Read-only check of the Trenchers mainnet deployment (see verify.ts); runs in the background, cached 5 minutes.
       const q = new URLSearchParams((req.url ?? "").split("?")[1] ?? "");
-      const l = q.get("launcher");
+      const l = q.get("v2") ?? q.get("launcher");
       if (l && /^0x[0-9a-fA-F]{40}$/.test(l) && !verifyRunning) { verifyLauncher = l as `0x${string}`; runVerify(); }
       else if (!verifyRunning && (!lastVerify || Date.now() - lastVerify.t > 300_000)) runVerify();
       res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));

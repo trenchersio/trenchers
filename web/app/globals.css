@@ -1937,3 +1937,7 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .trades .t-card .pnl-btn { margin: 0; font: 500 11px var(--mono); padding: 4px 8px; border: 1px solid rgba(57,255,136,.5); border-radius: 6px; background: rgba(57,255,136,.08); color: var(--green); cursor: pointer; }
 .trades .t-card .pnl-btn:hover, .trades .t-card .pnl-btn:focus-visible { background: rgba(57,255,136,.16); }
 .trades .t-card .pnl-btn::before, .trades .t-card .pnl-btn::after { content: none; }
+/* Agent coin: the one-time switch to agent wallet version 2 before launching. */
+.coin-step { margin: 4px 0 14px; padding: 14px 16px; border: 1px solid rgba(57,255,136,.4); border-radius: 12px; background: rgba(57,255,136,.06); display: grid; gap: 10px; justify-items: start; }
+.coin-step p { margin: 0; }
+.coin-own .agent-actions { align-items: center; }

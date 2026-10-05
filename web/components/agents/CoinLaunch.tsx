@@ -1,34 +1,36 @@
 "use client";
 import { useEffect, useState } from "react";
-import { decodeAbiParameters, encodeFunctionData, formatEther, parseAbi, zeroAddress, zeroHash, type Address, type Hex } from "viem";
+import { formatEther, parseAbi, zeroAddress, zeroHash, type Address } from "viem";
 import { ABI, DEPLOYMENT, reader, sendCall } from "@/lib/chain";
 import { EXPLORER, gmgnToken } from "@/lib/constants";
 
 /**
- * "Launch its coin": the agent wallet launches its own Pons coin through the coin launcher set in AgentConfig.
- * The coin's creator fees go to the agent wallet, and the engine never trades it. Trenchers pays the Pons launch
- * fee (from the launcher's balance), so an agent can launch with nothing but its starter.
+ * "Its own coin": with agent wallet version 2 the agent wallet itself calls the Pons launch factory, so Pons records
+ * the agent wallet as the coin's deployer and creator. The Pons launch fee comes out of the agent's balance (the
+ * starter may pay it). Creator fees go to the agent wallet and can be collected any time; the engine never trades it.
  */
-const LAUNCHER_ABI = parseAbi([
+const PONS_FACTORY = "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e" as Address;
+const AGENT_V2 = parseAbi([
   "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }",
   "struct TokenParams { string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics; }",
-  "function launch(TokenParams params, uint256 launchConfigId, address expected) payable returns (address coin)",
-  "function feeCovered() view returns (bool)",
+  "function launchCoin(TokenParams params, uint256 launchConfigId) returns (address coin, address curve)",
+  "function claimCoinFees() returns (uint256 amount)",
+  "function VERSION() view returns (uint256)",
+  "function agentLogic() view returns (address)",
+  "function setAgentVersion(address logic)",
 ]);
+const CFG = parseAbi(["function accountLogic() view returns (address)", "function isAccountLogic(address) view returns (bool)"]);
 const PONS = parseAbi(["function launchFee() view returns (uint256)"]);
 const ERC20 = parseAbi(["function symbol() view returns (string)", "function name() view returns (string)"]);
-const PONS_FACTORY = "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e" as Address;
 const SITE = "https://www.trenchers.io";
-const fmt = (v: bigint) => Number(formatEther(v)).toFixed(6).replace(/\.?0+$/, "");
+const fmt = (v: bigint) => Number(formatEther(v)).toFixed(6).replace(/\.?0+$/, "") || "0";
 
-type Props = { id: number; wallet: Address; me: Address; free: bigint; busy: boolean; run: (label: string, fn: (ph: (p: "sign" | "chain") => void) => Promise<unknown>, refreshId?: number) => Promise<boolean> };
+type Props = { id: number; wallet: Address; me: Address; bal: bigint; busy: boolean; run: (label: string, fn: (ph: (p: "sign" | "chain") => void) => Promise<unknown>, refreshId?: number) => Promise<boolean> };
+type State = { ready: boolean; opens: number | null; v2: Address | null; onV2: boolean; fee: bigint | null };
 
-export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
-  const [launcher, setLauncher] = useState<Address | null | undefined>(undefined);
-  const [eta, setEta] = useState<number | null>(null);
+export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
+  const [st, setSt] = useState<State | undefined>(undefined);
   const [coin, setCoin] = useState<{ address: Address; symbol: string; name: string } | null>(null);
-  const [fee, setFee] = useState<bigint | null>(null);
-  const [covered, setCovered] = useState<boolean | null>(null);
   const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain. Its creator fees fund the agent.`, x: "", telegram: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const [ver, setVer] = useState(0);
@@ -37,17 +39,23 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
     const d = DEPLOYMENT; if (!d) return;
     const c = reader();
     (async () => {
-      const [l, p, own, lf] = await Promise.all([
+      const [launcher, pL, pV, current, own, fee, logic] = await Promise.all([
         c.readContract({ address: d.config, abi: ABI.config, functionName: "launcher" }).catch(() => zeroAddress),
         c.readContract({ address: d.config, abi: ABI.config, functionName: "pending", args: [2] }).catch(() => [zeroAddress, 0n] as const),
+        c.readContract({ address: d.config, abi: ABI.config, functionName: "pending", args: [4] }).catch(() => [zeroAddress, 0n] as const),
+        c.readContract({ address: d.config, abi: CFG, functionName: "accountLogic" }).catch(() => zeroAddress),
         c.readContract({ address: wallet, abi: ABI.agent, functionName: "coin" }).catch(() => zeroAddress),
         c.readContract({ address: PONS_FACTORY, abi: PONS, functionName: "launchFee" }).catch(() => null),
+        c.readContract({ address: wallet, abi: AGENT_V2, functionName: "agentLogic" }).catch(() => zeroAddress),
       ]);
-      setLauncher(l === zeroAddress ? null : l);
-      const target = l !== zeroAddress ? l : p[0];
-      if (target !== zeroAddress) setCovered(await c.readContract({ address: target, abi: LAUNCHER_ABI, functionName: "feeCovered" }).catch(() => null));
-      setEta(p[0] !== zeroAddress ? Number(p[1]) : null);
-      setFee(lf);
+      // Version 2: the offered one, or the one waiting out its 48-hour notice.
+      const isV2 = (a: Address) => (a === zeroAddress ? Promise.resolve(false) : c.readContract({ address: a, abi: AGENT_V2, functionName: "VERSION" }).then((v) => v === 2n).catch(() => false));
+      const v2 = (await isV2(current)) ? current : (await isV2(pV[0])) ? pV[0] : null;
+      const offered = v2 ? await c.readContract({ address: d.config, abi: CFG, functionName: "isAccountLogic", args: [v2] }).catch(() => false) : false;
+      const launcherOk = launcher.toLowerCase() === PONS_FACTORY.toLowerCase();
+      const ready = launcherOk && offered;
+      const etas = [!launcherOk && pL[0].toLowerCase() === PONS_FACTORY.toLowerCase() ? Number(pL[1]) : 0, !offered && v2 && pV[0] === v2 ? Number(pV[1]) : 0];
+      setSt({ ready, opens: ready ? null : Math.max(...etas) || null, v2, onV2: !!v2 && logic.toLowerCase() === v2.toLowerCase(), fee });
       if (own !== zeroAddress) {
         const [symbol, name] = await Promise.all([c.readContract({ address: own, abi: ERC20, functionName: "symbol" }).catch(() => "?"), c.readContract({ address: own, abi: ERC20, functionName: "name" }).catch(() => "")]);
         setCoin({ address: own, symbol, name });
@@ -55,37 +63,27 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
     })();
   }, [wallet, ver]);
 
-  const params = (expected: Address) => encodeFunctionData({
-    abi: LAUNCHER_ABI, functionName: "launch",
-    args: [{
-      name: f.name.trim(), symbol: f.symbol.trim().toUpperCase(), logo: `${SITE}/meta/img/awake/${id}.png`, description: f.description.trim(),
-      socials: { twitter: f.x.trim(), telegram: f.telegram.trim(), discord: "", website: `${SITE}/collection#${id}`, farcaster: "" },
-      creatorFeeRecipient: zeroAddress, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash,
-    }, 0n, expected],
-  });
+  const sym = f.symbol.trim().toUpperCase();
+  const switchV2 = () => run(`Switching Trencher #${id} to agent wallet version 2`, (ph) =>
+    sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "setAgentVersion", args: [st!.v2!] }, ph), id).then((ok) => { if (ok) setVer((v) => v + 1); });
 
-  const launch = () => run(`Launching $${f.symbol.trim().toUpperCase()} for Trencher #${id}`, async (ph) => {
-    if (!launcher) throw new Error("Coin launches aren't switched on yet.");
-    // Trenchers pays the launch fee; if that money ever runs out, the agent's own free balance covers it.
-    const own = covered === false && fee !== null ? fee : 0n;
-    if (own > free) throw new Error(`The launch-fee budget is empty right now. Deposit ${fmt(own - free)} ETH to pay the fee yourself, or try again later.`);
-    // Pons gives each new coin the next address, so: work out the address right now, then launch exactly
-    // there. If someone else's launch lands first, the launcher refuses (nothing spent) and we try again.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const sim = await reader().simulateContract({ address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(zeroAddress), own, zeroAddress], account: me });
-      const [expected] = decodeAbiParameters([{ type: "address" }], sim.result as Hex);
-      try {
-        await sendCall(me, { address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [params(expected as Address), own, expected] }, ph);
-        return;
-      } catch (e) {
-        if (attempt === 3 || !/WrongCoin|0x[0-9a-f]{8}/i.test(String((e as Error).message))) throw e;
-        setMsg("Someone launched on Pons at the same moment; trying again…");
-      }
-    }
+  const launch = () => run(`Launching $${sym} for Trencher #${id}`, async (ph) => {
+    if (!st?.ready) throw new Error("Coin launches aren't switched on yet.");
+    if (!st.onV2) throw new Error("Switch this agent to wallet version 2 first.");
+    if (st.fee !== null && bal < st.fee) throw new Error(`The agent needs ${fmt(st.fee)} ETH for the Pons launch fee. Deposit ${fmt(st.fee - bal)} ETH first.`);
+    const params = {
+      name: f.name.trim(), symbol: sym, logo: `${SITE}/meta/img/awake/${id}.png`, description: f.description.trim(),
+      socials: { twitter: f.x.trim(), telegram: f.telegram.trim(), discord: "", website: `${SITE}/collection#${id}`, farcaster: "" },
+      creatorFeeRecipient: wallet, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash,
+    };
+    await sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "launchCoin", args: [params, 0n] }, ph);
   }, id).then((ok) => { if (ok) { setMsg(null); setVer((v) => v + 1); } });
 
+  const collect = () => run(`Collecting $${coin?.symbol ?? ""} creator fees for Trencher #${id}`, (ph) =>
+    sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "claimCoinFees" }, ph), id).then((ok) => { if (ok) setMsg("Creator fees collected into the agent wallet. They're free balance: withdraw them any time."); });
+
   const valid = f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim());
-  const opens = eta ? new Date(eta * 1000) : null;
+  const opens = st?.opens ? new Date(st.opens * 1000) : null;
 
   return (
     <section className="panel-card coin-launch">
@@ -93,21 +91,29 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
       {coin ? (
         <div className="coin-own">
           <p><b>${coin.symbol}</b> {coin.name && <span className="muted-note">· {coin.name}</span>}</p>
-          <p className="muted-note">Launched on Pons by this agent. Every trade pays creator fees to its wallet, and the engine never trades its own coin.</p>
+          <p className="muted-note">Launched on Pons by this agent&apos;s wallet. Every trade pays creator fees to the agent, and the engine never trades its own coin.</p>
           <div className="agent-actions">
+            {st?.onV2 && <button type="button" className="gf-btn go" onClick={collect} disabled={busy}>Collect creator fees</button>}
             <span className="agent-links">
               <a className="tbtn" href={gmgnToken(coin.address)} target="_blank" rel="noreferrer">GMGN ↗</a>
               <a className="tbtn" href={`${EXPLORER}/token/${coin.address}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
             </span>
           </div>
+          {msg && <p className="muted-note">{msg}</p>}
         </div>
-      ) : launcher === undefined ? (
+      ) : st === undefined ? (
         <p className="muted-note">Checking…</p>
       ) : (
-        <div className={launcher ? "" : "coin-soon"}>
-          {!launcher && <p className="coin-soon-tag">{opens ? `Opens ${opens.toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : "Coming soon"}</p>}
-          <p className="muted-note">Launch your agent&apos;s own coin on Pons, once. Every trade in it pays creator fees into the agent&apos;s wallet, and its art becomes the coin&apos;s logo. <b>Trenchers pays the launch fee</b>, so it works with just the starter balance.</p>
-          <fieldset className="coin-form" disabled={!launcher || busy}>
+        <div className={st.ready ? "" : "coin-soon"}>
+          {!st.ready && <p className="coin-soon-tag">{opens ? `Opens ${opens.toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : "Coming soon"}</p>}
+          <p className="muted-note">Launch your agent&apos;s own coin on Pons, once. <b>The agent wallet deploys it itself</b>, so it is the coin&apos;s creator: every trade in it pays creator fees into the agent&apos;s wallet, and its art becomes the coin&apos;s logo. The Pons launch fee ({st.fee === null ? "…" : `${fmt(st.fee)} ETH`}) comes out of the agent&apos;s balance, so it works with just the starter.</p>
+          {st.ready && !st.onV2 && (
+            <div className="coin-step">
+              <p><b>Step 1 · Switch to agent wallet version 2.</b> One transaction. Same wallet address, balance, rules and track record; you can switch back any time.</p>
+              <button type="button" className="gf-btn go" onClick={switchV2} disabled={busy}>Switch to version 2</button>
+            </div>
+          )}
+          <fieldset className="coin-form" disabled={!st.ready || !st.onV2 || busy}>
             <label><span className="mono">Name</span><input value={f.name} maxLength={32} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
             <label><span className="mono">Ticker</span><input className="mono" value={f.symbol} maxLength={10} onChange={(e) => setF({ ...f, symbol: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() })} /></label>
             <label className="wide"><span className="mono">Description</span><textarea rows={3} maxLength={280} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></label>
@@ -115,7 +121,9 @@ export function CoinLaunch({ id, wallet, me, free, busy, run }: Props) {
             <label><span className="mono">Telegram (optional)</span><input placeholder="https://t.me/…" value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} /></label>
           </fieldset>
           {msg && <p className="muted-note">{msg}</p>}
-          <button type="button" className="gf-btn go" onClick={launch} disabled={!launcher || busy || !valid}>{launcher ? `Launch $${f.symbol.trim().toUpperCase() || "…"}` : `Launch $${f.symbol.trim().toUpperCase() || "…"} · ${opens ? "opens soon" : "coming soon"}`}</button>
+          <button type="button" className="gf-btn go" onClick={launch} disabled={!st.ready || !st.onV2 || busy || !valid}>
+            {!st.ready ? `Launch $${sym || "…"} · ${opens ? "opens soon" : "coming soon"}` : !st.onV2 ? `Step 2 · Launch $${sym || "…"}` : `Launch $${sym || "…"}`}
+          </button>
         </div>
       )}
     </section>
