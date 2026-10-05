@@ -400,7 +400,37 @@ export class Engine {
 
   // ------------------------------------------------------------------ signals → entries
 
+  /** How often each kind of Pons signal was seen, and when last: shows on /health whether the chain is busy. */
+  seen: Record<string, { n: number; last: number }> = {};
+  private noteOnce(key: string, msg: string) {
+    if (Date.now() - (this.skipNoted.get(key as Address) ?? 0) < 3_600_000) return;
+    this.skipNoted.set(key as Address, Date.now()); this.log(msg);
+  }
+  private sellFails = new Map<string, { n: number; first: number }>();
+
+  /** Why each agent is or isn't trading right now, for /health. */
+  diag() {
+    const now = this.now(), today = BigInt(Math.floor(now / 86400));
+    const ago = (t: number) => (t ? `${Math.round((now - t) / 60)} min ago` : "never");
+    const agents = [...this.agents.values()].map((ag) => {
+      const book = this.book(ag.wallet), mine = this.trades.filter((x) => x.wallet === ag.wallet);
+      const last = mine.length ? Math.max(...mine.map((x) => x.time)) : 0;
+      const spent = ag.spentDay === today ? ag.spentToday : 0n;
+      const blocked = !ag.rule ? "no rule" : !ag.live || ag.setBy !== ag.owner ? "trading switched off" : ag.perTrade === 0n ? "no per-trade limit"
+        : book.size >= ENV.MAX_POSITIONS ? `holding the maximum ${ENV.MAX_POSITIONS} positions` : spent >= ag.dailyCap ? "daily limit reached (resets 00:00 UTC)"
+        : ag.balance < 10_000_000_000n ? "no ETH left in its wallet" : null;
+      return { id: ag.id, trigger: ag.rule?.trigger ?? null, ready: !blocked, waitingFor: blocked ?? `the next ${ag.rule!.trigger} signal`, open: book.size,
+        balance: Number(formatEther(ag.balance)).toFixed(5), spentToday: `${formatEther(spent)} / ${formatEther(ag.dailyCap)} ETH`, lastTrade: ago(last) };
+    }).filter((a) => a.trigger || a.open);
+    const launches = [...this.tokens.values()].reduce((m, x) => Math.max(m, x.launchedAt), 0);
+    const signals = Object.fromEntries(Object.entries(this.seen).map(([k, v]) => [k, `${v.n} since start, last ${ago(v.last)}`]));
+    return { lastPonsLaunch: ago(launches), signals, agents };
+  }
+
   private signal(kind: CustomRule["trigger"], tok: Token, t: number, extra?: { before: number; after: number }) {
+    if (kind !== "volume" || (extra && extra.before < 50_000 / ENV.ETH_USD && extra.after >= 50_000 / ENV.ETH_USD)) {
+      const k = kind === "volume" ? "volume crossed $50k" : kind; const v = (this.seen[k] ??= { n: 0, last: 0 }); v.n++; v.last = Math.max(v.last, t);
+    }
     if (tok.graduated && kind !== "graduation" && kind !== "devsell") return; // curve signals stop once a coin graduates
     for (const ag of this.agents.values()) {
       const r = ag.rule;
@@ -488,7 +518,8 @@ export class Engine {
       const r = ag.rule!;
       if (ag.coin && ag.coin === tok.token) continue;
       const book = this.book(ag.wallet);
-      if (book.has(tok.token) || book.size >= ENV.MAX_POSITIONS) continue;
+      if (book.has(tok.token)) continue;
+      if (book.size >= ENV.MAX_POSITIONS) { this.noteOnce(`full:${ag.wallet}`, `Agent #${ag.id} skipped ${tok.token}: already holds the maximum ${ENV.MAX_POSITIONS} positions`); continue; }
       if (r.maxAgeMin && ts - tok.launchedAt > r.maxAgeMin * 60) continue;
       if (r.minLiquidityEth) {
         const liq = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "trackedQuote" }).catch(() => 0n);
@@ -508,7 +539,7 @@ export class Engine {
       let size = ag.perTrade;
       if (spent + size > ag.dailyCap) size = ag.dailyCap > spent ? ag.dailyCap - spent : 0n;
       if (size > ag.balance) size = ag.balance;
-      if (size < 10_000_000_000n) return; // below 0.00000001 ETH: nothing worth trading
+      if (size < 10_000_000_000n) { this.noteOnce(`size:${ag.wallet}`, `Agent #${ag.id} skipped ${tok.token}: ${spent >= ag.dailyCap ? "daily limit reached" : "no ETH left in its wallet"}`); return; } // nothing worth trading
       // What the trade would really get right now (fees, snipe tax, price impact, graduation all included).
       const sim = await this.simulateTrade(ag.wallet, size, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, 0n] }));
       const fair = await this.quoteBuy(tok, size).catch(() => 0n);
@@ -537,7 +568,8 @@ export class Engine {
         const age = ts - p.openedAt;
         let why: string | null = null;
         let value = 0n;
-        try { value = await this.quoteSell(tok, p.tokens); } catch { continue; }
+        try { value = await this.quoteSell(tok, p.tokens); this.sellFails.delete(`q:${w}:${tok.token}`); }
+        catch (e) { this.failed(`q:${w}:${tok.token}`, ag, tok, p, `it can't be priced (${(e as Error).message.split("\n")[0].slice(0, 80)})`); continue; }
         const pnl = p.ethIn > 0n ? Number(value - p.ethIn) / Number(p.ethIn) * 100 : 0;
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
         else if (r?.exit === "tpsl" && r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
@@ -561,8 +593,22 @@ export class Engine {
       const minOut = (sim * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
       this.log(`Agent #${ag.id} SELL ${tok.token} (${why}), ~${Number(formatEther(sim)).toPrecision(4)} ETH`);
       await this.send(ag.wallet, "trade", [0n, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "sell", args: [tok.token, held, minOut] })]);
-    } catch (e) { this.log(`Agent #${ag.id} sell failed: ${(e as Error).message.split("\n")[0]}`); }
+      this.sellFails.delete(`s:${key}`);
+    } catch (e) { this.log(`Agent #${ag.id} sell failed: ${(e as Error).message.split("\n")[0]}`); this.failed(`s:${key}`, ag, tok, p, "its sell keeps failing"); }
     finally { this.busy.delete(key); }
+  }
+
+  /**
+   * Counts failures on one position. Once it has failed at least 5 times over 30+ minutes it stops counting against the
+   * agent's open slots, so a coin that can't be sold doesn't block new trades for good. Its tokens stay in the wallet.
+   */
+  private failed(key: string, ag: Agent, tok: Token, p: Position, why: string) {
+    const now = Date.now(), f = this.sellFails.get(key) ?? { n: 0, first: now };
+    f.n++; this.sellFails.set(key, f);
+    if (f.n < 5 || now - f.first < 1_800_000) return false;
+    this.book(ag.wallet).delete(p.token); this.sellFails.delete(key);
+    this.log(`Agent #${ag.id} set aside ${tok.token}: ${why}. Its tokens stay in the agent wallet; the slot is free for new trades.`);
+    return true;
   }
 
   private queue: Promise<unknown> = Promise.resolve();
