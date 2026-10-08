@@ -13,6 +13,7 @@ import { connectedProvider, short, useWallet } from "@/lib/wallet";
 const ABI = parseAbi([
   "function mint(uint256 quantity) payable",
   "function totalSupply() view returns (uint256)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
   "function mintOpen() view returns (bool)",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ]);
@@ -53,12 +54,11 @@ export function MintPage() {
     let alive = true;
     (async () => {
       try {
-        const head = await c.getBlockNumber();
-        const STEP = 50_000n, ranges: [bigint, bigint][] = [];
-        for (let f = BigInt(DEPLOYMENT!.startBlock); f <= head; f += STEP) ranges.push([f, f + STEP - 1n < head ? f + STEP - 1n : head]);
-        const logs = (await Promise.all(ranges.map(([a, b]) => c.getLogs({ address: NFT_ADDRESS, event: ABI[3], args: { from: zeroAddress }, fromBlock: a, toBlock: b })))).flat();
-        const list = logs.map((l) => ({ id: Number(l.args.tokenId), to: l.args.to as Address, block: l.blockNumber! }))
-          .filter((m) => m.id > 5).sort((a, b) => b.id - a.id).slice(0, 12);
+        // The 12 newest Trenchers and who holds them (no history scan).
+        const n = Number(await c.readContract({ address: NFT_ADDRESS, abi: ABI, functionName: "totalSupply" }));
+        const ids = Array.from({ length: Math.min(12, Math.max(0, n - 5)) }, (_, i) => n - i);
+        const owners = ids.length ? await c.multicall({ contracts: ids.map((id) => ({ address: NFT_ADDRESS, abi: ABI, functionName: "ownerOf", args: [BigInt(id)] }) as const), allowFailure: true }) : [];
+        const list = ids.flatMap((id, i) => (owners[i]?.status === "success" ? [{ id, to: owners[i].result as unknown as Address, block: 0n }] : []));
         if (alive) setRecent(list);
       } catch { /* the list is a bonus */ }
     })();

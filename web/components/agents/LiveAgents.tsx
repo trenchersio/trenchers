@@ -150,9 +150,11 @@ export function LiveAgents() {
 
   if (ids === null) return <Loader label="Finding your Trenchers" sub={`Reading ${short(me)} on ${chain.name}`} />;
 
-  const sel = selected ? agents[selected] : null;
+  const base = selected ? agents[selected] : null;
   const busy = !!task && task.phase !== "done" && task.phase !== "error";
-  const live = sel ? engine?.agents.find((x) => x.id === sel.id) ?? null : null;
+  const live = base ? engine?.agents.find((x) => x.id === base.id) ?? null : null;
+  // If the chain's history couldn't be read for the rule text, the engine knows the current rule too.
+  const sel = base && !base.ruleText && live?.rule ? { ...base, ruleText: live.rule } : base;
 
   return (
     <div className="ap live-ap">

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseAbiItem, formatEther, type Address } from "viem";
+import { formatEther, type Address } from "viem";
 import { TextButton } from "@/components/TextButton";
 import { useWallet, short } from "@/lib/wallet";
 import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, traits, type Status } from "@/lib/collection";
@@ -15,7 +15,6 @@ type Filter = "all" | Status | "mine";
 type Size = "s" | "m" | "l";
 type EngineAgent = { id: number; rank: number; live: boolean; rule: string | null; ruleVersion: number; nav: number; pnlPct: number; trades: number; wins: number; closed: number; wallet: string };
 type Entry = { status: Status; mine: boolean; agent: EngineAgent | null };
-const CLAIMED = parseAbiItem("event Claimed(uint256 indexed tokenId, address indexed holder, address indexed agentWallet, uint256 amount)");
 
 /** The live state of all 2,000 Trenchers: minted or not, dormant or awake, trading in the Arena, and yours. */
 function useBook(address: string | null) {
@@ -29,13 +28,13 @@ function useBook(address: string | null) {
     let alive = true;
     const load = async () => {
       try {
-        const [s, head] = await Promise.all([c.readContract({ address: d.nft, abi: ABI.nft, functionName: "totalSupply" }), c.getBlockNumber()]);
-        const STEP = 50_000n, ranges: [bigint, bigint][] = [];
-        for (let f = BigInt(d.startBlock); f <= head; f += STEP) ranges.push([f, f + STEP - 1n < head ? f + STEP - 1n : head]);
-        const logs = (await Promise.all(ranges.map(([a, b]) => c.getLogs({ address: d.fund, event: CLAIMED, fromBlock: a, toBlock: b })))).flat();
+        // Which minted Trenchers are awake: one claimed() read each, batched (no history scan).
+        const s = await c.readContract({ address: d.nft, abi: ABI.nft, functionName: "totalSupply" });
+        const ids = Array.from({ length: Math.max(0, Number(s) - 5) }, (_, i) => i + 6);
+        const res = ids.length ? await c.multicall({ contracts: ids.map((id) => ({ address: d.fund, abi: ABI.fund, functionName: "claimed", args: [BigInt(id)] }) as const), allowFailure: true }) : [];
         if (!alive) return;
         setSupply(Number(s));
-        setClaimed(new Set(logs.map((l) => Number(l.args.tokenId))));
+        setClaimed(new Set(ids.filter((_, i) => res[i]?.status === "success" && res[i].result === true)));
       } catch { if (alive) setSupply((x) => x ?? 0); }
     };
     const feed = () => fetch(`${ENGINE_URL}/arena`, { cache: "no-store" }).then((r) => r.json()).then((j: { agents?: EngineAgent[] }) => {
