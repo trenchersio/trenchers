@@ -2,7 +2,7 @@ import { WalletMenu } from "./WalletMenu";
 import { ConnectModal } from "./ConnectModal";
 import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
-import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
 
@@ -39,6 +39,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
           <NavDropdown label="Community" items={community} />
           {OPENSEA_URL && <a href={OPENSEA_URL} target="_blank" rel="noreferrer" className="tbtn">OpenSea ↗</a>}
+          {TRENCHERS_TOKEN && <a href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer" className="tbtn coin-chart-btn">$TRENCHERS ↗</a>}
           <span className="nav-sep" aria-hidden="true" />
           <WalletMenu />
         </nav>

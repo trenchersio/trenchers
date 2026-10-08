@@ -15,6 +15,8 @@ export const EXPLORER_NAME = process.env.NEXT_PUBLIC_EXPLORER_NAME || (MAINNET ?
 export const GMGN_URL = process.env.NEXT_PUBLIC_GMGN_URL || "https://gmgn.ai/robinhood/address/{address}";
 /** Pons token page. Empty until confirmed: the site then shows a plain "Pons" label. {address} is replaced. */
 export const PONS_TOKEN_URL = process.env.NEXT_PUBLIC_PONS_TOKEN_URL || "";
+/** The $TRENCHERS token, once launched: set NEXT_PUBLIC_TRENCHERS_TOKEN (its address) and a "$TRENCHERS ↗" link appears in the menu. */
+export const TRENCHERS_TOKEN = (/^0x[0-9a-fA-F]{40}$/.test((process.env.NEXT_PUBLIC_TRENCHERS_TOKEN || "").trim()) ? (process.env.NEXT_PUBLIC_TRENCHERS_TOKEN || "").trim() : "");
 export const gmgnToken = (a: string) => GMGN_URL.replace("/address/{address}", "/token/{address}").replace("{address}", a);
 export const explorerAddress = (a: string) => `${EXPLORER}/address/${a}`;
 export const gmgnAddress = (a: string) => GMGN_URL.replace("{address}", a);

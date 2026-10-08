@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
@@ -36,6 +36,7 @@ export function MobileMenu({ page }: { page: Page }) {
           </nav>
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
+            {TRENCHERS_TOKEN && <a className="tbtn coin-chart-btn" href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer">$TRENCHERS</a>}
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             {SOCIALS.x && <a className="tbtn" href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>}
             {SOCIALS.discord && <a className="tbtn" href={SOCIALS.discord} target="_blank" rel="noreferrer">Discord</a>}
