@@ -103,23 +103,24 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   await expect("settings: sealed (48h notice for any change)", () => read(d.config, "AgentConfig", "isSealed"), true);
   await expect("settings: not paused", () => read(d.config, "AgentConfig", "paused"), false);
   await expect("settings: 48h notice", () => read(d.config, "AgentConfig", "TIMELOCK"), 172800n);
-  // ---- Agent coins: agent wallet version 2 launches the coin itself, straight on the Pons factory (keys 2 and 4).
+  // ---- Agent coins: the agent wallet launches its coin itself, straight on the Pons factory (keys 2 and 4).
+  // Version 3 (current) builds nothing itself: it sends the launch call the site prepares and checks Pons's record.
   const [pendingLogic, logicEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [4]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
   const liveLogic = await read<Address>(d.config, "AgentConfig", "accountLogic").catch(() => zeroAddress);
   const versions = await read<bigint>(d.config, "AgentConfig", "accountLogicVersions").catch(() => 0n);
-  const v2Runtime = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.TrenchersAgentAccountV2.abi, bytecode: ART.TrenchersAgentAccountV2.bytecode, args: [d.config, d.fund] }) }).then((r) => r.data ?? null).catch(() => null);
-  const v2Addr: Address | null = opts.walletV2 ?? (!same(pendingLogic, zeroAddress) ? pendingLogic : !same(liveLogic, d.logic) && !same(liveLogic, zeroAddress) ? liveLogic : null);
-  checks.push({ what: "settings: agent wallet code is the original or version 2", ok: same(liveLogic, d.logic) || (!!v2Addr && same(liveLogic, v2Addr)), value: liveLogic });
-  checks.push({ what: "settings: wallet code versions offered", ok: versions === 1n || versions === 2n, value: String(versions) });
-  if (!same(liveLogic, d.logic) && !(v2Addr && same(liveLogic, v2Addr))) problems.push(`agent wallet code ${liveLogic} is unexpected`);
-  if (v2Addr) {
-    const onchain = await c.getCode({ address: v2Addr });
-    const ok = !!v2Runtime && same(v2Runtime, onchain);
-    checks.push({ what: "agent wallet version 2: code is TrenchersAgentAccountV2 for these settings", ok, value: v2Addr });
-    if (!ok) problems.push(`agent wallet version 2 at ${v2Addr} is not the expected code`);
-    checks.push({ what: same(pendingLogic, v2Addr) ? "agent wallet version 2: proposed, can be switched on at" : same(liveLogic, v2Addr) ? "agent wallet version 2: offered to holders" : "agent wallet version 2: not proposed yet", ok: true, value: same(pendingLogic, v2Addr) ? new Date(Number(logicEta) * 1000).toISOString() : "—" });
-  } else checks.push({ what: "agent wallet version 2: not deployed yet", ok: true, value: "—" });
-  if (!same(pendingLogic, zeroAddress) && !(v2Addr && same(pendingLogic, v2Addr))) problems.push(`unexpected pending agent wallet code ${pendingLogic}`);
+  const runtime = (name: string) => c.call({ account: R.deployer, data: encodeDeployData({ abi: ART[name].abi, bytecode: ART[name].bytecode, args: [d.config, d.fund] }) }).then((r) => r.data ?? null).catch(() => null);
+  const [v2Runtime, v3Runtime] = await Promise.all([runtime("TrenchersAgentAccountV2"), runtime("TrenchersAgentAccountV3")]);
+  const offered = opts.walletV2 ?? (!same(pendingLogic, zeroAddress) ? pendingLogic : !same(liveLogic, d.logic) && !same(liveLogic, zeroAddress) ? liveLogic : null);
+  checks.push({ what: "settings: agent wallet code versions offered", ok: versions >= 1n && versions <= 3n, value: String(versions) });
+  let newIsV3 = false;
+  if (offered) {
+    const onchain = await c.getCode({ address: offered });
+    newIsV3 = !!v3Runtime && same(v3Runtime, onchain);
+    const isV2 = !!v2Runtime && same(v2Runtime, onchain);
+    checks.push({ what: "newest agent wallet version: code is TrenchersAgentAccountV3 (or V2) for these settings", ok: newIsV3 || isV2, value: `${offered} · ${newIsV3 ? "version 3" : isV2 ? "version 2 (launch format may not match the live factory: offer version 3)" : "unknown code"}` });
+    if (!newIsV3 && !isV2) problems.push(`agent wallet code ${offered} is not the expected version 2 or 3`);
+    checks.push({ what: same(pendingLogic, offered) ? "newest agent wallet version: proposed, can be switched on at" : "newest agent wallet version: offered to holders", ok: true, value: same(pendingLogic, offered) ? new Date(Number(logicEta) * 1000).toISOString() : "yes" });
+  } else checks.push({ what: "agent wallet version 3: not deployed yet", ok: true, value: "—" });
 
   const [pendingLauncher, launcherEta] = await read<[Address, bigint]>(d.config, "AgentConfig", "pending", [2]).catch(() => [zeroAddress, 0n] as [Address, bigint]);
   const liveLauncher = await read<Address>(d.config, "AgentConfig", "launcher").catch(() => zeroAddress);
@@ -129,8 +130,7 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
     c.readContract({ address: L.ponsFactory, abi: PF, functionName: "launchEnabled" }).catch(() => null),
     c.readContract({ address: L.ponsFactory, abi: PF, functionName: "feeEscrow" }).catch(() => null),
   ]);
-  const launcherState = same(liveLauncher, L.ponsFactory) ? "live" : same(pendingLauncher, L.ponsFactory) ? `proposed, can be switched on at ${new Date(Number(launcherEta) * 1000).toISOString()}` : "not proposed yet";
-  checks.push({ what: "agent coins: launcher is the Pons factory itself", ok: true, value: launcherState });
+  checks.push({ what: "agent coins: launcher is the Pons factory itself", ok: true, value: same(liveLauncher, L.ponsFactory) ? "live" : same(pendingLauncher, L.ponsFactory) ? `proposed, can be switched on at ${new Date(Number(launcherEta) * 1000).toISOString()}` : "not proposed yet" });
   for (const [k, v] of [["live", liveLauncher], ["pending", pendingLauncher]] as const) {
     if (!same(v, zeroAddress) && !same(v, L.ponsFactory)) problems.push(`coin launcher (${k}) is ${v}, not the Pons factory: propose ${L.ponsFactory} for key 2`);
   }
@@ -138,58 +138,50 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   checks.push({ what: "agent coins: launches open on Pons", ok: enabled === true, value: String(enabled) });
   checks.push({ what: "agent coins: Pons fee escrow (where creator fees are collected)", ok: !!escrow && !same(escrow, zeroAddress), value: String(escrow) });
 
-  // Rehearsal on the live chain (one eth_call, nothing sent): house agent #1's wallet on version 2 launches a coin
-  // straight on the real Pons factory, as its holder. Settings and the wallet's version are set by state overrides.
-  if (v2Runtime) {
-    const fakeV2 = (v2Addr ?? "0x0000000000000000000000000000000000c0ffee") as Address;
+  // Which launch format does the live Pons factory accept? Then a full rehearsal: house agent #1's wallet on version 3
+  // launches with that format (one eth_call, nothing sent; settings and the wallet's version set by state overrides).
+  const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
+  const holder1 = await read<Address>(d.nft, "TrenchersNFT", "ownerOf", [1n]);
+  const SOC = "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }";
+  const BASE = "string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics";
+  const launchData = (withSalt: boolean, to: Address) => encodeFunctionData({
+    abi: parseAbi([SOC, `struct TokenParams { ${BASE}${withSalt ? "; bytes32 salt" : ""}; }`, "function launchToken(TokenParams params, uint256 launchConfigId, address pairToken) payable returns (address token, address curve)"]),
+    functionName: "launchToken",
+    args: [{ name: "Rehearsal", symbol: "RHSL", logo: "", description: "", socials: { twitter: "", telegram: "", discord: "", website: "", farcaster: "" }, creatorFeeRecipient: to, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash, ...(withSalt ? { salt: keccak256(toHex(`trenchers-check-${Date.now()}`)) } : {}) } as never, 0n, zeroAddress],
+  });
+  const revertData = (e: unknown) => { for (let x: unknown = e; x; x = (x as { cause?: unknown }).cause) { const dd = (x as { data?: unknown }).data; if (typeof dd === "string") return dd; if (dd && typeof (dd as { data?: unknown }).data === "string") return (dd as { data: string }).data; } return undefined; };
+  const fmt: Record<string, string> = {};
+  let accepted: boolean | null = null;
+  for (const withSalt of [true, false]) {
+    try {
+      await c.call({ account: wallet1, to: L.ponsFactory, value: fee ?? 0n, data: launchData(withSalt, wallet1), stateOverride: [{ address: wallet1, balance: parseEther("1") }] });
+      fmt[withSalt ? "with salt" : "without salt"] = "accepted"; if (accepted === null) accepted = withSalt;
+    } catch (e) { const dd = revertData(e); fmt[withSalt ? "with salt" : "without salt"] = `refused${dd && dd !== "0x" ? ` (${dd.slice(0, 10)})` : " (no reason: not a function of this factory)"}`; }
+  }
+  checks.push({ what: "agent coins: launch format the live Pons factory accepts", ok: accepted !== null, value: JSON.stringify(fmt) });
+  if (accepted === null) problems.push(`agent coins: the live Pons factory refused both launch formats ${JSON.stringify(fmt)}`);
+  if (v3Runtime && accepted !== null) {
+    const fake = (offered && newIsV3 ? offered : "0x0000000000000000000000000000000000c0ffee") as Address;
     const slot = (key: Hex | bigint, base: bigint) => keccak256(encodeAbiParameters([{ type: typeof key === "bigint" ? "uint256" : "address" }, { type: "uint256" }], [key as never, base]));
     const word = (v: Address | bigint) => pad(typeof v === "bigint" ? toHex(v) : v, { size: 32 });
-    const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
-    const holder1 = await read<Address>(d.nft, "TrenchersNFT", "ownerOf", [1n]);
-    const V2ABI = parseAbi([
-      "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }",
-      "struct TokenParams { string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics; }",
-      "function launchCoin(TokenParams params, uint256 launchConfigId) returns (address coin, address curve)",
-    ]);
     try {
       const r = await c.call({
         account: holder1, to: wallet1,
-        data: encodeFunctionData({ abi: V2ABI, functionName: "launchCoin", args: [{ name: "Rehearsal", symbol: "RHSL", logo: "", description: "", socials: { twitter: "", telegram: "", discord: "", website: "", farcaster: "" }, creatorFeeRecipient: zeroAddress, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash }, 0n] }),
+        data: encodeFunctionData({ abi: parseAbi(["function launchCoin(bytes data, uint256 fee) returns (address coin, address curve)"]), functionName: "launchCoin", args: [launchData(accepted, wallet1), fee ?? 0n] }),
         stateOverride: [
-          ...(v2Addr ? [] : [{ address: fakeV2, code: v2Runtime as Hex }]),
-          { address: d.config, stateDiff: [{ slot: slot(2n, 1n), value: word(L.ponsFactory) }, { slot: slot(fakeV2, 3n), value: word(1n) }] },
-          { address: wallet1, balance: parseEther("0.01"), stateDiff: [{ slot: "0xb7b5a01d4aafd4bfc48752d90fbca5d48b765dd637cd324b455d0308dee35ef8", value: word(fakeV2) }] },
+          ...(offered && newIsV3 ? [] : [{ address: fake, code: v3Runtime as Hex }]),
+          { address: d.config, stateDiff: [{ slot: slot(2n, 1n), value: word(L.ponsFactory) }, { slot: slot(fake, 3n), value: word(1n) }] },
+          { address: wallet1, balance: parseEther("0.01"), stateDiff: [{ slot: "0xb7b5a01d4aafd4bfc48752d90fbca5d48b765dd637cd324b455d0308dee35ef8", value: word(fake) }] },
           { address: holder1, balance: parseEther("1") },
         ],
       });
       const [coin] = decodeAbiParameters([{ type: "address" }, { type: "address" }], r.data!);
-      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 2) deploys a coin on the real Pons factory", ok: !same(coin, zeroAddress), value: coin });
+      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 3) deploys a coin on the real Pons factory, as its deployer and creator", ok: !same(coin, zeroAddress), value: coin });
     } catch (e) {
       const m = (e as { shortMessage?: string }).shortMessage ?? (e as Error).message.split("\n")[0];
-      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 2) deploys a coin on the real Pons factory", ok: false, value: m });
+      checks.push({ what: "agent coins rehearsal: house agent #1's wallet (version 3) deploys a coin on the real Pons factory, as its deployer and creator", ok: false, value: `${m} ${revertData(e)?.slice(0, 74) ?? ""}` });
       problems.push(`agent coins rehearsal: ${m}`);
     }
-  }
-  // Which launch format does the live Pons factory accept? (The published source and the deployed factory differ:
-  // newer factories take a bytes32 salt at the end of TokenParams.) One eth_call each, from house agent #1's wallet.
-  {
-    const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
-    const base = "string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics";
-    const variants = [["without salt", base], ["with salt", `${base}; bytes32 salt`]] as const;
-    const fmt: Record<string, string> = {};
-    for (const [label, fields] of variants) {
-      const abi = parseAbi(["struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }", `struct TokenParams { ${fields}; }`, "function launchToken(TokenParams params, uint256 launchConfigId, address pairToken) payable returns (address token, address curve)"]);
-      const p0 = { name: "Format check", symbol: "FMTC", logo: "", description: "", socials: { twitter: "", telegram: "", discord: "", website: "", farcaster: "" }, creatorFeeRecipient: wallet1, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash, ...(label === "with salt" ? { salt: keccak256(toHex(`trenchers-format-check-${Date.now()}`)) } : {}) };
-      try {
-        await c.call({ account: wallet1, to: L.ponsFactory, value: fee ?? 0n, data: encodeFunctionData({ abi, functionName: "launchToken", args: [p0 as never, 0n, zeroAddress] }), stateOverride: [{ address: wallet1, balance: parseEther("1") }] });
-        fmt[label] = "accepted";
-      } catch (e) {
-        let data: string | undefined;
-        for (let x: unknown = e; x && !data; x = (x as { cause?: unknown }).cause) { const dd = (x as { data?: unknown }).data; if (typeof dd === "string") data = dd; }
-        fmt[label] = `refused${data && data !== "0x" ? ` (${data.slice(0, 10)})` : " (no reason: unknown function)"}`;
-      }
-    }
-    checks.push({ what: "agent coins: launch format the live Pons factory accepts", ok: Object.values(fmt).some((v) => v === "accepted"), value: JSON.stringify(fmt) });
   }
   for (const k of [0, 1, 3]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet

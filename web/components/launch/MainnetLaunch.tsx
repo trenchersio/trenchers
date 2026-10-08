@@ -43,10 +43,15 @@ export function MainnetLaunch() {
   const [walletV2, setWalletV2] = useState<Address | null>(null);
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
-    try { const v = localStorage.getItem("trenchers:walletV2"); if (v) setWalletV2(v as Address); } catch { /* */ }
+    try { const v = localStorage.getItem("trenchers:walletV3"); if (v) setWalletV2(v as Address); } catch { /* */ }
     // Already deployed and proposed? Then the agent settings know it.
     pub().readContract({ address: MAINNET_DEPLOYMENT.config, abi: A("AgentConfig"), functionName: "pending", args: [4] })
-      .then((p) => { const v = (p as readonly [Address, bigint])[0]; if (v && !/^0x0+$/.test(v)) setWalletV2(v); }).catch(() => {});
+      .then(async (p) => {
+        const v = (p as readonly [Address, bigint])[0];
+        if (!v || /^0x0+$/.test(v)) return;
+        const n = await pub().readContract({ address: v, abi: parseAbi(["function VERSION() view returns (uint256)"]), functionName: "VERSION" }).catch(() => 0n);
+        if (n === 3n) setWalletV2(v);
+      }).catch(() => {});
     pub().getBalance({ address: OLD_COIN_LAUNCHER }).then(setOldBal).catch(() => {});
   }, []);
   const oldWithdraw = encodeFunctionData({ abi: A("AgentCoinLauncher"), functionName: "withdraw", args: [R.safe, oldBal ?? 0n] });
@@ -277,19 +282,19 @@ export function MainnetLaunch() {
       )}
 
       <section className="tn-card">
-        <h2>6 · Agent coins: deployed by the agent wallet itself</h2>
-        <p>Agent wallet version 2 lets each agent launch its own coin by calling Pons directly, so Pons records the <b>agent wallet as the coin&apos;s deployer and creator</b>. The Pons launch fee (0.0005 ETH) comes out of the agent&apos;s starter balance, and the agent can collect its coin&apos;s creator fees at any time, also during the 6-month lock. Holders switch their agent to version 2 with one click on its profile (nothing changes unless they do).</p>
-        <p><b>Step 1.</b> Deploy agent wallet version 2 from the Deployer wallet.</p>
+        <h2>6 · Agent coins: deployed by the agent wallet itself (version 3)</h2>
+        <p>Agent wallet version 3 lets each agent launch its own coin by calling Pons directly (version 2 used a launch format the live Pons factory doesn't accept; version 3 works with any format and checks Pons's record after the launch), so Pons records the <b>agent wallet as the coin&apos;s deployer and creator</b>. The Pons launch fee (0.0005 ETH) comes out of the agent&apos;s starter balance, and the agent can collect its coin&apos;s creator fees at any time, also during the 6-month lock. Holders switch their agent to version 3 with one click on its profile (nothing changes unless they do).</p>
+        <p><b>Step 1.</b> Deploy agent wallet version 3 from the Deployer wallet.</p>
         {walletV2 ? (
           <>
-            <p className="mono">Agent wallet version 2: <a href={`${EXPLORER}/address/${walletV2}`} target="_blank" rel="noreferrer">{walletV2}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(walletV2)}>Copy</button></p>
-            <p><b>Step 2.</b> In the Safe, send these to the agent settings contract (each: To, Data, Value 0). The first two start the 48-hour notice; the second replaces the earlier coin-launcher proposal.</p>
+            <p className="mono">Agent wallet version 3: <a href={`${EXPLORER}/address/${walletV2}`} target="_blank" rel="noreferrer">{walletV2}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(walletV2)}>Copy</button></p>
+            <p><b>Step 2.</b> In the Safe, send these to the agent settings contract (each: To, Data, Value 0). Offering version 3 starts a new 48-hour notice. If coin launches are already switched on (Pons as launcher), skip the two coin-launch lines.</p>
             <ol className="launch-safe">
               {[
-                { what: "Now: offer agent wallet version 2", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [4, walletV2] }) },
-                { what: "Now: coin launches go straight to Pons", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [2, L.ponsFactory] }) },
-                { what: "After 48 hours: switch on version 2", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [4] }) },
-                { what: "After 48 hours: switch on coin launches", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [2] }) },
+                { what: "Now: offer agent wallet version 3", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [4, walletV2] }) },
+                { what: "Now (only if not done yet): coin launches go straight to Pons", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [2, L.ponsFactory] }) },
+                { what: "After 48 hours: switch on version 3", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [4] }) },
+                { what: "After 48 hours (only if not done yet): switch on coin launches", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [2] }) },
               ].map((c) => (
                 <li key={c.what}><b>{c.what}</b>
                   <span className="mono">To: {MAINNET_DEPLOYMENT.config} <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(MAINNET_DEPLOYMENT.config)}>Copy</button></span>
@@ -310,10 +315,10 @@ export function MainnetLaunch() {
         ) : (
           <TextButton onClick={async () => {
             setBusy(true); setError(null);
-            try { const a = await deploy("Agent wallet version 2", "TrenchersAgentAccountV2", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund]); setWalletV2(a); try { localStorage.setItem("trenchers:walletV2", a); } catch { /* */ } }
+            try { const a = await deploy("Agent wallet version 3", "TrenchersAgentAccountV3", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund]); setWalletV2(a); try { localStorage.setItem("trenchers:walletV3", a); } catch { /* */ } }
             catch (e) { setError(errText(e)); }
             setBusy(false);
-          }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 2</TextButton>
+          }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 3</TextButton>
         )}
       </section>
     </div>

@@ -343,9 +343,9 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         {upgrade && (
           <section className="panel-card tn-upgrade-like">
             <h3>A new version of the agent wallet is available</h3>
-            <p>Version 2 lets your agent deploy its own coin itself (the agent wallet becomes the coin&apos;s creator on Pons) and collect its creator fees at any time. It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
+            <p>The new version lets your agent deploy its own coin itself (the agent wallet becomes the coin&apos;s creator on Pons) and collect its creator fees at any time. It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
             <div className="actions">
-              <TextButton onClick={() => setVersion(a.offered!, `Switching #${a.id} to agent wallet version 2`)} disabled={busy}>Switch to version 2</TextButton>
+              <TextButton onClick={() => setVersion(a.offered!, `Switching #${a.id} to the new agent wallet version`)} disabled={busy}>Switch to the new version</TextButton>
               <TextButton href={`${EXPLORER}/address/${a.offered}#code`} external>View the new code</TextButton>
             </div>
           </section>
