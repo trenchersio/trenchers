@@ -24,9 +24,12 @@ function runLiveCheck() {
 let lastVerify: { t: number; body: string } | null = null;
 let verifyRunning = false;
 let verifyLauncher: `0x${string}` | null = null;
+let verifyStarted = 0;
 function runVerify() {
-  verifyRunning = true;
-  verifyDeployment(mainnetRpcs().join(","), undefined, undefined, undefined, verifyLauncher ? { walletV2: verifyLauncher } : {})
+  verifyRunning = true; verifyStarted = Date.now();
+  // Never let one slow RPC answer keep the report from appearing: give up after 2 minutes and say so.
+  const limit = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The check took longer than 2 minutes (the RPC is slow or rate-limiting). Refresh to run it again.")), 120_000));
+  Promise.race([verifyDeployment(mainnetRpcs().join(","), undefined, undefined, undefined, verifyLauncher ? { walletV2: verifyLauncher } : {}), limit])
     .catch((e) => ({ ok: false, error: explain(e) }))
     .then((r) => { lastVerify = { t: Date.now(), body: scrub(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2)) }; })
     .finally(() => { verifyRunning = false; });
@@ -76,7 +79,8 @@ const server = createServer(async (req, res) => {
       const l = q.get("v2") ?? q.get("launcher");
       if (l && /^0x[0-9a-fA-F]{40}$/.test(l) && !verifyRunning) { verifyLauncher = l as `0x${string}`; runVerify(); }
       else if (!verifyRunning && (!lastVerify || Date.now() - lastVerify.t > 300_000)) runVerify();
-      res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));
+      res.setHeader("cache-control", "no-store");
+      res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute", runningFor: verifyRunning ? `${Math.round((Date.now() - verifyStarted) / 1000)}s` : "not started" }));
     } else if (path === "/coins") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.coins()));
