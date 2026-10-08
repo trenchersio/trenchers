@@ -275,7 +275,10 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
         if (coin == address(0)) revert NotAllowed();
         address escrow = IPonsLaunchFactory(config.launcher()).feeEscrow();
         _state++;
-        if (coinCurve != address(0)) { try IPonsCurve(coinCurve).sweepFees(0) {} catch {} }
+        // Coins launched on the original wallet code didn't record their curve: Pons's own record has it.
+        address curve = coinCurve;
+        if (curve == address(0)) { try IPonsLaunchFactory(config.launcher()).getLaunchedToken(coin) returns (IPonsLaunchFactory.LaunchRecord memory rec) { curve = rec.curve; } catch {} }
+        if (curve != address(0)) { try IPonsCurve(curve).sweepFees(0) {} catch {} }
         uint256 before = address(this).balance;
         try IPonsFeeEscrow(escrow).claim() {} catch {}
         amount = address(this).balance - before;

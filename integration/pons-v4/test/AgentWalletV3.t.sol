@@ -170,4 +170,28 @@ contract AgentWalletV3Test is TrenchersHarness {
         vm.expectRevert();
         IAgentV3(address(agent)).launchCoin(_launch(_p("Big", "BIG", address(agent))), 0.003 ether);
     }
+
+    /// Launch today, on the original wallet code (no new version needed), exactly as the site does it: simulate to get
+    /// the coin's address, then launch recording it. The agent wallet is deployer and creator. Later, on version 3, it
+    /// collects the creator fees (its curve looked up from Pons's record).
+    function test_OriginalCodeLaunchesThenV3CollectsFees() public {
+        bytes memory data = _launch(_p("Agent Six", "SIX", address(agent)));
+        uint256 snap = vm.snapshotState();
+        vm.prank(holder);
+        (address expected,) = abi.decode(agent.launchCoin(data, LAUNCH_FEE, address(0)), (address, address));
+        vm.revertToState(snap);
+        vm.prank(holder);
+        agent.launchCoin(data, LAUNCH_FEE, expected);
+        assertEq(agent.coin(), expected, "coin recorded");
+        LaunchedToken memory rec = factory.getLaunchedToken(expected);
+        assertTrue(rec.exists);
+        assertEq(rec.deployer, address(agent), "deployer is the agent wallet");
+        assertEq(rec.creatorFeeRecipient, address(agent), "creator is the agent wallet");
+        assertEq(agent.lockedNow(), 0.01 ether, "the starter stayed locked: the fee came from the free balance");
+        vm.prank(whale);
+        assertGt(adapter.buy{value: 1 ether}(expected, 0), 0);
+        _optIn();
+        uint256 got = IAgentV3(address(agent)).claimCoinFees();
+        assertGt(got, 0, "version 3 collects the fees of a coin launched on the original code");
+    }
 }
