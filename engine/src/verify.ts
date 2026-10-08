@@ -40,6 +40,12 @@ export const MAINNET_LAUNCH: Launch = {
 
 type Art = { abi: Abi; bytecode: Hex };
 const ART: Record<string, Art> = JSON.parse(readFileSync(new URL("./mainnet-artifacts.json", import.meta.url), "utf8"));
+/** Earlier builds of agent wallet version 3 (so /verify can say exactly which one was offered). */
+const V3_HISTORY: Record<string, { abi: Art["abi"]; bytecode: `0x${string}` }> = JSON.parse(readFileSync(new URL("./v3-history.json", import.meta.url), "utf8"));
+const V3_LABEL: Record<string, string> = {
+  a63f1a2: "an early build of version 3 (format-independent launch; no fee collection for coins launched on the original code, no deposit protection)",
+  c56efb7: "an earlier build of version 3 (launch and fee collection work, but a holder's deposits can still end up locked after trading losses)",
+};
 const REHEARSAL_ABI = parseAbi([
   "struct A { address nft; address fund; address splitter; address config; address impl; address adapter; address registry; address engine; address guardian; address deployer; address curveCoin; address poolCoin; }",
   "function run(A a) payable returns (uint256[] n, string uriBefore, string uriAfter)",
@@ -76,7 +82,13 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
     if (!onchain || onchain === "0x") { code[key] = "NO CODE"; problems.push(`${key}: no contract at ${d[key]}`); continue; }
     try {
       const r = await c.call({ account: R.deployer, data: encodeDeployData({ abi: ART[name].abi, bytecode: ART[name].bytecode, args }) });
-      const ok = same(r.data, onchain);
+      let built = r.data ?? "0x";
+      // The wallet records the agent code that was live when it was deployed (the original), so rebuild it with that.
+      if (key === "impl") {
+        const now = await read<Address>(d.config, "AgentConfig", "accountLogic").catch(() => null);
+        if (now) built = built.toLowerCase().split(now.slice(2).toLowerCase()).join(d.logic.slice(2).toLowerCase()) as `0x${string}`;
+      }
+      const ok = same(built, onchain);
       code[key] = ok ? `matches ${name} (${(onchain.length - 2) / 2} bytes)` : `DIFFERENT from ${name}`;
       if (!ok) problems.push(`${key}: on-chain code is not the expected ${name}`);
     } catch (e) { code[key] = `could not rebuild: ${(e as Error).message.split("\n")[0]}`; problems.push(`${key}: could not rebuild the expected code`); }
@@ -118,8 +130,16 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
     const onchain = await c.getCode({ address: offered });
     newIsV3 = !!v3Runtime && same(v3Runtime, onchain);
     const isV2 = !!v2Runtime && same(v2Runtime, onchain);
-    checks.push({ what: "newest agent wallet version: code is TrenchersAgentAccountV3 (or V2) for these settings", ok: newIsV3 || isV2, value: `${offered} · ${newIsV3 ? "version 3" : isV2 ? "version 2 (launch format may not match the live factory: offer version 3)" : "unknown code"}` });
-    if (!newIsV3 && !isV2) problems.push(`agent wallet code ${offered} is not the expected version 2 or 3`);
+    let earlier: string | null = null;
+    if (!newIsV3 && !isV2) for (const [commit, b] of Object.entries(V3_HISTORY)) {
+      const r = await c.call({ account: R.deployer, data: encodeDeployData({ abi: b.abi, bytecode: b.bytecode, args: [d.config, d.fund] }) }).then((x) => x.data ?? null).catch(() => null);
+      if (r && same(r, onchain)) { earlier = commit; break; }
+    }
+    if (earlier) {
+      checks.push({ what: "newest agent wallet version: code is the current TrenchersAgentAccountV3", ok: false, value: `${offered} · ${V3_LABEL[earlier] ?? `an earlier build (${earlier})`}. Deploy the current version 3 from the launch page and offer that one instead.` });
+      problems.push(`agent wallet code ${offered} is ${V3_LABEL[earlier] ?? "an earlier build of version 3"}`);
+    } else checks.push({ what: "newest agent wallet version: code is TrenchersAgentAccountV3 (or V2) for these settings", ok: newIsV3 || isV2, value: `${offered} · ${newIsV3 ? "version 3" : isV2 ? "version 2 (launch format may not match the live factory: offer version 3)" : "unknown code"}` });
+    if (!newIsV3 && !isV2 && !earlier) problems.push(`agent wallet code ${offered} is not the expected version 2 or 3`);
     checks.push({ what: same(pendingLogic, offered) ? "newest agent wallet version: proposed, can be switched on at" : "newest agent wallet version: offered to holders", ok: true, value: same(pendingLogic, offered) ? new Date(Number(logicEta) * 1000).toISOString() : "yes" });
   } else checks.push({ what: "agent wallet version 3: not deployed yet", ok: true, value: "—" });
 
@@ -267,8 +287,9 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
       }
       let msg = (e as { shortMessage?: string }).shortMessage ?? (e as Error).message.split("\n")[0];
       if (data) try { const de = decodeErrorResult({ abi: REHEARSAL_ABI, data }); msg = `failed at "${(de.args as [string, Hex])[0]}" (reason ${(de.args as [string, Hex])[1]})`; } catch { msg = `${msg} (revert data ${data.slice(0, 74)})`; }
-      report.rehearsal = { error: msg };
-      problems.push(`rehearsal: ${msg}`);
+      // House agent #1 trades for real, so on a busy day it may have used its daily limit: the rehearsal can't buy then.
+      if (/0xc4891db5/i.test(msg)) report.rehearsal = { skipped: "house agent #1 (used for the rehearsal) has reached today's trading limit; it runs again after 00:00 UTC. Not a problem with the contracts." };
+      else { report.rehearsal = { error: msg }; problems.push(`rehearsal: ${msg}`); }
     }
   }
   report.ok = problems.length === 0;
