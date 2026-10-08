@@ -31,7 +31,7 @@ type State = { ready: boolean; opens: number | null; v2: Address | null; onV2: b
 export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const [st, setSt] = useState<State | undefined>(undefined);
   const [coin, setCoin] = useState<{ address: Address; symbol: string; name: string } | null>(null);
-  const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain. Its creator fees fund the agent.`, x: "", telegram: "" });
+  const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain. Its creator fees fund the agent.`, x: "", telegram: "", website: `${SITE}/collection#${id}` });
   const [msg, setMsg] = useState<string | null>(null);
   const [ver, setVer] = useState(0);
 
@@ -73,7 +73,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
     if (st.fee !== null && bal < st.fee) throw new Error(`The agent needs ${fmt(st.fee)} ETH for the Pons launch fee. Deposit ${fmt(st.fee - bal)} ETH first.`);
     const params = {
       name: f.name.trim(), symbol: sym, logo: `${SITE}/meta/img/awake/${id}.png`, description: f.description.trim(),
-      socials: { twitter: f.x.trim(), telegram: f.telegram.trim(), discord: "", website: `${SITE}/collection#${id}`, farcaster: "" },
+      socials: { twitter: f.x.trim(), telegram: f.telegram.trim(), discord: "", website: f.website.trim(), farcaster: "" },
       creatorFeeRecipient: wallet, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash,
     };
     await sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "launchCoin", args: [params, 0n] }, ph);
@@ -82,7 +82,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const collect = () => run(`Collecting $${coin?.symbol ?? ""} creator fees for Trencher #${id}`, (ph) =>
     sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "claimCoinFees" }, ph), id).then((ok) => { if (ok) setMsg("Creator fees collected into the agent wallet. They're free balance: withdraw them any time."); });
 
-  const valid = f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim());
+  const valid = f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim()) && (!f.website.trim() || /^https?:\/\/\S+\.\S+/.test(f.website.trim()));
   const opens = st?.opens ? new Date(st.opens * 1000) : null;
 
   return (
@@ -119,6 +119,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
             <label className="wide"><span className="mono">Description</span><textarea rows={3} maxLength={280} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></label>
             <label><span className="mono">X (optional)</span><input placeholder="https://x.com/…" value={f.x} onChange={(e) => setF({ ...f, x: e.target.value })} /></label>
             <label><span className="mono">Telegram (optional)</span><input placeholder="https://t.me/…" value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} /></label>
+            <label className="wide"><span className="mono">Website</span><input placeholder="https://…" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} /></label>
           </fieldset>
           {msg && <p className="muted-note">{msg}</p>}
           <button type="button" className="gf-btn go" onClick={launch} disabled={!st.ready || !st.onV2 || busy || !valid}>
