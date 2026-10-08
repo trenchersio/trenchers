@@ -539,7 +539,7 @@ export class Engine {
       if (!ag || !tok) continue;
       if (!this.tradable(ag)) { if (Date.now() - (this.skipNoted.get(ag.wallet) ?? 0) > 3_600_000) { this.skipNoted.set(ag.wallet, Date.now()); this.log(`Agent #${ag.id} skipped ${tok.token}: ${!ag.live || ag.setBy !== ag.owner ? "trading is switched off" : ag.perTrade === 0n ? "no per-trade limit set" : "no rule"}`); } continue; }
       const r = ag.rule!;
-      if (ag.coin && ag.coin === tok.token) continue;
+      if ((ag.coin && ag.coin === tok.token) || this.agentCoins.get(tok.token)?.wallet === ag.wallet) continue; // never its own coin
       const book = this.book(ag.wallet);
       if (book.has(tok.token)) continue;
       if (book.size >= ENV.MAX_POSITIONS) { this.noteOnce(`full:${ag.wallet}`, `Agent #${ag.id} skipped ${tok.token}: already holds the maximum ${ENV.MAX_POSITIONS} positions`); continue; }
