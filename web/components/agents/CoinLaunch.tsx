@@ -5,6 +5,7 @@ import { ABI, DEPLOYMENT, reader, sendCall } from "@/lib/chain";
 import { EXPLORER, gmgnToken } from "@/lib/constants";
 import { useCoins, ethFmt } from "@/components/coins/coins";
 import { CoinChartButton } from "@/components/coins/CoinChart";
+import { useCoinInfo } from "@/components/coins/chainCoin";
 
 /**
  * "Its own coin": with agent wallet version 2 the agent wallet itself calls the Pons launch factory, so Pons records
@@ -86,9 +87,11 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   }, [wallet, ver]);
 
   const coins = useCoins();
-  const info = coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase()) ?? null;
+  const seen = coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase()) ?? null;
   // The engine saw this agent wallet launch a coin even if the wallet didn't record it: show that coin (no second launch).
-  const shown = coin ?? (info ? { address: info.coin as Address, symbol: info.symbol, name: "" } : null);
+  const shown = coin ?? (seen ? { address: seen.coin as Address, symbol: seen.symbol, name: "" } : null);
+  // Fees, volume and chart: read from the coin's own trades on-chain (the engine's figures stand in until then).
+  const info = useCoinInfo(id, wallet, shown?.address) ?? seen;
   const sym = f.symbol.trim().toUpperCase();
 
   const launch = () => run(`Launching $${sym} for Trencher #${id}`, async (ph) => {
@@ -136,13 +139,16 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
       <h3>Its own coin</h3>
       {shown ? (
         <div className="coin-own">
-          <p><b>${shown.symbol}</b> {shown.name && <span className="muted-note">· {shown.name}</span>}</p>
-          {info && <p className="mono agent-coin-fees">{ethFmt(info.feesEth)} ETH creator fees earned · {ethFmt(info.volumeEth)} ETH volume · {info.trades} trades</p>}
+          <div className="coin-own-id">
+            <b className="mono coin-own-sym">${shown.symbol}</b>
+            {shown.name && <span className="coin-own-name">{shown.name}</span>}
+          </div>
+          <p className="mono agent-coin-fees">{info ? `${ethFmt(info.feesEth)} ETH creator fees earned · ${ethFmt(info.volumeEth)} ETH volume · ${info.trades} trades` : "Reading its trades…"}</p>
           <p className="muted-note">Launched on Pons by this agent&apos;s wallet. Every trade pays creator fees to the agent, and the engine never trades its own coin.</p>
           <div className="agent-actions">
             {(st?.walletVersion ?? 0) >= 3 && <button type="button" className="gf-btn go" onClick={collect} disabled={busy}>Collect creator fees</button>}
             <span className="agent-links">
-              {info && <CoinChartButton coin={info} />}
+              <CoinChartButton coin={info} fallback={{ agent: id, coin: shown.address, symbol: shown.symbol }} />
               <a className="tbtn" href={gmgnToken(shown.address)} target="_blank" rel="noreferrer">GMGN ↗</a>
               <a className="tbtn" href={`${EXPLORER}/token/${shown.address}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
             </span>

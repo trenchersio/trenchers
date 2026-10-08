@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { transport, urls } from "./rpc";
 import {
   createPublicClient, decodeAbiParameters, decodeErrorResult, defineChain, encodeDeployData, encodeFunctionData, formatEther, http, parseAbi, parseEther,
   zeroAddress, zeroHash, keccak256, encodeAbiParameters, pad, toHex, type Abi, type Address, type Hex, type PublicClient,
@@ -49,8 +50,8 @@ const allZero = (v: unknown): boolean => v === null || v === undefined || v === 
 const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
 
 export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPLOYMENT, R: Roles = MAINNET_ROLES, L: Launch = MAINNET_LAUNCH, opts: { coins?: { curve?: Address; pool?: Address }; walletV2?: Address } = {}) {
-  const chain = defineChain({ id: d.chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc] } } });
-  const c = createPublicClient({ chain, transport: http(rpc) }) as PublicClient;
+  const chain = defineChain({ id: d.chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [urls(rpc)[0]] } } });
+  const c = createPublicClient({ chain, transport: transport(urls(rpc)) }) as PublicClient;
   const problems: string[] = [];
   const report: Record<string, unknown> = { at: new Date().toISOString(), chainId: await c.getChainId(), deployment: d };
   if (report.chainId !== d.chainId) problems.push(`RPC is chain ${report.chainId}, expected ${d.chainId}`);

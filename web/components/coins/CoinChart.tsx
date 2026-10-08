@@ -6,17 +6,21 @@ import { EXPLORER, gmgnToken } from "@/lib/constants";
 import { ethFmt, type CoinInfo } from "./coins";
 
 /** "Chart" button: the coin's price chart, fees and links in a popup. */
-export function CoinChartButton({ coin, label = "Chart" }: { coin: CoinInfo; label?: string }) {
+/** While the coin's trades are still being read, the popup opens straight away and fills in when they arrive. */
+type Basic = { agent: number; coin: string; symbol: string };
+export function CoinChartButton({ coin, fallback, label = "Chart" }: { coin: CoinInfo | null; fallback?: Basic; label?: string }) {
   const [open, setOpen] = useState(false);
+  const shown: CoinInfo | null = coin ?? (fallback ? { ...fallback, wallet: "", curve: "", launchedAt: 0, feesEth: 0, feesExact: false, volumeEth: 0, trades: 0, graduated: false, price: null, chart: [] } : null);
+  if (!shown) return null;
   return (
     <>
       <button type="button" className="tbtn coin-chart-btn" onClick={() => setOpen(true)}>{label}</button>
-      {open && <CoinChartModal coin={coin} onClose={() => setOpen(false)} />}
+      {open && <CoinChartModal coin={shown} loading={!coin} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function CoinChartModal({ coin, onClose }: { coin: CoinInfo; onClose: () => void }) {
+function CoinChartModal({ coin, loading, onClose }: { coin: CoinInfo; loading?: boolean; onClose: () => void }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", esc);
@@ -35,7 +39,7 @@ function CoinChartModal({ coin, onClose }: { coin: CoinInfo; onClose: () => void
           </div>
           <button type="button" className="tbtn" onClick={onClose}>Close</button>
         </div>
-        <PriceChart pts={pts} />
+        {loading ? <div className="coin-chart empty" style={{ height: 260 }}><span className="mono">Reading the coin&apos;s trades from Robinhood Chain…</span></div> : <PriceChart pts={pts} />}
         <dl className="coin-stats">
           <div><dt>Creator fees earned</dt><dd className="mono up">{ethFmt(coin.feesEth)} ETH</dd></div>
           <div><dt>Price</dt><dd className="mono">{last === null ? "—" : `${last.toExponential(3)} ETH`}</dd></div>

@@ -1901,6 +1901,10 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .coin-form input:focus-visible, .coin-form textarea:focus-visible { outline: 2px dashed var(--green); outline-offset: 2px; }
 .coin-own p { margin: 0 0 6px; }
 .coin-own b { font-size: 20px; }
+.coin-own-id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 6px; }
+.coin-own-id .coin-own-sym { font-size: 20px; line-height: 1; }
+.coin-own-id .coin-own-name { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; line-height: 1; color: var(--quiet); }
+.linkish { background: none; border: 0; padding: 0; color: var(--green); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 600px) { .coin-form { grid-template-columns: minmax(0, 1fr); } }
 
 .coin-soon { position: relative; }

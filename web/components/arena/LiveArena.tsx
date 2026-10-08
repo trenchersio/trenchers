@@ -169,10 +169,15 @@ function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
   const inside = history.filter((h) => end - h.t <= span);
   const before = span === Infinity ? undefined : history.filter((h) => end - h.t > span).at(-1);
   const pts = before ? [{ t: end - span, v: before.v }, ...inside] : inside;
+  const flat = pts.every((p) => Math.abs(p.v - pts[0].v) < 1e-9);
+  const lastMove = (() => { for (let i = history.length - 1; i > 0; i--) if (Math.abs(history[i].v - history[i - 1].v) > 1e-9) return history[i].t; return null; })();
   return (
     <div className="panel-block">
       <div className="lc-head"><h3>Value</h3><RangeTabs value={range} options={LIVE_RANGES} onChange={setRange} /></div>
       <LineChart data={pts.map((h) => h.v)} times={pts.map((h) => h.t * 1000)} height={170} baseline={pts[0]?.v} />
+      {span !== Infinity && flat && history.length > 2 && (
+        <p className="hint-line">No change in its value in the last {range}{lastMove ? ` (last move ${ago(Date.now() / 1000 - lastMove)} ago)` : ""}. <button type="button" className="linkish" onClick={() => setRange("All")}>See all</button></p>
+      )}
     </div>
   );
 }
@@ -192,7 +197,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
         </div>
       </header>
 
-      <AgentCoinLine wallet={a.wallet} />
+      <AgentCoinLine wallet={a.wallet} agent={a.id} />
       <dl className="kpis">
         <div><dt>Value</dt><dd className="mono">{ethTxt(a.nav)} ETH</dd></div>
         <div><dt>PnL this week</dt><dd className={`mono ${a.pnlPct >= 0 ? "up" : "down"}`}>{signed(a.pnlPct)}</dd></div>

@@ -1,3 +1,4 @@
+import { transport, urls } from "./rpc";
 import {
   createPublicClient, createWalletClient, decodeAbiParameters, encodeFunctionData, formatEther, http, defineChain, parseAbi,
   type Address, type Hash, type Hex, type Log, type PublicClient, type WalletClient,
@@ -76,10 +77,10 @@ export class Engine {
   constructor(log: (m: string) => void = (m) => console.log(new Date().toISOString(), m)) {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
     // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
-    this.pub = createPublicClient({ chain, transport: http(ENV.RPC_URL, { retryCount: 3, retryDelay: 150, timeout: 20_000 }), batch: { multicall: { wait: 16 } } }) as PublicClient;
+    this.pub = createPublicClient({ chain, transport: transport(urls(ENV.RPC_URL)), batch: { multicall: { wait: 16 } } }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
-      this.wallet = createWalletClient({ account, chain, transport: http(ENV.RPC_URL) });
+      this.wallet = createWalletClient({ account, chain, transport: transport(urls(ENV.RPC_URL)) });
       this.engineAddress = account.address;
     } else { this.wallet = null; this.engineAddress = null; }
     this.log = log;

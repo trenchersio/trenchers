@@ -286,7 +286,7 @@ function Detail({ id, b, of }: { id: number; b: Entry; of: number }) {
         </dl>
       )}
 
-      {wallet?.deployed && <AgentCoinLine wallet={wallet.address} />}
+      {wallet?.deployed && <AgentCoinLine wallet={wallet.address} agent={id} />}
       {wallet?.deployed && (
         <div className="cd-verify">
           <span className="mono">Verify trading activity</span>

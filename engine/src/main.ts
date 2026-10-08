@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { explain, mainnetRpcs, scrub } from "./rpc";
 import { Engine } from "./engine";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
@@ -7,7 +8,7 @@ import { verifyDeployment } from "./verify";
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
 const recent: string[] = [];
-const log = (m: string) => { const line = `${new Date().toISOString().slice(11, 19)} ${m}`; console.log(line); recent.push(line); if (recent.length > 25) recent.shift(); };
+const log = (m: string) => { const line = scrub(`${new Date().toISOString().slice(11, 19)} ${m}`); console.log(line); recent.push(line); if (recent.length > 25) recent.shift(); };
 const engine = PROBLEMS.length ? null : new Engine(log);
 let status = PROBLEMS.length ? "settings need fixing" : "starting: reading the chain's history";
 let lastTick = 0;
@@ -15,9 +16,9 @@ let lastLive: { t: number; body: string } | null = null;
 let liveRunning = false;
 function runLiveCheck() {
   liveRunning = true;
-  liveCheck(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com")
-    .catch((e) => ({ ok: false, error: (e as Error).message }))
-    .then((r) => { lastLive = { t: Date.now(), body: JSON.stringify(r, null, 2) }; })
+  liveCheck(mainnetRpcs().join(","))
+    .catch((e) => ({ ok: false, error: explain(e) }))
+    .then((r) => { lastLive = { t: Date.now(), body: scrub(JSON.stringify(r, null, 2)) }; })
     .finally(() => { liveRunning = false; });
 }
 let lastVerify: { t: number; body: string } | null = null;
@@ -25,9 +26,9 @@ let verifyRunning = false;
 let verifyLauncher: `0x${string}` | null = null;
 function runVerify() {
   verifyRunning = true;
-  verifyDeployment(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com", undefined, undefined, undefined, verifyLauncher ? { walletV2: verifyLauncher } : {})
-    .catch((e) => ({ ok: false, error: (e as Error).message }))
-    .then((r) => { lastVerify = { t: Date.now(), body: JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2) }; })
+  verifyDeployment(mainnetRpcs().join(","), undefined, undefined, undefined, verifyLauncher ? { walletV2: verifyLauncher } : {})
+    .catch((e) => ({ ok: false, error: explain(e) }))
+    .then((r) => { lastVerify = { t: Date.now(), body: scrub(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2)) }; })
     .finally(() => { verifyRunning = false; });
 }
 let lastError: string | null = null;
@@ -42,7 +43,7 @@ async function loop() {
     const method = Array.isArray(body) ? body.map((b) => b.method).join(",") : body?.method;
     const status = x.status ?? x.cause?.status;
     const details = x.details ?? x.cause?.details;
-    lastError = [(x.shortMessage ?? x.message).split("\n")[0], method && `(${method})`, status && `status ${status}`, details && String(details).slice(0, 120)].filter(Boolean).join(" ");
+    lastError = /Just a moment|cf_chl|fetch failed/i.test(String(x.message) + String(details)) ? explain(String(x.message) + String(details)) : [(x.shortMessage ?? x.message).split("\n")[0], method && `(${method})`, status && `status ${status}`, details && String(details).slice(0, 120)].filter(Boolean).join(" ");
     // A rate-limited RPC: wait the limit out instead of retrying every few seconds (which keeps it tripped).
     if (/rate ?limit|too many requests|429/i.test(`${lastError} ${x.status ?? ""}`)) {
       engine.log(`RPC rate limit hit: pausing 65 s before the next update`);
@@ -63,7 +64,7 @@ const server = createServer(async (req, res) => {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2));
+      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.
@@ -83,7 +84,7 @@ const server = createServer(async (req, res) => {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));
     } else { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); }
-  } catch (e) { res.statusCode = 500; res.end(JSON.stringify({ error: (e as Error).message })); }
+  } catch (e) { res.statusCode = 500; res.end(scrub(JSON.stringify({ error: (e as Error).message }))); }
 });
 
 // Serve /health straight away (history replay can take a while), then start trading.

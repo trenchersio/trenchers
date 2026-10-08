@@ -16,7 +16,12 @@ export function LineChart({ data, height = 120, baseline, compact = false, times
   const vals = baseline !== undefined ? [...data, baseline] : data;
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hi - lo < 1e-9) { hi += 1e-6; lo -= 1e-6; }
-  const x = (i: number) => (i / (data.length - 1)) * W;
+  // With times, points sit where they happened (a quiet night takes its real width); otherwise evenly spaced.
+  const t0 = times?.[0] ?? 0, t1 = times?.[times.length - 1] ?? 0, timed = !!times && times.length === data.length && t1 > t0;
+  const fx = (i: number) => (timed ? (times![i] - t0) / (t1 - t0) : i / (data.length - 1));
+  const x = (i: number) => fx(i) * W;
+  // Enough decimals that the top and bottom labels differ (0.0103 / 0.0098 rather than 0.010 / 0.010).
+  const dp = Math.min(8, Math.max(3, Math.ceil(-Math.log10(Math.max(hi - lo, 1e-9))) + 1));
   const y = (v: number) => pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad);
   const line = data.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join("");
   const area = `${line}L${W} ${H}L0 ${H}Z`;
@@ -28,10 +33,13 @@ export function LineChart({ data, height = 120, baseline, compact = false, times
   const pick = (clientX: number) => {
     const r = box.current?.getBoundingClientRect(); if (!r) return;
     const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-    setHover(Math.round(f * (data.length - 1)));
+    if (!timed) { setHover(Math.round(f * (data.length - 1))); return; }
+    let best = 0;
+    for (let i = 1; i < data.length; i++) if (Math.abs(fx(i) - f) < Math.abs(fx(best) - f)) best = i;
+    setHover(best);
   };
   const h = hover !== null ? { i: hover, v: data[hover], t: times?.[hover] } : null;
-  const hx = h ? (h.i / (data.length - 1)) * 100 : 0;
+  const hx = h ? fx(h.i) * 100 : 0;
   const chg = h ? ((h.v - data[0]) / (data[0] || 1)) * 100 : 0;
 
   return (
@@ -52,15 +60,15 @@ export function LineChart({ data, height = 120, baseline, compact = false, times
       </svg>
       {!h && <span className="lc-dot" style={{ top: `${(y(last) / H) * 100}%`, background: color }} />}
       {!compact && !h && <>
-        <span className="lc-label lc-hi mono">{hi.toFixed(3)}</span>
-        <span className="lc-label lc-lo mono">{lo.toFixed(3)}</span>
+        <span className="lc-label lc-hi mono">{hi.toFixed(dp)}</span>
+        <span className="lc-label lc-lo mono">{lo.toFixed(dp)}</span>
         {baseline !== undefined && <span className="lc-label lc-base mono" style={{ top: `${(y(baseline) / H) * 100}%` }}>start</span>}
       </>}
       {h && (<>
         <span className="lc-cross" style={{ left: `${hx}%` }} />
         <span className="lc-dot lc-dot-h" style={{ left: `${hx}%`, top: `${(y(h.v) / H) * 100}%`, background: color }} />
         <span className={`lc-tip mono${hx > 60 ? " left" : ""}`} style={{ left: `${hx}%` }}>
-          <b>{h.v.toFixed(4)} {unit}</b>
+          <b>{h.v.toFixed(Math.max(4, dp))} {unit}</b>
           <em className={chg >= 0 ? "up" : "down"}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</em>
           {h.t !== undefined && <small>{fmtTime(h.t)}</small>}
         </span>

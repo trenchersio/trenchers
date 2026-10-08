@@ -1,3 +1,4 @@
+import { transport, urls } from "./rpc";
 import {
   createPublicClient, decodeAbiParameters, decodeEventLog, defineChain, encodeFunctionData, formatEther, http, parseAbi, parseEther,
   type Address, type Hex, type Log, type PublicClient,
@@ -86,9 +87,9 @@ export async function findLiveCoins(c: PublicClient): Promise<{ curve?: Address;
 }
 
 export async function liveCheck(rpc: string) {
-  const chain = defineChain({ id: 4663, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc] } } });
-  const c = createPublicClient({ chain, transport: http(rpc) }) as PublicClient;
-  const report: Record<string, unknown> = { rpc, at: new Date().toISOString() };
+  const chain = defineChain({ id: 4663, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [urls(rpc)[0]] } } });
+  const c = createPublicClient({ chain, transport: transport(urls(rpc)) }) as PublicClient;
+  const report: Record<string, unknown> = { rpc: rpc.replace(/\/v2\/[^,]+/g, "/v2/…"), at: new Date().toISOString() };
   const problems: string[] = [];
   report.chainId = await c.getChainId();
   if (report.chainId !== 4663) problems.push(`chain id is ${report.chainId}, expected 4663`);
