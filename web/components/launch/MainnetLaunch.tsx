@@ -43,14 +43,15 @@ export function MainnetLaunch() {
   const [walletV2, setWalletV2] = useState<Address | null>(null);
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
-    try { const v = localStorage.getItem("trenchers:walletV3"); if (v) setWalletV2(v as Address); } catch { /* */ }
+    try { const v = localStorage.getItem("trenchers:walletV3b"); if (v) setWalletV2(v as Address); } catch { /* */ }
     // Already deployed and proposed? Then the agent settings know it.
     pub().readContract({ address: MAINNET_DEPLOYMENT.config, abi: A("AgentConfig"), functionName: "pending", args: [4] })
       .then(async (p) => {
         const v = (p as readonly [Address, bigint])[0];
         if (!v || /^0x0+$/.test(v)) return;
-        const n = await pub().readContract({ address: v, abi: parseAbi(["function VERSION() view returns (uint256)"]), functionName: "VERSION" }).catch(() => 0n);
-        if (n === 3n) setWalletV2(v);
+        // The current version 3 (with deposits that never lock); an earlier version 3 proposal is replaced by deploying this one.
+        const ok = await pub().readContract({ address: v, abi: parseAbi(["function deposited() view returns (uint256)"]), functionName: "deposited" }).then(() => true).catch(() => false);
+        if (ok) setWalletV2(v);
       }).catch(() => {});
     pub().getBalance({ address: OLD_COIN_LAUNCHER }).then(setOldBal).catch(() => {});
   }, []);
@@ -283,7 +284,7 @@ export function MainnetLaunch() {
 
       <section className="tn-card">
         <h2>6 · Agent coins: deployed by the agent wallet itself (version 3)</h2>
-        <p>Agent wallet version 3 lets each agent launch its own coin by calling Pons directly (version 2 used a launch format the live Pons factory doesn't accept; version 3 works with any format and checks Pons's record after the launch), so Pons records the <b>agent wallet as the coin&apos;s deployer and creator</b>. The Pons launch fee (0.0005 ETH) comes out of the agent&apos;s starter balance, and the agent can collect its coin&apos;s creator fees at any time, also during the 6-month lock. Holders switch their agent to version 3 with one click on its profile (nothing changes unless they do).</p>
+        <p>Agent wallet version 3 lets each agent launch its own coin by calling Pons directly (version 3 works with any Pons launch format and checks Pons's record after the launch; only the starter is ever locked, so the holder's own deposits stay withdrawable even after trading losses. If an earlier version 3 was proposed, deploy this one and propose it: it replaces the earlier proposal), so Pons records the <b>agent wallet as the coin&apos;s deployer and creator</b>. The Pons launch fee (0.0005 ETH) comes out of the agent&apos;s starter balance, and the agent can collect its coin&apos;s creator fees at any time, also during the 6-month lock. Holders switch their agent to version 3 with one click on its profile (nothing changes unless they do).</p>
         <p><b>Step 1.</b> Deploy agent wallet version 3 from the Deployer wallet.</p>
         {walletV2 ? (
           <>
@@ -315,7 +316,7 @@ export function MainnetLaunch() {
         ) : (
           <TextButton onClick={async () => {
             setBusy(true); setError(null);
-            try { const a = await deploy("Agent wallet version 3", "TrenchersAgentAccountV3", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund]); setWalletV2(a); try { localStorage.setItem("trenchers:walletV3", a); } catch { /* */ } }
+            try { const a = await deploy("Agent wallet version 3", "TrenchersAgentAccountV3", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund]); setWalletV2(a); try { localStorage.setItem("trenchers:walletV3b", a); } catch { /* */ } }
             catch (e) { setError(errText(e)); }
             setBusy(false);
           }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 3</TextButton>

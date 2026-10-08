@@ -7,6 +7,7 @@ interface IAgentV3 {
     function launchCoin(bytes calldata data, uint256 fee) external returns (address coin, address curve);
     function claimCoinFees() external returns (uint256);
     function withdraw(uint256 amount) external;
+    function deposited() external view returns (uint256);
     function VERSION() external view returns (uint256);
     function ruleVersion() external view returns (uint32);
     function policy() external view returns (uint128, uint128, bool, address);
@@ -193,5 +194,51 @@ contract AgentWalletV3Test is TrenchersHarness {
         _optIn();
         uint256 got = IAgentV3(address(agent)).claimCoinFees();
         assertGt(got, 0, "version 3 collects the fees of a coin launched on the original code");
+    }
+
+    /// Only the starter is ever locked: after trading losses, the holder's own top-up stays withdrawable,
+    /// and the starter itself still can't be taken out early.
+    function test_DepositsStayWithdrawableAfterLosses() public {
+        _optIn();
+        // the holder takes out their free ETH, leaving the 0.01 starter; then the agent "loses" 0.006 trading
+        vm.startPrank(holder);
+        IAgentV3(address(agent)).withdraw(agent.withdrawable());
+        vm.stopPrank();
+        vm.deal(address(agent), 0.004 ether);
+        assertEq(agent.withdrawable(), 0, "below the starter: nothing free");
+        // a 0.0005 top-up from the holder is theirs straight away
+        vm.deal(holder, 1 ether);
+        vm.prank(holder);
+        (bool ok,) = address(agent).call{value: 0.0005 ether}("");
+        assertTrue(ok);
+        assertEq(IAgentV3(address(agent)).deposited(), 0.0005 ether);
+        assertEq(agent.withdrawable(), 0.0005 ether, "the top-up is withdrawable");
+        assertEq(agent.lockedNow(), 0.004 ether, "the rest of the starter stays locked");
+        // ETH from anyone else (e.g. trade proceeds) isn't a deposit
+        vm.prank(whale);
+        (ok,) = address(agent).call{value: 0.001 ether}("");
+        assertTrue(ok);
+        assertEq(IAgentV3(address(agent)).deposited(), 0.0005 ether);
+        // withdrawing the top-up works, and the starter can't follow it out
+        vm.prank(holder);
+        IAgentV3(address(agent)).withdraw(0.0005 ether);
+        assertEq(IAgentV3(address(agent)).deposited(), 0);
+        assertEq(agent.withdrawable(), 0, "starter still locked");
+        vm.prank(holder);
+        vm.expectRevert();
+        IAgentV3(address(agent)).withdraw(0.001 ether);
+    }
+
+    /// An agent that lost money can still launch: the starter pays the fee; a top-up stays the holder's.
+    function test_LosingAgentLaunchesFromItsStarter() public {
+        _optIn();
+        vm.startPrank(holder);
+        IAgentV3(address(agent)).withdraw(agent.withdrawable());
+        vm.stopPrank();
+        vm.deal(address(agent), 0.00364 ether);
+        vm.prank(holder);
+        IAgentV3(address(agent)).launchCoin(_launch(_p("Agent Six", "SIX", address(agent))), LAUNCH_FEE);
+        assertTrue(agent.coin() != address(0));
+        assertEq(address(agent).balance, 0.00364 ether - LAUNCH_FEE);
     }
 }

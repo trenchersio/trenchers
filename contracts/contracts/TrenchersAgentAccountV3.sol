@@ -80,6 +80,8 @@ interface IAgentConfig {
 ///             taken from Pons's own return value and recorded so the engine never trades it.
 ///           - claimCoinFees: collects the coin's creator fees from Pons's fee escrow into the agent
 ///             wallet, also during the starter lock. Collected fees are free balance (withdrawable).
+///           - Only the starter is ever locked: the holder's own deposits stay withdrawable, also after trading losses
+///             (losses come out of the starter first).
 ///         Everything else is exactly version 1.
 /// @notice The wallet of a Trenchers agent: an ERC-6551 token-bound account owned by whoever holds
 ///         the NFT. The rule: the trading engine can make the agent trade, but can never take its money.
@@ -128,6 +130,8 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
     uint256 public policyTransfers;
     /// @notice (Version 2, appended) The agent coin's Pons bonding curve, for collecting creator fees.
     address public coinCurve;
+    /// @notice (Version 3, appended) ETH the holder put in themselves and hasn't taken out: never counted as locked.
+    uint256 public deposited;
 
 
     event PolicySet(address indexed holder, uint128 perTrade, uint128 dailyCap, bool live);
@@ -136,6 +140,7 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
     event StarterReceived(uint256 amount);
     event CoinLaunched(address indexed coin);
     event CoinFeesClaimed(uint256 amount);
+    event Deposited(address indexed holder, uint256 amount);
     event Withdrawn(address indexed to, uint256 amount);
 
     error NotHolder();
@@ -160,6 +165,10 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
             starterLocked += msg.value;
             if (starterLockedAt == 0) starterLockedAt = block.timestamp;
             emit StarterReceived(msg.value);
+        } else if (msg.value > 0 && msg.sender == owner()) {
+            // The holder's own top-up: always theirs to withdraw, even if trading has eaten into the starter.
+            deposited += msg.value;
+            emit Deposited(msg.sender, msg.value);
         }
     }
 
@@ -203,10 +212,13 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
 
     // ------------------------------------------------------------------ views
 
-    /// @notice Starter ETH that is still locked (zero once STARTER_LOCK has passed).
+    /// @notice Starter ETH that is still locked (zero once STARTER_LOCK has passed). Only the starter is ever locked:
+    ///         the holder's own deposits never are, so trading losses come out of the starter first.
     function lockedNow() public view returns (uint256) {
         if (starterLocked == 0 || block.timestamp >= starterLockedAt + STARTER_LOCK) return 0;
-        return starterLocked < address(this).balance ? starterLocked : address(this).balance;
+        uint256 bal = address(this).balance;
+        uint256 notDeposited = bal > deposited ? bal - deposited : 0;
+        return starterLocked < notDeposited ? starterLocked : notDeposited;
     }
 
     /// @notice True during the 180 days after the starter balance arrived.
@@ -256,6 +268,7 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
             if (fee > MAX_LAUNCH_FEE) revert StarterLocked();
             starterLocked -= fee - free;
         }
+        _spendFree(fee > free ? free : fee);
         _state++;
         bytes memory r = _call(address(factory), fee, data);
         if (r.length < 64) revert NotAllowed();
@@ -289,6 +302,7 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
     function withdraw(uint256 amount) external onlyHolder nonReentrant {
         if (amount == 0) revert NoWithdrawal();
         if (amount > withdrawable()) revert StarterLocked();
+        _spendFree(amount);
         _state++;
         (bool ok, bytes memory r) = msg.sender.call{value: amount}("");
         if (!ok) revert CallFailed(r);
@@ -302,6 +316,7 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
         // During the starter lock, only plain ETH sends from the free balance: no contract calls, so
         // coins bought with the starter can't be moved, approved or sold outside the engine's limits.
         if (inStarterLock() && (data.length != 0 || value > withdrawable())) revert StarterLocked();
+        if (value > 0) _spendFree(value);
         _state++;
         return _call(to, value, data);
     }
@@ -346,6 +361,9 @@ contract TrenchersAgentAccountV3 is IERC165, IERC1271, IERC6551Account, IERC6551
     }
 
     // ------------------------------------------------------------------ internals
+
+    /// @dev ETH leaving the free balance comes out of the holder's recorded deposits first.
+    function _spendFree(uint256 amount) internal { deposited = deposited > amount ? deposited - amount : 0; }
 
     function _call(address to, uint256 value, bytes calldata data) internal returns (bytes memory result) {
         bool ok;
