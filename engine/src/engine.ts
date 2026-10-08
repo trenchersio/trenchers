@@ -244,6 +244,7 @@ export class Engine {
       }
       case "CurveBuy": case "CurveSell": {
         const token = this.curves.get(lc(l.address)); if (!token) return;
+        if (l.eventName === "CurveBuy" && a.recipient && this.agents.has(lc(a.recipient as string))) this.touch(lc(a.recipient as string), token);
         const tok = this.tokens.get(token)!;
         const eth = Number(formatEther((l.eventName === "CurveBuy" ? a.quoteIn : a.quoteOut) as bigint));
         const before = tok.volumeEth;
@@ -294,6 +295,7 @@ export class Engine {
         const ethIn = (a.ethIn as bigint), tokens = (a.tokensOut as bigint);
         if (p) { p.ethIn += ethIn; p.tokens += tokens; } else book.set(token, { token, ethIn, tokens, openedAt: t });
         await this.symbolOf(token);
+        this.touch(w, token);
         this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!);
         break;
       }
@@ -353,12 +355,18 @@ export class Engine {
   /** Coins an agent holds without a recorded buy (e.g. bought while the engine restarted): picked up as
    *  positions so the agent's exit rule still sells them. */
   private lastRecover = 0;
+  /** Coins each agent wallet ever received from a buy (its own or someone buying for it): the only ones it can hold. */
+  private touched = new Map<Address, Set<Address>>();
+  private touch(wallet: Address, token: Address) { let s = this.touched.get(wallet); if (!s) this.touched.set(wallet, (s = new Set())); s.add(token); }
+
   private async recoverHoldings() {
     this.lastRecover = Date.now();
-    const toks = [...this.tokens.values()];
-    if (!toks.length) return;
     for (const ag of this.agents.values()) {
       if (!this.tradable(ag)) continue;
+      // Only the coins this wallet ever bought or was sent by a buy (not all 11,000+ Pons coins every minute,
+      // which made each round slow and used up the RPC's rate limit).
+      const toks = [...(this.touched.get(ag.wallet) ?? [])].map((t) => this.tokens.get(t)).filter((t): t is NonNullable<typeof t> => !!t);
+      if (!toks.length) continue;
       const book = this.book(ag.wallet);
       const bals = await Promise.all(toks.map((t) => this.pub.readContract({ address: t.token, abi: ERC20_ABI, functionName: "balanceOf", args: [ag.wallet] }).catch(() => 0n)));
       for (let i = 0; i < toks.length; i++) {
