@@ -67,6 +67,8 @@ async function main() {
   await call(splitter, "RevenueSplitter", "setPrimarySeller", [nft]);
   await call(splitter, "RevenueSplitter", "proposeDestination", [3, fund]);
   await call(nft, "TrenchersNFT", "setMintOpen", [true]);
+  const dist = await deploy("AgentFeeDistributor", [deployer.address, registry, nft, 600n]);
+  await call(dist, "AgentFeeDistributor", "setAccount", [impl, zeroHash]);
   console.log("deployed");
 
   // Alice mints and awakens #6 and #7, funds them and gives each a rule.
@@ -91,7 +93,7 @@ async function main() {
   Object.assign(process.env, {
     TELEGRAM_API: "http://127.0.0.1:8977", TELEGRAM_BOT_TOKEN: "test", TELEGRAM_CHAT: "@trencherstest",
     RPC_URL: RPC, CHAIN_ID: "31337", ENGINE_KEY, NFT_ADDRESS: nft, FUND_ADDRESS: fund, ADAPTER_ADDRESS: adapter,
-    PONS_FACTORY: pons, START_BLOCK: (block0 + 1n).toString(), SNIPE_WAIT_SEC: "3", POLL_MS: "500",
+    PONS_FACTORY: pons, DIST_ADDRESS: dist, START_BLOCK: (block0 + 1n).toString(), SNIPE_WAIT_SEC: "3", POLL_MS: "500",
   });
   const { Engine } = await import("../src/engine");
   const logs: string[] = [];
@@ -213,6 +215,22 @@ async function main() {
   const woke = posts.slice(n1);
   check(woke.length === 1 && /Trencher #9 awakened/.test(cap(woke[0])) && /\/awake\/9\.png$/.test(woke[0].body.photo ?? ""), `Telegram: the awakening of #9 is posted with its art (${woke.length} post)`);
   tg.close();
+
+  // $TRENCHERS fee share: the engine enrols awake agents, closes each week and pays every agent its share.
+  const rpc = (method: string, params: unknown[] = []) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  await engine.feeKeeper.run();
+  const f6 = await read<bigint>(dist, "AgentFeeDistributor", "enrolledFrom", [6n]), f9 = await read<bigint>(dist, "AgentFeeDistributor", "enrolledFrom", [9n]);
+  check(f6 === 2n && f9 === 2n, `fee share: awake agents #6 and #9 enrolled by the engine, earning from week 2 (${f6}, ${f9})`);
+  await pub.waitForTransactionReceipt({ hash: await wal().sendTransaction({ to: dist, value: parseEther("0.3"), account: deployer, chain }) });
+  await rpc("evm_increaseTime", [7 * 86400 + 60]); await rpc("evm_mine");
+  await engine.feeKeeper.run(); // closes week 1 (nobody earning yet: the pot carries over)
+  await rpc("evm_increaseTime", [7 * 86400 + 60]); await rpc("evm_mine");
+  const enrolledNow = await read<bigint>(dist, "AgentFeeDistributor", "activeAgents");
+  const before6 = await pub.getBalance({ address: w6 });
+  await engine.feeKeeper.run(); // closes week 2 and pays it
+  const per = await read<bigint>(dist, "AgentFeeDistributor", "sharePerAgent", [2n]);
+  const got6 = (await pub.getBalance({ address: w6 })) - before6;
+  check(per > 0n && per === parseEther("0.3") / enrolledNow && got6 === per, `fee share: week 2 closed and paid ${formatEther(per)} ETH into each of ${enrolledNow} agent wallets`);
 
   running = false;
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll engine checks passed");

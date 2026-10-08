@@ -54,4 +54,7 @@ export const ENV = {
   IMAGE_BASE: opt("IMAGE_BASE", "https://www.trenchers.io/testnet-meta/png/"),
   /** DRY_RUN=1 decides and logs trades without sending them. */
   DRY_RUN: opt("DRY_RUN", "0") === "1",
+  /** The $TRENCHERS fee distributor: the engine enrols awake agents, closes each weekly epoch and pays the shares. */
+  DIST: (opt("DIST_ADDRESS", Number(opt("CHAIN_ID", "46630")) === 4663 ? "0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a" : "") || null) as Address | null,
+  FEE_KEEPER: opt("FEE_KEEPER", "1") !== "0",
 };

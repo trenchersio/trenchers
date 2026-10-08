@@ -7,6 +7,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
+import { FeeKeeper } from "./keeper";
 import {
   ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
@@ -121,6 +122,7 @@ export class Engine {
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
     if (Date.now() - this.lastSnapshot > 120_000) await this.snapshot();
     if (Date.now() - this.lastRecover > 60_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
+    if (ENV.FEE_KEEPER && ENV.DIST && Date.now() - this.feeKeeper.last > 600_000) await this.feeKeeper.run().catch((e) => this.log(`fee share upkeep failed: ${(e as Error).message.split("\n")[0]}`));
     if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
     await this.runExits();
@@ -355,6 +357,7 @@ export class Engine {
   /** Coins an agent holds without a recorded buy (e.g. bought while the engine restarted): picked up as
    *  positions so the agent's exit rule still sells them. */
   private lastRecover = 0;
+  feeKeeper = new FeeKeeper(this);
   /** Coins each agent wallet ever received from a buy (its own or someone buying for it): the only ones it can hold. */
   private touched = new Map<Address, Set<Address>>();
   private touch(wallet: Address, token: Address) { let s = this.touched.get(wallet); if (!s) this.touched.set(wallet, (s = new Set())); s.add(token); }
@@ -647,9 +650,13 @@ export class Engine {
   private queue: Promise<unknown> = Promise.resolve();
   /** Sends one engine call to an agent wallet, one at a time (simple nonce handling), after a dry run. */
   private send(wallet: Address, fn: "trade" | "approveRouter", args: readonly unknown[]): Promise<Hash | null> {
+    return this.sendTo(wallet, AGENT_ABI as readonly unknown[], fn, args);
+  }
+  /** Any engine transaction (agent trades, fee distributor upkeep), queued so nonces never clash. */
+  sendTo(address: Address, abi: readonly unknown[], fn: string, args: readonly unknown[]): Promise<Hash | null> {
     const job = this.queue.then(async () => {
       if (ENV.DRY_RUN || !this.wallet || !this.engineAddress) { this.log(`  (not sent: ${ENV.DRY_RUN ? "dry run" : "no ENGINE_KEY"})`); return null; }
-      const { request } = await this.pub.simulateContract({ address: wallet, abi: AGENT_ABI, functionName: fn, args: args as never, account: this.wallet.account! });
+      const { request } = await this.pub.simulateContract({ address, abi: abi as never, functionName: fn as never, args: args as never, account: this.wallet.account! });
       // Signed here with the engine key and sent raw: public RPCs don't hold keys (no eth_sendTransaction).
       const hash = await this.wallet.writeContract(request as never);
       const r = await this.pub.waitForTransactionReceipt({ hash });
