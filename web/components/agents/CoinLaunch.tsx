@@ -27,6 +27,7 @@ const FACTORY = {
   salt: parseAbi([SOC, `struct TokenParams { ${BASE}; bytes32 salt; }`, "function launchToken(TokenParams params, uint256 launchConfigId, address pairToken) payable returns (address token, address curve)"]),
   plain: parseAbi([SOC, `struct TokenParams { ${BASE}; }`, "function launchToken(TokenParams params, uint256 launchConfigId, address pairToken) payable returns (address token, address curve)"]),
 };
+const STARTER = parseAbi(["function starterLocked() view returns (uint256)"]);
 const CFG = parseAbi(["function accountLogic() view returns (address)", "function isAccountLogic(address) view returns (bool)"]);
 const PONS = parseAbi(["function launchFee() view returns (uint256)"]);
 const ERC20 = parseAbi(["function symbol() view returns (string)", "function name() view returns (string)"]);
@@ -34,7 +35,7 @@ const SITE = "https://www.trenchers.io";
 const fmt = (v: bigint) => Number(formatEther(v)).toFixed(6).replace(/\.?0+$/, "") || "0";
 
 type Props = { id: number; wallet: Address; me: Address; bal: bigint; busy: boolean; run: (label: string, fn: (ph: (p: "sign" | "chain") => void) => Promise<unknown>, refreshId?: number) => Promise<boolean> };
-type State = { ready: boolean; opens: number | null; v2: Address | null; v2n: number; onV2: boolean; fee: bigint | null; walletVersion: number; free: bigint };
+type State = { ready: boolean; opens: number | null; v2: Address | null; v2n: number; onV2: boolean; fee: bigint | null; walletVersion: number; free: bigint; need: bigint };
 
 export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const [st, setSt] = useState<State | undefined>(undefined);
@@ -62,12 +63,19 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
       const v2 = vp >= 2 && vp >= vc ? pV[0] : vc >= 2 ? current : null;
       const v2n = v2 === pV[0] ? vp : vc;
       const launcherOk = launcher.toLowerCase() === PONS_FACTORY.toLowerCase();
-      const [walletVersion, free] = await Promise.all([
+      const [walletVersion, free, lockedNow, starterLocked, balance] = await Promise.all([
         c.readContract({ address: wallet, abi: AGENT_V2, functionName: "VERSION" }).then(Number).catch(() => 1),
         c.readContract({ address: wallet, abi: ABI.agent, functionName: "withdrawable" }).catch(() => 0n),
+        c.readContract({ address: wallet, abi: ABI.agent, functionName: "lockedNow" }).catch(() => 0n),
+        c.readContract({ address: wallet, abi: STARTER, functionName: "starterLocked" }).catch(() => 0n),
+        c.getBalance({ address: wallet }).catch(() => 0n),
       ]);
+      // How much to deposit so the free balance covers the fee. While the starter is locked and the agent holds less
+      // than its starter (trading losses), a deposit first refills the locked part, so it takes more than the fee.
+      const f0 = fee ?? 0n;
+      const need = free >= f0 ? 0n : lockedNow > 0n && balance <= starterLocked ? starterLocked + f0 - balance : f0 - free;
       // Coin launches only need Pons as the launcher: the original wallet code (1) and version 3 launch directly on it.
-      setSt({ ready: launcherOk, opens: launcherOk ? null : (pL[0].toLowerCase() === PONS_FACTORY.toLowerCase() ? Number(pL[1]) : null), v2, v2n, onV2: !!v2 && logic.toLowerCase() === v2.toLowerCase(), fee, walletVersion, free });
+      setSt({ ready: launcherOk, opens: launcherOk ? null : (pL[0].toLowerCase() === PONS_FACTORY.toLowerCase() ? Number(pL[1]) : null), v2, v2n, onV2: !!v2 && logic.toLowerCase() === v2.toLowerCase(), fee, walletVersion, free, need });
       if (own !== zeroAddress) {
         const [symbol, name] = await Promise.all([c.readContract({ address: own, abi: ERC20, functionName: "symbol" }).catch(() => "?"), c.readContract({ address: own, abi: ERC20, functionName: "name" }).catch(() => "")]);
         setCoin({ address: own, symbol, name });
@@ -96,7 +104,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
         return;
       }
       // Original wallet code: the agent wallet calls Pons itself (deployer and creator); the fee comes from its free balance.
-      if (st.free < fee) throw new Error(`Deposit ${fmt(fee - st.free)} ETH into the agent first (Funding → Deposit): the launch fee comes from its free balance.`);
+      if (st.free < fee) throw new Error(`Deposit ${fmt(st.need)} ETH into the agent first (Funding → Deposit): the launch fee comes from its free balance.`);
       let coinAddr: Address;
       try {
         const sim = await reader().simulateContract({ address: wallet, abi: ABI.agent, functionName: "launchCoin", args: [data, fee, zeroAddress], account: me });
@@ -148,7 +156,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
           )}
           {st.ready && st.walletVersion < 2 && st.fee !== null && st.free < st.fee && (
             <div className="coin-step">
-              <p><b>Step 1 · Deposit the launch fee.</b> Deposit at least <b>{fmt(st.fee - st.free)} ETH</b> into the agent (Balance → Deposit, just left). The locked starter can&apos;t pay it on this wallet version.</p>
+              <p><b>Step 1 · Deposit the launch fee.</b> Deposit at least <b>{fmt(st.need)} ETH</b> into the agent (Balance → Deposit, just left). The locked starter can&apos;t pay it on this wallet version.{st.need > st.fee ? " This agent holds less than its starter right now, so a deposit first tops the locked starter back up: only what's above it can pay the fee. Waiting for the next wallet version (free launches) is cheaper for this agent." : ""}</p>
             </div>
           )}
           <fieldset className="coin-form" disabled={!st.ready || st.walletVersion === 2 || (st.walletVersion < 2 && st.fee !== null && st.free < st.fee) || busy}>
