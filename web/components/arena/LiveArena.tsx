@@ -161,10 +161,14 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
 
 const LIVE_RANGES = ["1H", "6H", "24H", "All"] as const;
 function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
-  const [range, setRange] = useState<(typeof LIVE_RANGES)[number]>("24H");
+  const [range, setRange] = useState<(typeof LIVE_RANGES)[number]>(LIVE_RANGES[LIVE_RANGES.length - 1]);
   const span = range === "1H" ? 3600 : range === "6H" ? 21600 : range === "24H" ? 86400 : Infinity;
   const end = history.at(-1)?.t ?? 0;
-  const pts = history.filter((h) => end - h.t <= span);
+  // The window's points, starting from the value the agent had when the window opened (carried forward), so a quiet
+  // hour shows a flat line at the right level instead of nothing.
+  const inside = history.filter((h) => end - h.t <= span);
+  const before = span === Infinity ? undefined : history.filter((h) => end - h.t > span).at(-1);
+  const pts = before ? [{ t: end - span, v: before.v }, ...inside] : inside;
   return (
     <div className="panel-block">
       <div className="lc-head"><h3>Value</h3><RangeTabs value={range} options={LIVE_RANGES} onChange={setRange} /></div>

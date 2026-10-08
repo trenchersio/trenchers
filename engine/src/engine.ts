@@ -683,6 +683,28 @@ export class Engine {
     }
   }
 
+  /**
+   * Value over time, rebuilt from the agent's own trades (so it survives restarts): each closed trade moves the value
+   * by its profit or loss; the snapshots taken since this process started add the open positions' moves in between.
+   * Deposits and withdrawals aren't trades, so they show up only in snapshots.
+   */
+  private valueHistory(wallet: Address, nav: number, unrealized: bigint) {
+    const now = this.now();
+    const real = this.realized.filter((x) => x.wallet === wallet && x.time > 0).sort((a, b) => a.time - b.time);
+    const total = real.reduce((s, x) => s + x.pnl, 0n);
+    const base = nav - Number(formatEther(total + unrealized));
+    const firstTrade = this.trades.find((x) => x.wallet === wallet && x.time > 0)?.time;
+    const pts: { t: number; v: number }[] = [];
+    if (firstTrade) pts.push({ t: firstTrade - 1, v: base });
+    let cum = 0n;
+    for (const x of real) { cum += x.pnl; pts.push({ t: x.time, v: base + Number(formatEther(cum)) }); }
+    const snaps = this.history.get(wallet) ?? [];
+    const merged = [...pts.filter((p) => !snaps.length || p.t < snaps[0].t), ...snaps, { t: now, v: nav }];
+    if (merged.length === 1) merged.unshift({ t: now - 3600, v: nav });
+    const step = Math.max(1, Math.ceil(merged.length / 400));
+    return merged.filter((_, i) => i % step === 0 || i === merged.length - 1);
+  }
+
   /** Agent coins: creator fees earned on the launch curve (Pons's fee minus the protocol's share, plus any creator tax),
    *  trading volume and a price history (ETH per coin), from the curve's own trade events. */
   async coins() {
@@ -724,7 +746,7 @@ export class Engine {
         nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,
         biggest: best ? { symbol: best.symbol ?? best.token.slice(2, 8), pct: best.pnlPct! } : null,
-        history: [...(this.history.get(ag.wallet) ?? []), { t: this.now(), v: nav }],
+        history: this.valueHistory(ag.wallet, nav, open - cost),
         recent: mine.slice(-30).reverse(),
       });
     }
