@@ -170,6 +170,27 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
       problems.push(`agent coins rehearsal: ${m}`);
     }
   }
+  // Which launch format does the live Pons factory accept? (The published source and the deployed factory differ:
+  // newer factories take a bytes32 salt at the end of TokenParams.) One eth_call each, from house agent #1's wallet.
+  {
+    const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
+    const base = "string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics";
+    const variants = [["without salt", base], ["with salt", `${base}; bytes32 salt`]] as const;
+    const fmt: Record<string, string> = {};
+    for (const [label, fields] of variants) {
+      const abi = parseAbi(["struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }", `struct TokenParams { ${fields}; }`, "function launchToken(TokenParams params, uint256 launchConfigId, address pairToken) payable returns (address token, address curve)"]);
+      const p0 = { name: "Format check", symbol: "FMTC", logo: "", description: "", socials: { twitter: "", telegram: "", discord: "", website: "", farcaster: "" }, creatorFeeRecipient: wallet1, creatorTaxBps: 0, buybackEnabled: false, expectedEconomics: zeroHash, ...(label === "with salt" ? { salt: keccak256(toHex(`trenchers-format-check-${Date.now()}`)) } : {}) };
+      try {
+        await c.call({ account: wallet1, to: L.ponsFactory, value: fee ?? 0n, data: encodeFunctionData({ abi, functionName: "launchToken", args: [p0 as never, 0n, zeroAddress] }), stateOverride: [{ address: wallet1, balance: parseEther("1") }] });
+        fmt[label] = "accepted";
+      } catch (e) {
+        let data: string | undefined;
+        for (let x: unknown = e; x && !data; x = (x as { cause?: unknown }).cause) { const dd = (x as { data?: unknown }).data; if (typeof dd === "string") data = dd; }
+        fmt[label] = `refused${data && data !== "0x" ? ` (${data.slice(0, 10)})` : " (no reason: unknown function)"}`;
+      }
+    }
+    checks.push({ what: "agent coins: launch format the live Pons factory accepts", ok: Object.values(fmt).some((v) => v === "accepted"), value: JSON.stringify(fmt) });
+  }
   for (const k of [0, 1, 3]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet
   await expect("agent wallet: original code", () => read(d.impl, "TrenchersAgentWallet", "ORIGINAL_VERSION"), d.logic);
