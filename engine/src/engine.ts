@@ -1,5 +1,5 @@
 import {
-  createPublicClient, createWalletClient, decodeAbiParameters, encodeFunctionData, formatEther, http, defineChain,
+  createPublicClient, createWalletClient, decodeAbiParameters, encodeFunctionData, formatEther, http, defineChain, parseAbi,
   type Address, type Hash, type Hex, type Log, type PublicClient, type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -20,6 +20,8 @@ import {
  */
 
 type Token = { token: Address; curve: Address; deployer: Address; launchedAt: number; volumeEth: number; graduated: boolean; symbol?: string; supply?: bigint };
+/** An agent's own coin (launched by its agent wallet): creator fees and a price history, from Pons's own trade events. */
+type AgentCoin = { token: Address; curve: Address; agent: number; wallet: Address; launchedAt: number; feeWei: bigint; taxWei: bigint; volumeEth: number; trades: number; points: { t: number; p: number }[] };
 type Agent = {
   id: number; wallet: Address; owner?: Address; coin?: Address; live: boolean; perTrade: bigint; dailyCap: bigint; setBy?: Address;
   ruleVersion: number; ruleText: string | null; rule: CustomRule | null; balance: bigint; spentDay: bigint; spentToday: bigint;
@@ -41,6 +43,9 @@ export class Engine {
   tokens = new Map<Address, Token>();
   curves = new Map<Address, Address>(); // curve -> token
   agents = new Map<Address, Agent>();
+  /** Coins launched by agent wallets, keyed by token. */
+  agentCoins = new Map<Address, AgentCoin>();
+  private feeShare = new Map<Address, number>();
   positions = new Map<Address, Map<Address, Position>>();
   trades: Trade[] = [];
   realized: { wallet: Address; time: number; pnl: bigint }[] = [];
@@ -212,13 +217,18 @@ export class Engine {
     // (on mainnet that's thousands of logs per replay window).
     if ((l.eventName === "CurveBuy" || l.eventName === "CurveSell") && !this.curves.has(lc(l.address))) return;
     const a = l.args as Record<string, any>;
-    // Replayed curve trades only add to a coin's volume; they don't need a time.
-    const t = !live && (l.eventName === "CurveBuy" || l.eventName === "CurveSell") ? 0 : await this.blockTime(l.blockNumber!);
+    // Replayed curve trades only add to a coin's volume; they don't need a time (except agent coins, for their chart).
+    const curveLog = l.eventName === "CurveBuy" || l.eventName === "CurveSell";
+    const agentCoin = curveLog ? this.agentCoins.get(this.curves.get(lc(l.address))!) : undefined;
+    const t = !live && curveLog && !agentCoin ? 0 : await this.blockTime(l.blockNumber!);
     switch (l.eventName) {
       case "TokenLaunched": {
         if (a.pairToken !== "0x0000000000000000000000000000000000000000") return; // ETH launches only
         const tok: Token = { token: lc(a.token), curve: lc(a.curve), deployer: lc(a.deployer), launchedAt: t, volumeEth: 0, graduated: false };
         this.tokens.set(tok.token, tok); this.curves.set(tok.curve, tok.token);
+        // Launched by an agent wallet: follow it as that agent's coin (fees, chart).
+        const ag = this.agents.get(tok.deployer);
+        if (ag) this.agentCoins.set(tok.token, { token: tok.token, curve: tok.curve, agent: ag.id, wallet: ag.wallet, launchedAt: t, feeWei: 0n, taxWei: 0n, volumeEth: 0, trades: 0, points: [] });
         if (live) this.signal("launch", tok, t);
         break;
       }
@@ -237,6 +247,11 @@ export class Engine {
         const eth = Number(formatEther((l.eventName === "CurveBuy" ? a.quoteIn : a.quoteOut) as bigint));
         const before = tok.volumeEth;
         tok.volumeEth += eth;
+        if (agentCoin) {
+          agentCoin.feeWei += a.fee as bigint; agentCoin.taxWei += a.tax as bigint; agentCoin.volumeEth += eth; agentCoin.trades++;
+          const units = Number(formatEther((l.eventName === "CurveBuy" ? a.tokensOut : a.tokensIn) as bigint));
+          if (units > 0) { agentCoin.points.push({ t, p: eth / units }); if (agentCoin.points.length > 2000) agentCoin.points.splice(0, agentCoin.points.length - 2000); }
+        }
         if (!live) return;
         this.signal("volume", tok, t, { before, after: tok.volumeEth });
         this.signal("mcap", tok, t);
@@ -668,6 +683,28 @@ export class Engine {
     }
   }
 
+  /** Agent coins: creator fees earned on the launch curve (Pons's fee minus the protocol's share, plus any creator tax),
+   *  trading volume and a price history (ETH per coin), from the curve's own trade events. */
+  async coins() {
+    const out = [];
+    for (const c of this.agentCoins.values()) {
+      let share = this.feeShare.get(c.curve);
+      if (share === undefined) {
+        share = Number(await this.pub.readContract({ address: c.curve, abi: parseAbi(["function protocolFeeShareBps() view returns (uint16)"]), functionName: "protocolFeeShareBps" }).catch(() => -1));
+        if (share >= 0) this.feeShare.set(c.curve, share);
+      }
+      const creatorWei = share >= 0 ? (c.feeWei * BigInt(10_000 - share)) / 10_000n + c.taxWei : c.taxWei;
+      const tok = this.tokens.get(c.token);
+      const pts = c.points, step = Math.max(1, Math.ceil(pts.length / 300));
+      out.push({
+        agent: c.agent, wallet: c.wallet, coin: c.token, curve: c.curve, symbol: await this.symbolOf(c.token), launchedAt: c.launchedAt,
+        feesEth: Number(formatEther(creatorWei)), feesExact: share >= 0, volumeEth: c.volumeEth, trades: c.trades, graduated: !!tok?.graduated,
+        price: pts.length ? pts[pts.length - 1].p : null, chart: pts.filter((_, i) => i % step === 0 || i === pts.length - 1),
+      });
+    }
+    return { updatedAt: this.now(), coins: out.sort((a, b) => a.agent - b.agent) };
+  }
+
   /** Live leaderboard: each agent's value, open positions and trading PnL this week, from real trades. */
   async arena() {
     const weekStart = this.now() - WEEK;
@@ -682,7 +719,8 @@ export class Engine {
       const best = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined).sort((a, b) => b.pnlPct! - a.pnlPct!)[0];
       const sells = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined);
       rows.push({
-        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
+        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag),
+        coin: ag.coin && !/^0x0+$/.test(ag.coin) ? ag.coin : ([...this.agentCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? null), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
         nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,
         biggest: best ? { symbol: best.symbol ?? best.token.slice(2, 8), pct: best.pnlPct! } : null,

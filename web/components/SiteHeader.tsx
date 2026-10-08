@@ -4,7 +4,7 @@ import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
 import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
 
 /** Shared top bar: Arena and Collection up front, everything else in two compact dropdowns. */
 export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean }) {
@@ -35,6 +35,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           <a href={ROUTES.mint} className={`nav-mint${page === "mint" ? " on" : ""}`} aria-current={page === "mint" ? "page" : undefined}>Mint</a>
           <a href={ROUTES.arena} className={`tbtn${page === "arena" ? " tbtn-on" : ""}`} aria-current={page === "arena" ? "page" : undefined}>Arena</a>
           <a href={ROUTES.collection} className={`tbtn${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
+          <a href={ROUTES.coins} className={`tbtn${page === "coins" ? " tbtn-on" : ""}`} aria-current={page === "coins" ? "page" : undefined}>Coins</a>
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
           <NavDropdown label="Community" items={community} />
           {OPENSEA_URL && <a href={OPENSEA_URL} target="_blank" rel="noreferrer" className="tbtn">OpenSea ↗</a>}

@@ -5,6 +5,7 @@ import { TextButton } from "@/components/TextButton";
 import { useWallet, short } from "@/lib/wallet";
 import { PALETTES, STATUS_LABEL, SUPPLY, paletteOf, traits, type Status } from "@/lib/collection";
 import { loadArt } from "@/lib/art-vector";
+import { AgentCoinLine } from "@/components/coins/AgentCoinLink";
 import { ArtCanvas } from "./ArtCanvas";
 import { ENGINE_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, openseaItem } from "@/lib/constants";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader } from "@/lib/chain";
@@ -285,6 +286,7 @@ function Detail({ id, b, of }: { id: number; b: Entry; of: number }) {
         </dl>
       )}
 
+      {wallet?.deployed && <AgentCoinLine wallet={wallet.address} />}
       {wallet?.deployed && (
         <div className="cd-verify">
           <span className="mono">Verify trading activity</span>

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
 
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
@@ -17,7 +17,7 @@ export function MobileMenu({ page }: { page: Page }) {
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
   const links: [Page | "github" | "x", string, string][] = [
-    ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection],
+    ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection], ["coins", "Agent coins", ROUTES.coins],
     ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents],
   ];
   return (

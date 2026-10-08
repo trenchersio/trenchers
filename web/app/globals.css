@@ -1941,3 +1941,40 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .coin-step { margin: 4px 0 14px; padding: 14px 16px; border: 1px solid rgba(57,255,136,.4); border-radius: 12px; background: rgba(57,255,136,.06); display: grid; gap: 10px; justify-items: start; }
 .coin-step p { margin: 0; }
 .coin-own .agent-actions { align-items: center; }
+/* Agent coins: the public line on agent details, and the /coins page. */
+.agent-coin-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 14px 0; padding: 12px 14px; border: 1px solid rgba(57,255,136,.35); border-radius: 12px; background: rgba(57,255,136,.05); }
+.agent-coin-line b { color: var(--green); font-size: 15px; }
+.agent-coin-tag { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
+.agent-coin-line .agent-links { margin-left: auto; display: flex; gap: 8px; }
+.coins { display: grid; gap: 28px; }
+.coins-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 20px; }
+.coins-head h1 { margin: 6px 0 10px; }
+.coins-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.coin-card { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 18px; display: grid; gap: 12px; transition: border-color .15s ease, transform .15s ease; }
+.coin-card:hover { border-color: rgba(57,255,136,.5); transform: translateY(-2px); }
+.coin-card-top { display: flex; gap: 14px; align-items: center; }
+.coin-card-top > div { display: grid; gap: 3px; min-width: 0; }
+.coin-face { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 3px solid rgba(57,255,136,.7); flex: none; display: grid; place-items: center; }
+.coin-face canvas { width: 64px !important; height: 64px !important; }
+.coin-sym { font-size: 20px; color: var(--green); }
+.coin-name { font-size: 14px; color: var(--fog); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coin-by { font-size: 12px; color: var(--quiet); }
+.coin-addr { margin: 0; font-size: 12px; color: var(--quiet); }
+.coin-card .agent-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.agent-coin-fees { font-size: 12px; color: var(--green); }
+.coin-chart-btn { border-color: rgba(57,255,136,.5) !important; color: var(--green) !important; }
+.coin-modal { max-width: 860px; width: calc(100vw - 32px); display: grid; gap: 16px; }
+.coin-modal-id { display: flex; gap: 14px; align-items: center; }
+.coin-modal-id h2 { margin: 0; font-size: 26px; color: var(--green); }
+.coin-chart { border: 1px solid var(--line); border-radius: 14px; background: #0B0D0C; padding: 10px 10px 6px; }
+.coin-chart.mini { padding: 4px; border-radius: 10px; }
+.coin-chart.empty { display: grid; place-items: center; color: var(--quiet); font-size: 13px; }
+.coin-chart-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--quiet); margin-top: 4px; }
+.coin-stats, .coin-card-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
+.coin-stats div, .coin-card-stats div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.coin-stats dt, .coin-card-stats dt { font-size: 11px; color: var(--quiet); text-transform: uppercase; letter-spacing: .06em; }
+.coin-stats dd, .coin-card-stats dd { margin: 4px 0 0; font-size: 15px; }
+.coin-card-stats { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.coin-card-stats div { padding: 7px 8px; }
+.coin-card-stats dt { font-size: 9.5px; }
+.coin-card-stats dd { font-size: 13px; }

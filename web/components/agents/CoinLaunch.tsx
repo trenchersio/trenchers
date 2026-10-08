@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { decodeAbiParameters, encodeFunctionData, formatEther, keccak256, parseAbi, toHex, zeroAddress, zeroHash, type Address } from "viem";
 import { ABI, DEPLOYMENT, reader, sendCall } from "@/lib/chain";
 import { EXPLORER, gmgnToken } from "@/lib/constants";
+import { useCoins, ethFmt } from "@/components/coins/coins";
+import { CoinChartButton } from "@/components/coins/CoinChart";
 
 /**
  * "Its own coin": with agent wallet version 2 the agent wallet itself calls the Pons launch factory, so Pons records
@@ -83,6 +85,10 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
     })();
   }, [wallet, ver]);
 
+  const coins = useCoins();
+  const info = coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase()) ?? null;
+  // The engine saw this agent wallet launch a coin even if the wallet didn't record it: show that coin (no second launch).
+  const shown = coin ?? (info ? { address: info.coin as Address, symbol: info.symbol, name: "" } : null);
   const sym = f.symbol.trim().toUpperCase();
 
   const launch = () => run(`Launching $${sym} for Trencher #${id}`, async (ph) => {
@@ -119,7 +125,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const toOriginal = () => run(`Switching Trencher #${id} back to the original wallet code`, (ph) =>
     sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "setAgentVersion", args: [zeroAddress] }, ph), id).then((ok) => { if (ok) setVer((v) => v + 1); });
 
-  const collect = () => run(`Collecting $${coin?.symbol ?? ""} creator fees for Trencher #${id}`, (ph) =>
+  const collect = () => run(`Collecting $${shown?.symbol ?? ""} creator fees for Trencher #${id}`, (ph) =>
     sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "claimCoinFees" }, ph), id).then((ok) => { if (ok) setMsg("Creator fees collected into the agent wallet. They're free balance: withdraw them any time."); });
 
   const valid = f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim());
@@ -128,15 +134,17 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   return (
     <section className="panel-card coin-launch">
       <h3>Its own coin</h3>
-      {coin ? (
+      {shown ? (
         <div className="coin-own">
-          <p><b>${coin.symbol}</b> {coin.name && <span className="muted-note">· {coin.name}</span>}</p>
+          <p><b>${shown.symbol}</b> {shown.name && <span className="muted-note">· {shown.name}</span>}</p>
+          {info && <p className="mono agent-coin-fees">{ethFmt(info.feesEth)} ETH creator fees earned · {ethFmt(info.volumeEth)} ETH volume · {info.trades} trades</p>}
           <p className="muted-note">Launched on Pons by this agent&apos;s wallet. Every trade pays creator fees to the agent, and the engine never trades its own coin.</p>
           <div className="agent-actions">
             {(st?.walletVersion ?? 0) >= 3 && <button type="button" className="gf-btn go" onClick={collect} disabled={busy}>Collect creator fees</button>}
             <span className="agent-links">
-              <a className="tbtn" href={gmgnToken(coin.address)} target="_blank" rel="noreferrer">GMGN ↗</a>
-              <a className="tbtn" href={`${EXPLORER}/token/${coin.address}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
+              {info && <CoinChartButton coin={info} />}
+              <a className="tbtn" href={gmgnToken(shown.address)} target="_blank" rel="noreferrer">GMGN ↗</a>
+              <a className="tbtn" href={`${EXPLORER}/token/${shown.address}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
             </span>
           </div>
           {(st?.walletVersion ?? 0) < 3 && <p className="muted-note">Its creator fees build up for the agent wallet at Pons. Collecting them during the starter lock arrives with the next agent wallet version.</p>}

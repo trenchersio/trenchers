@@ -44,6 +44,7 @@ export const ROUTES = {
   mint: PREVIEW ? "mint.html" : "/mint",
   arena: PREVIEW ? "arena.html" : "/arena",
   collection: PREVIEW ? "collection.html" : "/collection",
+  coins: PREVIEW ? "coins.html" : "/coins",
   agents: PREVIEW ? "agents.html" : "/agents", // NFT / Agent Profile
   docs: PREVIEW ? "docs.html" : "/docs",
 };

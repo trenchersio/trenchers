@@ -76,6 +76,9 @@ const server = createServer(async (req, res) => {
       if (l && /^0x[0-9a-fA-F]{40}$/.test(l) && !verifyRunning) { verifyLauncher = l as `0x${string}`; runVerify(); }
       else if (!verifyRunning && (!lastVerify || Date.now() - lastVerify.t > 300_000)) runVerify();
       res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute" }));
+    } else if (path === "/coins") {
+      if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
+      res.end(JSON.stringify(await engine.coins()));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));

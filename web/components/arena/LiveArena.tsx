@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
+import { AgentCoinLine } from "@/components/coins/AgentCoinLink";
 import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
@@ -187,6 +188,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
         </div>
       </header>
 
+      <AgentCoinLine wallet={a.wallet} />
       <dl className="kpis">
         <div><dt>Value</dt><dd className="mono">{ethTxt(a.nav)} ETH</dd></div>
         <div><dt>PnL this week</dt><dd className={`mono ${a.pnlPct >= 0 ? "up" : "down"}`}>{signed(a.pnlPct)}</dd></div>
