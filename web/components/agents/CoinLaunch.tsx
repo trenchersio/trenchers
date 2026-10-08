@@ -31,7 +31,7 @@ type State = { ready: boolean; opens: number | null; v2: Address | null; onV2: b
 export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const [st, setSt] = useState<State | undefined>(undefined);
   const [coin, setCoin] = useState<{ address: Address; symbol: string; name: string } | null>(null);
-  const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain. Its creator fees fund the agent.`, x: "", telegram: "" });
+  const [f, setF] = useState({ name: `Trencher ${id}`, symbol: `T${id}`, description: `The coin of Trencher #${id}, an AI trading agent on Robinhood Chain, powered by the Trenchers Network. Its creator fees fund the agent.`, x: "", telegram: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const [ver, setVer] = useState(0);
 
