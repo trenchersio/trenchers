@@ -99,7 +99,7 @@ function CoinChartModal({ coin, loading, onClose }: { coin: CoinInfo; loading?: 
             : <PriceChart pts={pts} h={300} fmt={val} />}
 
           <dl className="coin-stats">
-            <div><dt>Creator fees earned</dt><dd className="mono up">{m.eth(coin.feesEth)}</dd><small className="mono">{m.sub(coin.feesEth)}</small></div>
+            <div><dt>Creator fees</dt><dd className="mono up">{m.eth(coin.feesEth)}</dd><small className="mono">{m.sub(coin.feesEth)}</small></div>
             <div><dt>Price</dt><dd className="mono">{last === null ? "—" : m.price(last)}</dd><small className="mono">{last === null ? "" : m.usd ? `${tiny(last)} ETH` : ""}</small></div>
             <div><dt>Since launch</dt><dd className={`mono ${sinceLaunch === null ? "" : sinceLaunch >= 0 ? "up" : "down"}`}>{sinceLaunch === null ? "—" : `${sinceLaunch >= 0 ? "+" : ""}${sinceLaunch.toFixed(1)}%`}</dd><small /></div>
             <div><dt>Volume</dt><dd className="mono">{m.eth(coin.volumeEth)}</dd><small className="mono">{m.sub(coin.volumeEth)}</small></div>
