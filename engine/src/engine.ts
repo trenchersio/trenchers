@@ -251,7 +251,8 @@ export class Engine {
         if (agentCoin) {
           agentCoin.feeWei += a.fee as bigint; agentCoin.taxWei += a.tax as bigint; agentCoin.volumeEth += eth; agentCoin.trades++;
           const units = Number(formatEther((l.eventName === "CurveBuy" ? a.tokensOut : a.tokensIn) as bigint));
-          if (units > 0) { agentCoin.points.push({ t, p: eth / units }); if (agentCoin.points.length > 2000) agentCoin.points.splice(0, agentCoin.points.length - 2000); }
+          const cut = Number(formatEther((a.fee as bigint) + (a.tax as bigint))), net = l.eventName === "CurveBuy" ? Math.max(0, eth - cut) : eth + cut; // the curve's price, without fee and tax
+          if (units > 0 && net > 0) { agentCoin.points.push({ t, p: net / units }); if (agentCoin.points.length > 2000) agentCoin.points.splice(0, agentCoin.points.length - 2000); }
         }
         if (!live) return;
         this.signal("volume", tok, t, { before, after: tok.volumeEth });

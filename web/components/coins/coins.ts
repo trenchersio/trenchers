@@ -7,6 +7,8 @@ export type CoinInfo = {
   agent: number; wallet: string; coin: string; curve: string; symbol: string; launchedAt: number;
   feesEth: number; feesExact: boolean; volumeEth: number; trades: number; graduated: boolean;
   price: number | null; chart: { t: number; p: number }[];
+  /** Total supply in whole coins (Pons coins: 1 billion). */
+  supply?: number;
 };
 
 let cache: { at: number; coins: CoinInfo[] } | null = null;

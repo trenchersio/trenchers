@@ -43,7 +43,7 @@ export function AgentCoinLine({ wallet, agent }: { wallet?: string | null; agent
   return (
     <div className="agent-coin-line">
       <span className="mono agent-coin-tag">Agent coin</span>
-      <b className="mono">${symbol}</b>{onChain?.name && <span className="muted-note">{onChain.name}</span>}
+      <b className="mono">${symbol}</b>{onChain?.name && <span className="agent-coin-name">{onChain.name}</span>}
       {info && <span className="mono agent-coin-fees">{ethFmt(info.feesEth)} ETH creator fees earned</span>}
       <span className="agent-links">
         {id ? <CoinChartButton coin={info} fallback={{ agent: id, coin: address, symbol }} /> : info && <CoinChartButton coin={info} />}

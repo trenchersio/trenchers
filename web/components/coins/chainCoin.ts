@@ -13,13 +13,13 @@ const FACTORY = parseAbi([
   "function getLaunchedToken(address token) view returns (LaunchedToken)",
 ]);
 const CURVE = parseAbi(["function protocolFeeShareBps() view returns (uint16)"]);
-const ERC20 = parseAbi(["function symbol() view returns (string)"]);
+const ERC20 = parseAbi(["function symbol() view returns (string)", "function totalSupply() view returns (uint256)"]);
 const BUY = parseAbiItem("event CurveBuy(address indexed buyer, address indexed recipient, uint256 quoteIn, uint256 tokensOut, uint256 fee, uint256 tax)");
 const SELL = parseAbiItem("event CurveSell(address indexed seller, address indexed recipient, uint256 tokensIn, uint256 quoteOut, uint256 fee, uint256 tax)");
 const LAUNCHED = parseAbiItem("event TokenLaunched(address indexed token, address indexed curve, address indexed deployer, address pairToken, uint256 launchConfigId, uint256 graduationThreshold)");
 
 type Trade = Log<bigint, number, false, typeof BUY | typeof SELL>;
-type State = { curve: Address; from: bigint; last: bigint; logs: Trade[]; share: number; symbol: string; graduated: boolean; launchedAt: number };
+type State = { curve: Address; from: bigint; last: bigint; logs: Trade[]; share: number; symbol: string; graduated: boolean; launchedAt: number; supply: number };
 const states = new Map<string, State>();
 const inflight = new Map<string, Promise<CoinInfo | null>>();
 
@@ -80,13 +80,14 @@ async function load(agent: number, wallet: Address, coin: Address): Promise<Coin
   const lt = (await c.readContract({ address: DEPLOYMENT.launchpad as Address, abi: FACTORY, functionName: "getLaunchedToken", args: [coin] })) as { curve: Address; phase: number };
   if (!s) {
     if (!lt.curve || lt.curve === zeroAddress) return null;
-    const [from, share, symbol] = await Promise.all([
+    const [from, share, symbol, supply] = await Promise.all([
       launchBlock(coin, head),
       c.readContract({ address: lt.curve, abi: CURVE, functionName: "protocolFeeShareBps" }).then(Number).catch(() => -1),
       c.readContract({ address: coin, abi: ERC20, functionName: "symbol" }).catch(() => "?"),
+      c.readContract({ address: coin, abi: ERC20, functionName: "totalSupply" }).then((v) => Number(formatEther(v))).catch(() => 1e9),
     ]);
     const launchedAt = Number((await c.getBlock({ blockNumber: from })).timestamp);
-    s = { curve: lt.curve, from, last: from - 1n, logs: [], share, symbol, graduated: false, launchedAt };
+    s = { curve: lt.curve, from, last: from - 1n, logs: [], share, symbol, graduated: false, launchedAt, supply };
     states.set(key, s);
   }
   s.graduated = Number(lt.phase) === 2;
@@ -104,14 +105,16 @@ async function load(agent: number, wallet: Address, coin: Address): Promise<Coin
     const buy = l.eventName === "CurveBuy";
     const eth = Number(formatEther((buy ? a.quoteIn : a.quoteOut) ?? 0n)), units = Number(formatEther((buy ? a.tokensOut : a.tokensIn) ?? 0n));
     fee += a.fee; tax += a.tax; vol += eth;
-    if (units > 0) chart.push({ t: when(l.blockNumber!), p: eth / units });
+    // The curve's own price, without the trade's fee and tax (a launch-time snipe tax would otherwise show as a fake spike).
+    const cut = Number(formatEther(a.fee + a.tax)), net = buy ? Math.max(0, eth - cut) : eth + cut;
+    if (units > 0 && net > 0) chart.push({ t: when(l.blockNumber!), p: net / units });
   }
   if (chart.length) chart.push({ t: headTime, p: chart[chart.length - 1].p });
   const creator = s.share >= 0 ? (fee * BigInt(10_000 - s.share)) / 10_000n + tax : tax;
   return {
     agent, wallet, coin, curve: s.curve, symbol: s.symbol, launchedAt: s.launchedAt,
     feesEth: Number(formatEther(creator)), feesExact: s.share >= 0, volumeEth: vol, trades: s.logs.length, graduated: s.graduated,
-    price: chart.length ? chart[chart.length - 1].p : null, chart,
+    price: chart.length ? chart[chart.length - 1].p : null, chart, supply: s.supply,
   };
 }
 
