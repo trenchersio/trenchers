@@ -128,8 +128,8 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}</b>
-                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</small>
+                        <b>Trencher #{a.id}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}</small>
                       </span>
                     </span>
                     <span className="col-num"><em className={`pnl mono ${a.pnlPct >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(a.pnlPct)}</em></span>
