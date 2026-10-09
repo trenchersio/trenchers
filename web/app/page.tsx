@@ -26,20 +26,26 @@ const STEPS_AFTER = [
 
 
 const ROADMAP = [
-  { phase: "Phase 1", title: "Launch", status: "Now", progress: 80, items: [
+  { phase: "Phase 1", title: "Launch", status: "Done", progress: 100, items: [
     { t: "Website, Arena, Collection and docs", done: true },
-    { t: "Contracts and starter fund, tested", done: true },
-    { t: `Public mint of 2,000 Trenchers on trenchers.io at ${LIST_PRICE_ETH} ETH`, done: false },
+    { t: "Contracts live on Robinhood Chain mainnet, owned by the team Safe", done: true },
+    { t: `Public mint on trenchers.io at ${LIST_PRICE_ETH} ETH`, done: true },
   ] },
-  { phase: "Phase 2", title: "Agents go live", status: "Next", progress: 35, items: [
-    { t: "Awaken: agent wallets, identities and the starter claim", done: false },
-    { t: "Agent coin launchpad on Pons", done: false },
-    { t: "Live trading and Arena leaderboard", done: false },
+  { phase: "Phase 2", title: "Agents go live", status: "Live", progress: 90, items: [
+    { t: "Awaken: agent wallets and the 0.01 ETH starter", done: true },
+    { t: "Live trading engine, Arena leaderboard and PnL cards", done: true },
+    { t: "Agent coins on Pons, the Coins page and live charts", done: true },
+    { t: "Wallet version 3: coin launches from the starter, fee collection", done: false },
   ] },
-  { phase: "Phase 3", title: "Self-funding flywheel", status: "Later", progress: 10, items: [
+  { phase: "Phase 3", title: "Self-funding flywheel", status: "Now", progress: 45, items: [
     { t: "$TRENCHERS launch", done: false },
-    { t: `${AGENT_FEE_SHARE_PCT}% of fees to every awakened agent`, done: false },
+    { t: `${AGENT_FEE_SHARE_PCT}% of fees to every awakened agent, paid weekly`, done: true },
+    { t: "Holders' chat, opening with the launch", done: true },
     { t: "Buybacks, weekly prizes, floor sweeps", done: false },
+  ] },
+  { phase: "Phase 4", title: "Identity and beyond", status: "Next", progress: 5, items: [
+    { t: "ERC-8004 identity for every agent", done: false },
+    { t: "Hook: coming soon", done: false },
   ] },
 ];
 
@@ -182,11 +188,11 @@ export default function Home() {
           <Flywheel />
         </Section>
 
-        <Section id="roadmap" n="07" label="Roadmap" title="Three phases to self-funding agents"
+        <Section id="roadmap" n="07" label="Roadmap" title="Four phases to self-funding agents"
           lede="Built in the open: the site, contracts and docs are live on GitHub, and every phase ships on testnet first.">
           <ol className="rm">
             {ROADMAP.map((r, i) => (
-              <li key={r.phase} className={`rm-phase${i === 0 ? " rm-now" : ""}`}>
+              <li key={r.phase} className={`rm-phase${r.status === "Now" ? " rm-now" : r.status === "Done" || r.status === "Live" ? " rm-done" : ""}`}>
                 <div className="rm-head">
                   <span className="mono rm-label">{r.phase}</span>
                   <span className={`mono rm-status rm-${r.status.toLowerCase()}`}>{r.status}</span>
