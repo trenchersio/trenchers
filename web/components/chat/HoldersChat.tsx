@@ -132,14 +132,14 @@ export function HoldersChat() {
             msgs.length ? msgs.map((m) => {
               const mod = admins.includes(m.addr.toLowerCase()), mine = !!me && m.addr.toLowerCase() === me.toLowerCase();
               return (
-                <div key={m.id} className={`hc-msg${mine ? " mine" : ""}`}>
+                <div key={m.id} className={`hc-msg${mine ? " hc-mine" : ""}`}>
                   <span className="hc-av">{m.avatar ? <ArtCanvas id={m.avatar} size={40} /> : <span className="hc-av-empty" />}</span>
                   <div className="hc-body">
-                    <div className="hc-meta mono">
+                    <div className="hc-meta">
                       <b>{m.avatar ? `Trencher #${m.avatar}` : "Team"}</b>
-                      <span>{short(m.addr)}</span>
-                      {mod && <span className="hc-mod">mod</span>}
-                      <span className="hc-time">{when(m.t)}</span>
+                      <span className="hc-addr mono">{short(m.addr)}</span>
+                      {mod && <span className="hc-mod mono">mod</span>}{mine && <span className="hc-you mono">you</span>}
+                      <span className="hc-time mono">{when(m.t)}</span>
                       {isAdmin && <button type="button" className="hc-del" onClick={() => remove(m.id)}>Remove</button>}
                     </div>
                     <p>{m.text}</p>
