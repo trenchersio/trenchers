@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-export type NavItem = { label: string; href: string; hint?: string; external?: boolean };
+export type NavItem = { label: string; href: string; hint?: string; external?: boolean; disabled?: boolean };
 
 /** Compact header menu: a [Label ▾] button that opens a small panel of links. Hover or click. */
 export function NavDropdown({ label, items, active = false }: { label: string; items: NavItem[]; active?: boolean }) {
@@ -26,7 +26,12 @@ export function NavDropdown({ label, items, active = false }: { label: string; i
       </button>
       {open && (
         <div className="nd-panel" role="menu">
-          {items.map((it) => (
+          {items.map((it) => it.disabled ? (
+            <span key={it.label} role="menuitem" aria-disabled="true" className="nd-disabled">
+              <span className="nd-label">{it.label}</span>
+              {it.hint && <span className="nd-hint">{it.hint}</span>}
+            </span>
+          ) : (
             <a key={it.label} role="menuitem" href={it.href} onClick={() => setOpen(false)} {...(it.external ? { target: "_blank", rel: "noreferrer" } : {})}>
               <span className="nd-label">{it.label}{it.external && <span className="nd-ext"> ↗</span>}</span>
               {it.hint && <span className="nd-hint">{it.hint}</span>}

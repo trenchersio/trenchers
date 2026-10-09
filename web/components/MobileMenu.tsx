@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
+import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
 
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
@@ -19,6 +19,7 @@ export function MobileMenu({ page }: { page: Page }) {
   const links: [Page | "github" | "x", string, string][] = [
     ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection], ["coins", "Agent coins", ROUTES.coins],
     ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents],
+    ...(CHAT_OPEN ? [["chat", "Holders' chat", ROUTES.chat] as [Page, string, string]] : []),
   ];
   return (
     <div className="mm">
@@ -34,6 +35,7 @@ export function MobileMenu({ page }: { page: Page }) {
               </a>
             ))}
           </nav>
+          {!CHAT_OPEN && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
             {TRENCHERS_TOKEN && <a className="tbtn coin-chart-btn" href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer">$TRENCHERS</a>}

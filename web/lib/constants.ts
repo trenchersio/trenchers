@@ -49,7 +49,10 @@ export const ROUTES = {
   coins: PREVIEW ? "coins.html" : "/coins",
   agents: PREVIEW ? "agents.html" : "/agents", // NFT / Agent Profile
   docs: PREVIEW ? "docs.html" : "/docs",
+  chat: PREVIEW ? "chat.html" : "/chat",
 };
+/** The holders' chat opens to the public once NEXT_PUBLIC_CHAT_OPEN=1 (until then it's greyed out in the menu). */
+export const CHAT_OPEN = (process.env.NEXT_PUBLIC_CHAT_OPEN || "").trim() === "1";
 /** True until the NFT contract is deployed: ownership and transactions are simulated. */
 export const SAMPLE_MODE = NFT_ADDRESS === "0x0000000000000000000000000000000000000000";
 

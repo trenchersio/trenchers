@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { explain, mainnetRpcs, scrub } from "./rpc";
 import { Engine } from "./engine";
+import { Chat } from "./chat";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
 import { verifyDeployment } from "./verify";
@@ -58,11 +59,13 @@ async function loop() {
   setTimeout(loop, ENV.POLL_MS);
 }
 
+const chat = new Chat();
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
   const path = (req.url ?? "/").split("?")[0];
   try {
+    if (await chat.handle(req, res, path)) return;
     if (path === "/health" || path === "/") {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }

@@ -2,9 +2,9 @@ import { WalletMenu } from "./WalletMenu";
 import { ConnectModal } from "./ConnectModal";
 import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
-import { GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
+import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
 
 /** Shared top bar: Arena and Collection up front, everything else in two compact dropdowns. */
 export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean }) {
@@ -20,6 +20,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
     { label: "Docs", href: ROUTES.docs, hint: "The full technical write-up" },
   ];
   const community: NavItem[] = [
+    { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN },
     ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersio", external: true }] : []),
     ...(SOCIALS.discord ? [{ label: "Discord", href: SOCIALS.discord, external: true }] : []),
     ...(SOCIALS.telegram ? [{ label: "Telegram", href: SOCIALS.telegram, external: true }] : []),
@@ -37,7 +38,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           <a href={ROUTES.collection} className={`tbtn${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
           <a href={ROUTES.coins} className={`tbtn${page === "coins" ? " tbtn-on" : ""}`} aria-current={page === "coins" ? "page" : undefined}>Coins</a>
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
-          <NavDropdown label="Community" items={community} />
+          <NavDropdown label="Community" items={community} active={page === "chat"} />
           {OPENSEA_URL && <a href={OPENSEA_URL} target="_blank" rel="noreferrer" className="tbtn">OpenSea ↗</a>}
           {TRENCHERS_TOKEN && <a href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer" className="tbtn coin-chart-btn">$TRENCHERS ↗</a>}
           <span className="nav-sep" aria-hidden="true" />
