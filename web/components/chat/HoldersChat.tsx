@@ -4,7 +4,7 @@ import { createWalletClient, custom, getAddress, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { TextButton } from "@/components/TextButton";
 import { CHAT_OPEN, ENGINE_URL, OPENSEA_URL, ROUTES } from "@/lib/constants";
-import { ownedTrenchers, walletProvider } from "@/lib/chain";
+import { cachedOwned, ownedTrenchers, trencherBalance, walletProvider } from "@/lib/chain";
 import { chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
@@ -52,12 +52,19 @@ export function HoldersChat() {
   useEffect(() => { pull(); const iv = setInterval(pull, 3000); return () => clearInterval(iv); }, [pull]);
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight }); }, [msgs.length]);
 
-  // which Trenchers this wallet holds
+  // which Trenchers this wallet holds: the saved list and a one-call balance check open the gate at once;
+  // the full list (for the avatar picker) follows in the background
+  const [bal, setBal] = useState<number | null>(null);
   useEffect(() => {
-    setOwned(null); setToken(null); setAvatar(null);
+    setOwned(null); setToken(null); setAvatar(null); setBal(null);
     if (!me) return;
     setToken(readToken(me));
-    ownedTrenchers(me).then((ids) => { setOwned(ids); setAvatar(ids[0] ?? null); }).catch(() => setOwned([]));
+    const cached = cachedOwned(me);
+    if (cached?.length) { setOwned(cached); setAvatar(cached[0]); }
+    let live = true;
+    trencherBalance(me).then((n) => live && setBal(n)).catch(() => {});
+    ownedTrenchers(me).then((ids) => { if (!live) return; setOwned(ids); setAvatar((a) => (a && ids.includes(a) ? a : ids[0] ?? null)); }).catch(() => live && setOwned((o) => o ?? []));
+    return () => { live = false; };
   }, [me]);
 
   const signIn = async () => {
@@ -98,15 +105,15 @@ export function HoldersChat() {
     if (r.ok) setMsgs((m) => m.filter((x) => x.id !== id)); else setNote((await r.json()).error ?? "Couldn't remove it.");
   };
 
-  const holder = !!owned && owned.length > 0;
+  const holder = (!!owned && owned.length > 0) || (bal ?? 0) > 0;
   const gate = useMemo(() => {
     if (!open) return "closed";
     if (!me) return "connect";
-    if (owned === null) return "checking";
+    if (owned === null && bal === null) return "checking";
     if (!holder && !isAdmin) return "no-nft";
     if (!token) return "sign-in";
     return "ok";
-  }, [open, me, owned, holder, isAdmin, token]);
+  }, [open, me, owned, bal, holder, isAdmin, token]);
 
   return (
     <div className="hc">
@@ -146,21 +153,21 @@ export function HoldersChat() {
               {gate === "connect" && <><b>Connect your wallet</b><p>The chat is for Trenchers holders. Connect the wallet that holds yours.</p><TextButton onClick={w.openModal}>Connect wallet</TextButton></>}
               {gate === "checking" && <p className="mono">Checking your wallet for Trenchers…</p>}
               {gate === "no-nft" && <><b>You need a Trencher to chat</b><p>This wallet holds no Trenchers. Mint one, or buy one on OpenSea, and you&apos;re in.</p><div className="hc-row"><TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>{OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}</div></>}
-              {gate === "sign-in" && <><b>Sign in to chat</b><p>One signature in your wallet proves you hold {holder ? `Trencher${owned!.length > 1 ? "s" : ""} ${owned!.slice(0, 3).map((i) => `#${i}`).join(", ")}${owned!.length > 3 ? "…" : ""}` : "this wallet"}. No transaction, no gas.</p><TextButton onClick={signIn} disabled={busy}>{busy ? "Waiting for your wallet…" : "Sign in"}</TextButton>{busy && <p className="mono">Check your wallet: a free sign-in request should be open there. Nothing is sent and it costs nothing.</p>}</>}
+              {gate === "sign-in" && <><b>Sign in to chat</b><p>One signature in your wallet proves you hold {owned?.length ? `Trencher${owned!.length > 1 ? "s" : ""} ${owned!.slice(0, 3).map((i) => `#${i}`).join(", ")}${owned!.length > 3 ? "…" : ""}` : "this wallet"}. No transaction, no gas.</p><TextButton onClick={signIn} disabled={busy}>{busy ? "Waiting for your wallet…" : "Sign in"}</TextButton>{busy && <p className="mono">Check your wallet: a free sign-in request should be open there. Nothing is sent and it costs nothing.</p>}</>}
             </div>
           )}
         </div>
 
         {gate === "ok" && (
           <form className="hc-form" onSubmit={(e) => { e.preventDefault(); post(); }}>
-            {holder && owned!.length > 1 && (
+            {!!owned && owned.length > 1 && (
               <select className="hc-as mono" value={avatar ?? ""} onChange={(e) => setAvatar(Number(e.target.value))} aria-label="Post as">
                 {owned!.map((i) => <option key={i} value={i}>#{i}</option>)}
               </select>
             )}
-            <textarea value={text} maxLength={500} rows={1} placeholder={holder ? `Message as Trencher #${avatar}` : "Message as the team"}
+            <textarea value={text} maxLength={500} rows={1} placeholder={avatar ? `Message as Trencher #${avatar}` : holder ? "Message" : "Message as the team"}
               onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); post(); } }} />
-            <button type="submit" className="hc-send" disabled={busy || !text.trim()}>Send</button>
+            <button type="submit" className="hc-send" disabled={busy || !text.trim() || (holder && !avatar && !isAdmin)}>Send</button>
           </form>
         )}
         {note && <p className="hc-note">{note}</p>}

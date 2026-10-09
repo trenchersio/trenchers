@@ -157,6 +157,12 @@ export async function sendEth(from: Address, to: Address, value: bigint, onPhase
 }
 
 const ownedKey = (holder: Address) => `trenchers:owned:${DEPLOYMENT?.nft}:${holder.toLowerCase()}`;
+/** How many Trenchers this address holds: one quick call, used to open gates before the full list is in. */
+export async function trencherBalance(holder: Address): Promise<number> {
+  if (!DEPLOYMENT) return 0;
+  return Number(await reader().readContract({ address: DEPLOYMENT.nft, abi: parseAbi(["function balanceOf(address) view returns (uint256)"]), functionName: "balanceOf", args: [holder] }));
+}
+
 /** The last list found for this holder (shown instantly while the chain is checked again). */
 export function cachedOwned(holder: Address): number[] | null {
   try { const v = localStorage.getItem(ownedKey(holder)); return v ? (JSON.parse(v) as number[]) : null; } catch { return null; }
