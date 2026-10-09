@@ -25,9 +25,9 @@ export function VideoButton({ className = "" }: { className?: string }) {
               <span className="mono">What is Trenchers?</span>
               <button type="button" className="tbtn" onClick={() => setOpen(false)}>Close</button>
             </div>
-            <video poster="video/what-is-trenchers.jpg" controls autoPlay playsInline preload="metadata">
-              <source src="video/what-is-trenchers.mp4" type="video/mp4" />
-              <source src="video/what-is-trenchers.webm" type="video/webm" />
+            <video poster="/video/what-is-trenchers.jpg" controls autoPlay playsInline preload="metadata">
+              <source src="/video/what-is-trenchers.mp4" type="video/mp4" />
+              <source src="/video/what-is-trenchers.webm" type="video/webm" />
             </video>
           </div>
         </div>,
