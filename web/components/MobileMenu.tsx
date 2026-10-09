@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TRENCHERS_TOKEN, gmgnToken } from "@/lib/constants";
+import { CopyCA } from "@/components/CopyCA";
+import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
@@ -38,7 +39,7 @@ export function MobileMenu({ page }: { page: Page }) {
           {!CHAT_OPEN && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
-            {TRENCHERS_TOKEN && <a className="tbtn coin-chart-btn" href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer">$TRENCHERS</a>}
+            <CopyCA />
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             {SOCIALS.x && <a className="tbtn" href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>}
             {SOCIALS.discord && <a className="tbtn" href={SOCIALS.discord} target="_blank" rel="noreferrer">Discord</a>}

@@ -2079,3 +2079,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .video-modal { width: min(1100px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
 .video-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--quiet); }
 .video-modal video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+
+/* "CA copied!" note from the $TRENCHERS button */
+.ca-toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(57,255,136,.4); background: #0f1a14; color: var(--green); font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: ca-in .18s ease-out; }
+.ca-toast span { color: var(--quiet); }
+@keyframes ca-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
