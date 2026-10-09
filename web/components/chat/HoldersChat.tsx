@@ -7,6 +7,7 @@ import { CHAT_OPEN, ENGINE_URL, OPENSEA_URL, ROUTES } from "@/lib/constants";
 import { cachedOwned, ownedTrenchers, trencherBalance, walletProvider } from "@/lib/chain";
 import { chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
+import { markChatSeen } from "@/lib/chat-unread";
 
 /**
  * Holders' chat. Reading and posting need a Trencher in the connected wallet; signing in is one free signature.
@@ -51,6 +52,7 @@ export function HoldersChat() {
   }, []);
   useEffect(() => { pull(); const iv = setInterval(pull, 3000); return () => clearInterval(iv); }, [pull]);
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight }); }, [msgs.length]);
+  useEffect(() => { if (msgs.length) markChatSeen(Math.max(...msgs.map((m) => m.id))); }, [msgs]);
 
   // which Trenchers this wallet holds: the saved list and a one-call balance check open the gate at once;
   // the full list (for the avatar picker) follows in the background

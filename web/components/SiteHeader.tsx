@@ -3,7 +3,8 @@ import { ConnectModal } from "./ConnectModal";
 import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
 import { CopyCA } from "@/components/CopyCA";
-import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { WakeBanner } from "@/components/WakeBanner";
+import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
 
@@ -21,7 +22,8 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
     { label: "Docs", href: ROUTES.docs, hint: "The full technical write-up" },
   ];
   const community: NavItem[] = [
-    { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN },
+    { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN, unread: "chat" },
+    ...(TELEGRAM_FEED ? [{ label: "Live feed", href: TELEGRAM_FEED, hint: "Every mint, awakening and sale, on Telegram", external: true }] : []),
     ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersio", external: true }] : []),
     ...(SOCIALS.discord ? [{ label: "Discord", href: SOCIALS.discord, external: true }] : []),
     ...(SOCIALS.telegram ? [{ label: "Telegram", href: SOCIALS.telegram, external: true }] : []),
@@ -47,6 +49,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
         </nav>
         <MobileMenu page={page} />
       </header>
+      <WakeBanner page={page} />
       <ConnectModal />
     </>
   );

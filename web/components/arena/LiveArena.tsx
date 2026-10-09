@@ -5,6 +5,8 @@ import { AgentCoinLine } from "@/components/coins/AgentCoinLink";
 import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
+import { badgeOf, type Blocked } from "@/lib/agent-status";
+import { useActivity } from "@/lib/activity";
 import { ENGINE_URL, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
@@ -24,6 +26,7 @@ type LiveAgent = {
   trades: number; wins: number; closed: number; biggest: { symbol: string; pct: number } | null;
   positions: { token: string; symbol?: string; cost: number; value: number; since: number }[];
   history: { t: number; v: number }[]; recent: LiveTrade[];
+  blocked?: Blocked; spentToday?: number; dailyCap?: number;
 };
 type Feed = { updatedAt: number; chainId: number; nft: string; paused: boolean; agents: LiveAgent[]; feed: LiveTrade[] };
 
@@ -74,6 +77,7 @@ export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string
 /** `only`: show just these Trenchers (the holder's own agents on their profile). */
 export function LiveArena({ only }: { only?: number[] } = {}) {
   const { feed: full, error } = useFeed();
+  const activity = useActivity();
   const [selected, setSelected] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
@@ -99,7 +103,11 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
           <span className="mono stat-delta">{feed.agents.length} awakened · {trading} trading</span>
         </div>
         <div className="stat"><span className="stat-label">Trades this week</span><span className="stat-value mono">{weekTrades}</span><span className="stat-sub">on Pons{testnet ? " (test launchpad)" : ""}</span></div>
-        <div className="stat"><span className="stat-label">Network</span><span className="stat-value mono">{testnet ? "Testnet" : "Mainnet"}</span><span className="stat-sub">Robinhood Chain</span></div>
+        {activity?.feeShare ? (
+          <div className="stat stat-fee"><span className="stat-label">$TRENCHERS fee share · week {activity.feeShare.week}</span><span className="stat-value mono">{activity.feeShare.closesIn}</span><span className="stat-sub">until payout · {activity.feeShare.agentsEarningThisWeek} earning, {activity.feeShare.joiningNextWeek} join next week</span></div>
+        ) : (
+          <div className="stat"><span className="stat-label">Network</span><span className="stat-value mono">{testnet ? "Testnet" : "Mainnet"}</span><span className="stat-sub">Robinhood Chain</span></div>
+        )}
         <div className="stat"><span className="stat-label">Updated</span><span className="stat-value mono">{ago(now - feed.updatedAt)}</span><span className="stat-sub">every 5 seconds</span></div>
       </section>
 
@@ -121,7 +129,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
                         <b>Trencher #{a.id}</b>
-                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}</small>
+                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</small>
                       </span>
                     </span>
                     <span className="col-num"><em className={`pnl mono ${a.pnlPct >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(a.pnlPct)}</em></span>
@@ -197,6 +205,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
         </div>
       </header>
 
+      {(() => { const b = badgeOf(a.blocked); return b ? <p className={`ag-note ag-note-${b.tone} mono`}>Can&apos;t buy right now: {a.blocked!.text}. {a.blocked!.code === "no-eth" ? "Its holder can top it up on its profile." : a.blocked!.code === "unsupported" ? "Its holder can pick another strategy on its profile." : ""}</p> : null; })()}
       <AgentCoinLine wallet={a.wallet} agent={a.id} />
       <dl className="kpis">
         <div><dt>Value</dt><dd className="mono">{ethTxt(a.nav)} ETH</dd></div>

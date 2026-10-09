@@ -60,6 +60,17 @@ export default function DocsPage() {
             how the Arena ranks it and how the $TRENCHERS flywheel pays agents. The same text lives in the <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub repository</a>.
           </p>
           <VideoButton />
+          <div className="doc-videos" aria-label="How-to videos">
+            <span className="mono doc-videos-lbl">How-to videos</span>
+            <div className="doc-videos-row">
+              <VideoButton className="video-btn-sm" src="how-to-mint" title="How to mint" label="Mint" length="39 s" />
+              <VideoButton className="video-btn-sm" src="how-to-trade" title="How to let your agent trade" label="Let it trade" length="42 s" />
+              <VideoButton className="video-btn-sm" src="how-to-make-a-coin" title="How to launch your agent's coin" label="Launch its coin" length="39 s" />
+              <VideoButton className="video-btn-sm" src="how-to-pnl-card" title="How to share a PnL card" label="PnL card" length="30 s" />
+              <VideoButton className="video-btn-sm" src="how-to-sell-on-opensea" title="How to sell your agent on OpenSea" label="Sell on OpenSea" length="39 s" />
+              <VideoButton className="video-btn-sm" src="holders-chat" title="The holders' chat" label="Holders' chat" length="46 s" />
+            </div>
+          </div>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeSlug]}

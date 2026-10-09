@@ -2,7 +2,7 @@ import { SiteShell } from "@/components/SiteShell";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ArtCycler } from "@/components/ArtCycler";
 import { TextButton } from "@/components/TextButton";
-import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH } from "@/lib/constants";
+import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH, TELEGRAM_FEED } from "@/lib/constants";
 import { Flywheel } from "@/components/Flywheel";
 import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
@@ -12,6 +12,8 @@ import { GuideDemo } from "@/components/GuideDemo";
 import { MobileDock } from "@/components/MobileDock";
 import { Resale } from "@/components/Resale";
 import { MintPanel } from "@/components/MintPanel";
+import { ActivityTicker } from "@/components/ActivityTicker";
+import { BurnStats } from "@/components/BurnStats";
 import { TokenLine } from "@/components/TokenLine";
 
 const STEPS = [
@@ -108,6 +110,8 @@ export default function Home() {
           <ArtCycler />
         </section>
 
+        <ActivityTicker />
+
         <section className="ticker" aria-hidden="true">
           <div className="ticker-track">
             {[...strip, ...strip].map((id, k) => (
@@ -187,6 +191,7 @@ export default function Home() {
         <Section id="flywheel" n="06" label="The flywheel" title="Every flow of value points back at $TRENCHERS"
           lede={`Half of every mint goes back to the minter's agent. Royalties, $TRENCHERS fees, agent coins and the house agents' profits feed buybacks, prizes, the floor or the agents themselves.`}>
           <Flywheel />
+          <BurnStats />
         </Section>
 
         <Section id="roadmap" n="07" label="Roadmap" title="Four phases to self-funding agents"
@@ -264,6 +269,7 @@ export default function Home() {
             <a className="tbtn" href={ROUTES.collection}>Collection</a>
             <a className="tbtn" href={ROUTES.docs}>Docs</a>
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
+            {TELEGRAM_FEED && <a className="tbtn" href={TELEGRAM_FEED} target="_blank" rel="noreferrer">Telegram</a>}
           </nav>
         </div>
         <TokenLine />

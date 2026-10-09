@@ -42,7 +42,7 @@ function PnlCardModal({ data, prefix, onClose }: { data: PnlCardData; prefix: st
     } catch { setMsg("Your browser can't copy images. Use Download instead."); }
     setTimeout(() => setMsg(null), 2500);
   };
-  const share = `https://x.com/intent/post?text=${encodeURIComponent(`Trencher #${data.id}: ${data.returnPct >= 0 ? "+" : ""}${data.returnPct.toFixed(1)}% ${data.period ? data.period.toLowerCase() : ""} 🟩\nSelf-funding trading agents with an identity\ntrenchers.io`)}`;
+  const share = `https://x.com/intent/post?text=${encodeURIComponent(`Trencher #${data.id}: ${data.returnPct >= 0 ? "+" : ""}${data.returnPct.toFixed(1)}% ${data.period ? data.period.toLowerCase() : ""} 🟩\nSelf-funding trading agents with an identity\nhttps://www.trenchers.io/agent/${data.id}`)}`;
 
   // Rendered at the end of <body>, so nothing on the page (leaderboard rows, sticky headers) can sit on top of it.
   return createPortal(

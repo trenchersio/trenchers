@@ -1,11 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-export type NavItem = { label: string; href: string; hint?: string; external?: boolean; disabled?: boolean };
+import { useChatUnread } from "@/lib/chat-unread";
+
+export type NavItem = { label: string; href: string; hint?: string; external?: boolean; disabled?: boolean; unread?: "chat" };
 
 /** Compact header menu: a [Label ▾] button that opens a small panel of links. Hover or click. */
 export function NavDropdown({ label, items, active = false }: { label: string; items: NavItem[]; active?: boolean }) {
   const [open, setOpen] = useState(false);
+  const chatUnread = useChatUnread(items.some((i) => i.unread === "chat" && !i.disabled));
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hovered = useRef(0); // when hover opened the menu, so the click that follows doesn't close it
@@ -22,7 +25,7 @@ export function NavDropdown({ label, items, active = false }: { label: string; i
   return (
     <div className="nd" ref={ref} onMouseEnter={enter} onMouseLeave={leave}>
       <button type="button" className={`tbtn nd-btn${open || active ? " tbtn-on" : ""}`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => (Date.now() - hovered.current < 600 ? true : !o))}>
-        {label}<span className="nd-caret" aria-hidden="true">▾</span>
+        {label}{chatUnread && <span className="nd-dot" aria-label="new messages" />}<span className="nd-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
         <div className="nd-panel" role="menu">
@@ -33,7 +36,7 @@ export function NavDropdown({ label, items, active = false }: { label: string; i
             </span>
           ) : (
             <a key={it.label} role="menuitem" href={it.href} onClick={() => setOpen(false)} {...(it.external ? { target: "_blank", rel: "noreferrer" } : {})}>
-              <span className="nd-label">{it.label}{it.external && <span className="nd-ext"> ↗</span>}</span>
+              <span className="nd-label">{it.label}{it.external && <span className="nd-ext"> ↗</span>}{it.unread === "chat" && chatUnread && <span className="nd-new mono">new</span>}</span>
               {it.hint && <span className="nd-hint">{it.hint}</span>}
             </a>
           ))}

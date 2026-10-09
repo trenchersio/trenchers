@@ -8,7 +8,7 @@ import type { ChatMsg } from "@/lib/agents-store";
  * "Train your agent" in three steps: choose its strategy (talk to it, or start from a house template),
  * set its hard limits, then start or pause trading. Used by the live profile and the demo walkthrough.
  */
-export type GuideTemplate = { name: string; text: string; house?: number | null };
+export type GuideTemplate = { name: string; text: string; house?: number | null; tag?: string };
 export type GuideLimit = { id: string; label: string; unit?: string; value: string; onChange: (v: string) => void };
 
 export function GuideFlow(p: {
@@ -64,7 +64,7 @@ export function GuideFlow(p: {
                 {p.chatExtra}
               </div>
               <div className="gf-tpls" role="list" aria-label="House templates">
-                <span className="mono gf-sub">Or start from a house template</span>
+                <span className="mono gf-sub">Or pick a ready-made strategy</span>
                 {p.templates.map((t) => {
                   const on = p.activeTemplate === t.name;
                   const picked = pick?.name === t.name;
@@ -72,7 +72,7 @@ export function GuideFlow(p: {
                     <button key={t.name} type="button" role="listitem" className={`gf-tpl${on ? " on" : ""}${picked ? " picked" : ""}`} disabled={off || on} onClick={() => setPick(picked ? null : t)} aria-pressed={on || picked}>
                       <span className="gf-radio" aria-hidden="true" />
                       <span className="gf-tpl-txt"><b>{t.name}</b><small>{t.text}</small></span>
-                      {on ? <span className="mono gf-tag on">Active</span> : picked ? <span className="mono gf-tag on">Selected</span> : t.house ? <span className="mono gf-tag">#{t.house}</span> : null}
+                      {on ? <span className="mono gf-tag on">Active</span> : picked ? <span className="mono gf-tag on">Selected</span> : t.house ? <span className="mono gf-tag">#{t.house}</span> : t.tag ? <span className="mono gf-tag">{t.tag}</span> : null}
                     </button>
                   );
                 })}

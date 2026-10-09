@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { CopyCA } from "@/components/CopyCA";
-import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS } from "@/lib/constants";
+import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
+import { useChatUnread } from "@/lib/chat-unread";
 import { short, useWallet } from "@/lib/wallet";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
@@ -10,6 +11,7 @@ type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coin
 export function MobileMenu({ page }: { page: Page }) {
   const [open, setOpen] = useState(false);
   const w = useWallet();
+  const chatUnread = useChatUnread(CHAT_OPEN);
   useEffect(() => {
     document.documentElement.classList.toggle("menu-open", open);
     if (!open) return;
@@ -25,14 +27,14 @@ export function MobileMenu({ page }: { page: Page }) {
   return (
     <div className="mm">
       <button type="button" className={`tbtn${open ? " tbtn-on" : ""}`} aria-expanded={open} aria-controls="mobile-menu" onClick={() => setOpen((o) => !o)}>
-        {open ? "Close" : "Menu"}
+        {open ? "Close" : "Menu"}{!open && chatUnread && <span className="nd-dot" aria-label="new messages" />}
       </button>
       {open && (
         <div id="mobile-menu" className="mm-panel">
           <nav aria-label="Pages">
             {links.map(([k, label, href]) => (
               <a key={k} href={href} className={page === k ? "on" : undefined} onClick={() => setOpen(false)}>
-                <span className="mono">{label}</span><span aria-hidden="true">→</span>
+                <span className="mono">{label}{k === "chat" && chatUnread && <span className="nd-new mono">new</span>}</span><span aria-hidden="true">→</span>
               </a>
             ))}
           </nav>
@@ -40,6 +42,7 @@ export function MobileMenu({ page }: { page: Page }) {
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
             <CopyCA />
+            {TELEGRAM_FEED && <a className="tbtn" href={TELEGRAM_FEED} target="_blank" rel="noreferrer">Telegram</a>}
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             {SOCIALS.x && <a className="tbtn" href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>}
             {SOCIALS.discord && <a className="tbtn" href={SOCIALS.discord} target="_blank" rel="noreferrer">Discord</a>}

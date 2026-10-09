@@ -2084,3 +2084,69 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .ca-toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(57,255,136,.4); background: #0f1a14; color: var(--green); font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: ca-in .18s ease-out; }
 .ca-toast span { color: var(--quiet); }
 @keyframes ca-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Agent status: why an agent can't buy right now */
+.ag-flag { display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
+.ag-flag-warn { color: var(--amber, #FFB020); background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.35); }
+.ag-flag-info { color: var(--quiet); background: rgba(255,255,255,.04); border: 1px solid var(--line); }
+.ag-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; }
+.ag-note-warn { color: var(--amber, #FFB020); background: rgba(255,176,32,.07); border: 1px solid rgba(255,176,32,.3); }
+.ag-note-info { color: var(--quiet); background: rgba(255,255,255,.03); border: 1px solid var(--line); }
+.ag-status { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 16px 0; padding: 16px 18px; border-radius: 14px; }
+.ag-status b { display: block; font-size: 16px; margin-bottom: 4px; }
+.ag-status p { margin: 0; color: var(--quiet); font-size: 14px; line-height: 1.5; max-width: 620px; }
+.ag-status-warn { background: rgba(255,176,32,.06); border: 1px solid rgba(255,176,32,.35); }
+.ag-status-warn b { color: var(--amber, #FFB020); }
+.ag-status-info { background: rgba(255,255,255,.03); border: 1px solid var(--line); }
+.stat-fee .stat-value { color: var(--green); }
+
+/* Live activity strip */
+.act { display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px 10px 8px 14px; margin: 18px 0; overflow: hidden; }
+.act-live { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--green); }
+.act-view { flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.act-track { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; width: max-content; }
+.act-track.moving { animation: scroll 60s linear infinite; }
+.act:hover .act-track.moving { animation-play-state: paused; }
+.act-track a { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--black); color: var(--fog); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.act-track a:hover { border-color: rgba(57,255,136,.4); }
+.act-track canvas { width: 24px !important; height: 24px !important; border-radius: 6px; }
+.act-kind { width: 7px; height: 7px; border-radius: 50%; background: var(--quiet); }
+.act-mint { background: var(--green); } .act-awaken { background: var(--amber, #FFB020); } .act-coin { background: #B98CFF; } .act-win { background: #6CB6FF; }
+.act-ago { color: var(--quiet); font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .act-track.moving { animation: none; } }
+.act-mint-page { margin: 0 0 18px; }
+
+/* "Your Trencher is still asleep" reminder */
+.wake-banner { display: flex; align-items: center; gap: 12px; max-width: 1160px; margin: 8px auto 0; padding: 10px 12px 10px 16px; border: 1px solid rgba(255,176,32,.35); background: rgba(255,176,32,.06); border-radius: 12px; font-size: 14px; }
+.wake-banner p { margin: 0; flex: 1; color: var(--quiet); line-height: 1.45; }
+.wake-banner b { color: var(--fog); }
+.wake-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber, #FFB020); flex: none; animation: pulse 2s ease-in-out infinite; }
+.wake-go { flex: none; padding: 7px 14px; border-radius: 9px; background: rgba(255,176,32,.14); border: 1px solid rgba(255,176,32,.5); color: var(--amber, #FFB020); font-weight: 600; text-decoration: none; font-size: 13px; }
+.wake-go:hover { background: rgba(255,176,32,.22); }
+.wake-x { flex: none; background: none; border: 0; color: var(--quiet); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+@media (max-width: 700px) { .wake-banner { margin: 8px 16px 0; flex-wrap: wrap; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* $TRENCHERS buyback and burn tracker */
+.burns { margin-top: 28px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 18px 20px; }
+.burns-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; }
+.burns-head a { color: var(--quiet); text-decoration: none; } .burns-head a:hover { color: var(--green); }
+.burns-kick { color: var(--green); letter-spacing: .08em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+.burns-flame { width: 8px; height: 8px; border-radius: 50%; background: var(--amber, #FFB020); box-shadow: 0 0 10px rgba(255,176,32,.7); }
+.burns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.burns-grid > div { display: flex; flex-direction: column; gap: 4px; }
+.burns-lbl { font-size: 11px; color: var(--quiet); text-transform: uppercase; letter-spacing: .06em; }
+.burns-grid b { font-size: 32px; color: var(--fog); }
+.burns-grid small { color: var(--quiet); font-size: 12px; }
+.burns-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.05); margin: 16px 0 10px; overflow: hidden; }
+.burns-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--amber, #FFB020), var(--green)); border-radius: 4px; }
+.doc-videos { margin: 18px 0 0; }
+.doc-videos-lbl { display: block; font-size: 11px; color: var(--quiet); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+.doc-videos-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.video-btn.video-btn-sm { margin: 0; padding: 8px 12px 8px 8px; gap: 10px; border-color: var(--line); background: var(--panel); width: 100%; }
+.video-btn.video-btn-sm:hover { border-color: rgba(57,255,136,.5); }
+.video-btn-sm .video-play { transform: scale(.72); }
+.video-btn-sm b { font-size: 13px; }
+.docs .video-btn + h2, .docs .doc-videos + h2 { margin-top: 32px; }
+.nd-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: 6px; vertical-align: 2px; box-shadow: 0 0 8px rgba(57,255,136,.8); }
+.nd-new { margin-left: 8px; font-size: 9px; padding: 0 5px; border-radius: 999px; background: rgba(57,255,136,.12); color: var(--green); border: 1px solid rgba(57,255,136,.35); text-transform: uppercase; vertical-align: 1px; }

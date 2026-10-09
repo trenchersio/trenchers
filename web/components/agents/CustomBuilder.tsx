@@ -59,9 +59,9 @@ export function CustomBuilder({ idPrefix, rule, onChange, disabled }: {
         <span className="field-label">Buy when</span>
         <div className="seg" role="radiogroup" aria-label="Buy signal">
           {TRIGGERS.map((t) => (
-            <button key={t.key} type="button" role="radio" aria-checked={rule.trigger === t.key} disabled={disabled}
-              className={`tbtn${rule.trigger === t.key ? " tbtn-on" : ""}`}
-              onClick={() => set({ trigger: t.key, threshold: t.defaultThreshold ?? null })}>{t.label}</button>
+            <button key={t.key} type="button" role="radio" aria-checked={rule.trigger === t.key} disabled={disabled || t.key === "dexupdate"}
+              className={`tbtn${rule.trigger === t.key ? " tbtn-on" : ""}`} title={t.key === "dexupdate" ? "Not supported by the trading engine yet" : undefined}
+              onClick={() => set({ trigger: t.key, threshold: t.defaultThreshold ?? null })}>{t.key === "dexupdate" ? `${t.label} (soon)` : t.label}</button>
           ))}
         </div>
         {trig.unit && (

@@ -35,6 +35,9 @@ export const STARTER_ETH = "0.01";
 /** The starter balance can only be spent by the agent (coin launch, trades) for this long, then becomes withdrawable. */
 export const STARTER_LOCK_DAYS = 180;
 
+/** Telegram channel where every mint, awakening and sale is posted live. */
+export const TELEGRAM_FEED = process.env.NEXT_PUBLIC_TELEGRAM_FEED_URL ?? "https://t.me/trenchersmints";
+
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
   x: process.env.NEXT_PUBLIC_X_URL || "https://x.com/trenchersio",

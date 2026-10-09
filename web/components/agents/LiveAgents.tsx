@@ -10,6 +10,7 @@ import { CoinLaunch } from "./CoinLaunch";
 import { Fold } from "@/components/Fold";
 import { SectionNav } from "@/components/SectionNav";
 import { cardFromLive, tradeCard } from "@/components/arena/LiveArena";
+import { explain, goToSection } from "@/lib/agent-status";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
 import { createPortal } from "react-dom";
@@ -35,7 +36,14 @@ type Agent = {
 type EngineAgent = Parameters<typeof cardFromLive>[0];
 type Task = { label: string; phase: "check" | "sign" | "chain" | "done" | "error"; note?: string };
 
-const TEMPLATES = STRATEGIES.filter((s) => s.name !== "Custom").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.`, house: s.houseAgent }));
+// House templates the engine can trade (DexScreener isn't supported yet), plus ready-made take-profit / stop-loss presets.
+const TEMPLATES = [
+  ...STRATEGIES.filter((s) => s.name !== "Custom" && s.event !== "dexupdate").map((s) => ({ name: s.name, text: `${s.trigger}. ${s.exit}.`, house: s.houseAgent })),
+  { name: "Launch Sniper", text: "Buys every new launch on Pons. Take profit at +100%, stop loss at -30%.", house: null, tag: "TP / SL" },
+  { name: "Graduation Momentum", text: "Buys every launch that graduates on Pons. Take profit at +50%, stop loss at -20%.", house: null, tag: "TP / SL" },
+  { name: "Breakout Runner", text: "Buys a new Pons token when it crosses $50k lifetime volume. Take profit at +40%, stop loss at -20%.", house: null, tag: "TP / SL" },
+  { name: "5 ETH Market Cap", text: "Buys when a token's market cap crosses 5 ETH. Sells after 2 minutes.", house: null, tag: "Timed" },
+];
 const LOCK_DAYS = 180;
 const NAV = [
   { id: "overview", label: "Overview" }, { id: "funding", label: "Funding" }, { id: "guide", label: "Train" },
@@ -250,6 +258,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
     return [p, dc] as const;
   };
   const applyText = (text: string, label: string) => run(label, async (ph) => {
+    if (parse(text).rule.trigger === "dexupdate") throw new Error("The DexScreener signal isn't supported by the trading engine yet, so the agent would never buy. Pick another signal.");
     const [p, dc] = limits();
     // Applying a rule never switches trading on by itself: that's the separate Start trading step.
     await sendCall(me, { address: a.wallet!, abi: ABI.agent, functionName: "setPolicy", args: [p, dc, trading, keccak256(toHex(text)), text] }, ph);
@@ -321,6 +330,17 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           )}
         </div>
       </section>
+
+      {a.deployed && (() => {
+        const x = explain(live?.blocked);
+        if (!x) return null;
+        return (
+          <section className={`ag-status ag-status-${x.tone}`} role="status">
+            <div><b>{x.title}</b><p>{x.body}</p></div>
+            {x.fix && <button type="button" className="gf-btn go" onClick={() => goToSection(x.fix!)}>{x.fixLabel}</button>}
+          </section>
+        );
+      })()}
 
       {!a.awake && (
         <section className="panel-card">
