@@ -2053,3 +2053,16 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .hc-send { height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--green); color: var(--black); font-weight: 700; cursor: pointer; }
 .hc-send:disabled { opacity: .45; cursor: default; }
 .hc-note { margin: 0; padding: 8px 14px 12px; font-size: 13px; color: var(--amber, #FFB020); }
+
+/* ---------- docs video ---------- */
+.video-btn { display: inline-flex; align-items: center; gap: 14px; margin: 4px 0 28px; padding: 12px 20px 12px 12px; border: 1px solid rgba(57,255,136,.45); border-radius: 14px; background: radial-gradient(ellipse at left, rgba(57,255,136,.12), transparent 70%), var(--panel); color: var(--fog); font: inherit; cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; }
+.video-btn:hover { border-color: var(--green); transform: translateY(-1px); }
+.video-btn:focus-visible { outline: 2px dashed var(--green); outline-offset: 3px; }
+.video-btn b { display: block; font-size: 15px; }
+.video-btn small { display: block; color: var(--quiet); font-size: 12px; margin-top: 3px; }
+.video-play { width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--green); position: relative; box-shadow: 0 0 24px rgba(57,255,136,.35); }
+.video-play::after { content: ""; position: absolute; left: 17px; top: 13px; border-style: solid; border-width: 9px 0 9px 14px; border-color: transparent transparent transparent var(--black); }
+.video-backdrop { padding: 24px; }
+.video-modal { width: min(1100px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.video-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--quiet); }
+.video-modal video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }

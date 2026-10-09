@@ -7,6 +7,7 @@ import rehypeSlug from "rehype-slug";
 import GithubSlugger from "github-slugger";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Mermaid } from "@/components/docs/Mermaid";
+import { VideoButton } from "@/components/docs/VideoButton";
 import { GITHUB_URL, ROUTES } from "@/lib/constants";
 
 export const metadata: Metadata = {
@@ -58,6 +59,7 @@ export default function DocsPage() {
             The full technical write-up: what a self-funding agent is, how it trades, how it launches its own coin,
             how the Arena ranks it and how the $TRENCHERS flywheel pays agents. The same text lives in the <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub repository</a>.
           </p>
+          <VideoButton />
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeSlug]}
