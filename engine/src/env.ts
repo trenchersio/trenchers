@@ -47,7 +47,15 @@ export const ENV = {
   PORT: Number(opt("PORT", "8080")),
   /** Live Telegram channel for mints and sales (optional): the bot's token and the channel (@name). */
   TELEGRAM_BOT_TOKEN: clean(process.env.TELEGRAM_BOT_TOKEN) || null,
-  TELEGRAM_CHAT: clean(process.env.TELEGRAM_CHAT) || null,
+  /** Accepts @name, name, a t.me link (https://t.me/name) or a numeric -100… id. */
+  TELEGRAM_CHAT: (() => {
+    const v = clean(process.env.TELEGRAM_CHAT);
+    if (!v) return null;
+    if (/^-?\d+$/.test(v)) return v;
+    const m = v.match(/^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/(?:s\/)?([A-Za-z0-9_]{4,})\/?$/);
+    if (m) return `@${m[1]}`;
+    return v.startsWith("@") ? v : /^[A-Za-z0-9_]{4,}$/.test(v) ? `@${v}` : v;
+  })(),
   SITE_URL: opt("SITE_URL", "https://www.trenchers.io").replace(/\/$/, ""),
   EXPLORER_URL: opt("EXPLORER_URL", Number(opt("CHAIN_ID", "46630")) === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robin.etherscan.io").replace(/\/$/, ""),
   /** Where the Trenchers' PNG art is served: {IMAGE_BASE}{awake|dormant}/{id}.png */
