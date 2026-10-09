@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAddress, toHex, type Address } from "viem";
+import { createWalletClient, custom, getAddress, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { TextButton } from "@/components/TextButton";
 import { CHAT_OPEN, ENGINE_URL, OPENSEA_URL, ROUTES } from "@/lib/constants";
 import { ownedTrenchers, walletProvider } from "@/lib/chain";
+import { chain } from "@/lib/constants";
 import { short, useWallet } from "@/lib/wallet";
 
 /**
@@ -65,7 +66,12 @@ export function HoldersChat() {
     try {
       const p = await walletProvider();
       const addr = getAddress(me), time = new Date().toISOString();
-      const signature = (await p.request({ method: "personal_sign", params: [toHex(loginText(addr, time)), addr] } as never)) as string;
+      // make sure the wallet has this site connected (some wallets otherwise ignore the request silently)
+      const accts = ((await p.request({ method: "eth_requestAccounts" } as never)) as string[]).map((a) => a.toLowerCase());
+      if (!accts.includes(addr.toLowerCase())) throw new Error(`Your wallet is on a different account. Switch it to ${short(addr)} and try again.`);
+      const sign = createWalletClient({ chain, transport: custom(p) }).signMessage({ account: addr, message: loginText(addr, time) });
+      const timeout = new Promise<never>((_, no) => setTimeout(() => no(new Error("No signature came back. Open your wallet (click its icon in the browser bar), approve the sign-in request there, or try again.")), 90_000));
+      const signature = await Promise.race([sign, timeout]);
       const r = await fetch(`${ENGINE_URL}/chat/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: addr, time, signature }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Sign-in failed.");
@@ -140,7 +146,7 @@ export function HoldersChat() {
               {gate === "connect" && <><b>Connect your wallet</b><p>The chat is for Trenchers holders. Connect the wallet that holds yours.</p><TextButton onClick={w.openModal}>Connect wallet</TextButton></>}
               {gate === "checking" && <p className="mono">Checking your wallet for Trenchers…</p>}
               {gate === "no-nft" && <><b>You need a Trencher to chat</b><p>This wallet holds no Trenchers. Mint one, or buy one on OpenSea, and you&apos;re in.</p><div className="hc-row"><TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>{OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}</div></>}
-              {gate === "sign-in" && <><b>Sign in to chat</b><p>One signature in your wallet proves you hold {holder ? `Trencher${owned!.length > 1 ? "s" : ""} ${owned!.slice(0, 3).map((i) => `#${i}`).join(", ")}${owned!.length > 3 ? "…" : ""}` : "this wallet"}. No transaction, no gas.</p><TextButton onClick={signIn} disabled={busy}>{busy ? "Waiting for your wallet…" : "Sign in"}</TextButton></>}
+              {gate === "sign-in" && <><b>Sign in to chat</b><p>One signature in your wallet proves you hold {holder ? `Trencher${owned!.length > 1 ? "s" : ""} ${owned!.slice(0, 3).map((i) => `#${i}`).join(", ")}${owned!.length > 3 ? "…" : ""}` : "this wallet"}. No transaction, no gas.</p><TextButton onClick={signIn} disabled={busy}>{busy ? "Waiting for your wallet…" : "Sign in"}</TextButton>{busy && <p className="mono">Check your wallet: a free sign-in request should be open there. Nothing is sent and it costs nothing.</p>}</>}
             </div>
           )}
         </div>
