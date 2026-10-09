@@ -102,6 +102,9 @@ export class Engine {
   async start() {
     const head = await this.pub.getBlockNumber();
     this.catchUpFrom = head > 100n ? head - 100n : 0n;
+    // Post what happened while the engine was down (restarts, redeploys), up to a day back.
+    const saved = this.telegram?.savedBlock() ?? null;
+    if (saved !== null && saved + 1n < this.catchUpFrom && head - saved < 400_000n) { this.catchUpFrom = saved + 1n; this.log(`telegram: posting mints, sales and awakenings since block ${saved + 1n}`); }
     const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
     this.cursor = start > 0n ? start - 1n : 0n;
     await this.discoverHouse(false);
@@ -212,6 +215,7 @@ export class Engine {
         this.telegram.onTransfers(moves).catch((e) => this.log(`telegram: ${(e as Error).message.split("\n")[0]}`));
       }
       this.cursor = to;
+      if (this.telegram && to >= this.catchUpFrom) this.telegram.markBlock(to);
       if (!live) this.log(`History read up to block ${to} of ${head} (${launches.length} launches, ${buys.length + sells.length} curve trades in this window)`);
     }
   }

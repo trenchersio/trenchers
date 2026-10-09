@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { decodeEventLog, formatEther, parseAbi, type Address, type Hash, type PublicClient } from "viem";
 
 /**
@@ -21,6 +23,19 @@ export class TelegramFeed {
   private seen = new Set<Hash>();
   posted = 0;
   lastError: string | null = null;
+  /** Last block whose mints, sales and awakenings were handed to the feed, kept on disk so a restart
+   *  posts what happened while the engine was down. Stored next to the chat (e.g. /data/telegram.json). */
+  private stateFile = (process.env.TELEGRAM_STATE || "").trim() || `${dirname((process.env.CHAT_FILE || "./chat.json").trim().replace(/^["']|["']$/g, ""))}/telegram.json`;
+  savedBlock(): bigint | null {
+    try { if (existsSync(this.stateFile)) { const j = JSON.parse(readFileSync(this.stateFile, "utf8")) as { block?: string }; return j.block ? BigInt(j.block) : null; } } catch { /* none */ }
+    return null;
+  }
+  private lastSave = 0;
+  markBlock(block: bigint) {
+    if (Date.now() - this.lastSave < 10_000) return;
+    this.lastSave = Date.now();
+    try { mkdirSync(dirname(this.stateFile), { recursive: true }); writeFileSync(this.stateFile, JSON.stringify({ block: block.toString() })); } catch { /* keep going */ }
+  }
   /** Result of the start-up check: can the bot post in the channel? */
   ready: string = "checking";
 
