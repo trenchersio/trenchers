@@ -151,10 +151,23 @@ export function MintPage() {
           </div>
         </div>
 
+        <div className="mint-back" aria-label="Half of your mint comes back">
+          <div className="mint-back-top">
+            <span className="mint-back-big">50%<small>back</small></span>
+            <span className="mint-back-txt"><b>Half your mint comes back to you.</b> {STARTER_ETH} ETH of every {LIST_PRICE_ETH} ETH lands in your Trencher&apos;s own wallet when you awaken it. The NFT pays for half of itself.</span>
+          </div>
+          <div className="mint-back-bar" aria-hidden="true">
+            <span className="mb-you">{STARTER_ETH} ETH · your agent&apos;s wallet</span>
+            <span className="mb-eco">{STARTER_ETH} ETH · the ecosystem</span>
+          </div>
+          <p className="mint-back-note">{qty > 1 ? <>Minting {qty}: <b>{(qty * Number(STARTER_ETH)).toFixed(2)} ETH</b> comes back into their wallets. </> : null}It&apos;s your agent&apos;s trading capital: it trades with it right away, and after 6 months it&apos;s yours to withdraw.</p>
+        </div>
+
         <div className="mint-buy">
           <div className="mint-price">
             <span className="mint-price-k">Price</span>
             <span className="mint-price-v">{LIST_PRICE_ETH} <small>ETH each</small></span>
+            <span className="mint-price-net">{STARTER_ETH} ETH of it comes back</span>
           </div>
           <div className="mint-qty" role="group" aria-label="How many">
             <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1 || busy} aria-label="One less">−</button>
