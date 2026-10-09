@@ -8,6 +8,7 @@ import { TelegramFeed } from "./telegram";
 import { parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
+import { BurnTracker } from "./burns";
 import {
   ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
@@ -60,6 +61,7 @@ export class Engine {
   history = new Map<Address, { t: number; v: number }[]>();
   lastSnapshot = 0;
   telegram: TelegramFeed | null = null;
+  burns!: BurnTracker;
   paused = false;
   cursor = 0n;
   liveFrom = 0n;
@@ -85,6 +87,7 @@ export class Engine {
       this.engineAddress = account.address;
     } else { this.wallet = null; this.engineAddress = null; }
     this.log = log;
+    this.burns = new BurnTracker(this.pub, ENV.LOG_RANGE);
     if (ENV.TELEGRAM_BOT_TOKEN && ENV.TELEGRAM_CHAT) {
       this.telegram = new TelegramFeed(
         { api: process.env.TELEGRAM_API, token: ENV.TELEGRAM_BOT_TOKEN, chat: ENV.TELEGRAM_CHAT, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, imageBase: ENV.IMAGE_BASE, nft: ENV.NFT },
@@ -99,9 +102,25 @@ export class Engine {
 
   /** First block of this process's lifetime (minus a margin): NFT moves from here on are posted even during the replay. */
   private catchUpFrom = 2n ** 255n;
+  /** NFT mints are read for the site's activity ticker from here on (about the last day). */
+  private activityFrom = 2n ** 255n;
+  /** Recent mints, awakenings and agent coin launches for the site's live ticker (newest last). */
+  activity: { kind: "mint" | "awaken" | "coin"; id: number; time: number; tx: string | null; symbol?: string; count?: number }[] = [];
+  private noteActivity(e: Engine["activity"][number]) {
+    if (e.tx && this.activity.some((x) => x.kind === e.kind && x.tx === e.tx && x.id === e.id)) return;
+    this.activity.push(e); this.activity.sort((a, b) => a.time - b.time);
+    if (this.activity.length > 120) this.activity.splice(0, this.activity.length - 120);
+  }
+  /** The ticker: activity plus agents' best closed trades, newest first. */
+  activityFeed() {
+    const wins = this.trades.filter((x) => x.side === "sell" && (x.pnlPct ?? 0) >= 50).slice(-30)
+      .map((x) => ({ kind: "win" as const, id: x.agent, time: x.time, tx: x.tx as string, symbol: x.symbol, pct: Math.round(x.pnlPct!) }));
+    return [...this.activity, ...wins].sort((a, b) => b.time - a.time).slice(0, 40);
+  }
   async start() {
     const head = await this.pub.getBlockNumber();
     this.catchUpFrom = head > 100n ? head - 100n : 0n;
+    this.activityFrom = head > 350_000n ? head - 350_000n : 0n;
     // Post what happened while the engine was down (restarts, redeploys), up to a day back.
     const saved = this.telegram?.savedBlock() ?? null;
     if (saved !== null && saved + 1n < this.catchUpFrom && head - saved < 400_000n) { this.catchUpFrom = saved + 1n; this.log(`telegram: posting mints, sales and awakenings since block ${saved + 1n}`); }
@@ -195,7 +214,7 @@ export class Engine {
         this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: this.adapter, events: [BOUGHT, SOLD], fromBlock: from, toBlock: to }),
-        this.telegram && (live || to >= this.catchUpFrom) ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
+        (this.telegram && (live || to >= this.catchUpFrom)) || live || to >= this.activityFrom ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
       ]);
       const launches = factoryLogs.filter((l) => l.eventName === "TokenLaunched");
       const grads = factoryLogs.filter((l) => l.eventName !== "TokenLaunched");
@@ -209,7 +228,13 @@ export class Engine {
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
       // While catching up after a restart, mints and sales made since this process started are still posted
       // (the previous process stopped when this one came up, so it never saw them).
-      const moves = live ? nftMoves : nftMoves.filter((l) => l.blockNumber! >= this.catchUpFrom);
+      // Mints for the site's ticker (grouped per transaction).
+      const mintsByTx = new Map<string, { ids: number[]; block: bigint }>();
+      for (const l of nftMoves) if (l.args.from === "0x0000000000000000000000000000000000000000" && l.transactionHash) {
+        const m = mintsByTx.get(l.transactionHash) ?? { ids: [], block: l.blockNumber! }; m.ids.push(Number(l.args.tokenId)); mintsByTx.set(l.transactionHash, m);
+      }
+      for (const [tx, m] of mintsByTx) this.noteActivity({ kind: "mint", id: m.ids[0], count: m.ids.length, time: await this.blockTime(m.block), tx });
+      const moves = !this.telegram ? [] : live ? nftMoves : nftMoves.filter((l) => l.blockNumber! >= this.catchUpFrom);
       if (moves.length && this.telegram) {
         this.log(`NFT: ${moves.length} transfer${moves.length > 1 ? "s" : ""} seen (${moves.map((m) => `#${Number(m.args.tokenId)}`).join(", ")}), posting to Telegram`);
         this.telegram.onTransfers(moves).catch((e) => this.log(`telegram: ${(e as Error).message.split("\n")[0]}`));
@@ -236,7 +261,7 @@ export class Engine {
         this.tokens.set(tok.token, tok); this.curves.set(tok.curve, tok.token);
         // Launched by an agent wallet: follow it as that agent's coin (fees, chart).
         const ag = this.agents.get(tok.deployer);
-        if (ag) this.agentCoins.set(tok.token, { token: tok.token, curve: tok.curve, agent: ag.id, wallet: ag.wallet, launchedAt: t, feeWei: 0n, taxWei: 0n, volumeEth: 0, trades: 0, points: [] });
+        if (ag) { this.agentCoins.set(tok.token, { token: tok.token, curve: tok.curve, agent: ag.id, wallet: ag.wallet, launchedAt: t, feeWei: 0n, taxWei: 0n, volumeEth: 0, trades: 0, points: [] }); this.noteActivity({ kind: "coin", id: ag.id, time: t, tx: l.transactionHash ?? null, symbol: this.symbols.get(tok.token) }); }
         if (live) this.signal("launch", tok, t);
         break;
       }
@@ -271,6 +296,7 @@ export class Engine {
       case "Claimed": {
         const w = lc(a.agentWallet);
         if (live) { this.lastAgentRefresh = 0; this.log(`Agent #${Number(a.tokenId)} awakened (wallet ${w})`); }
+        this.noteActivity({ kind: "awaken", id: Number(a.tokenId), time: t, tx: l.transactionHash ?? null });
         if (this.telegram && (live || l.blockNumber! >= this.catchUpFrom)) this.telegram.onAwaken(Number(a.tokenId), lc(a.holder), w, a.amount as bigint, l.transactionHash ?? null).catch(() => {});
         if (!this.agents.has(w)) this.agents.set(w, { id: Number(a.tokenId), wallet: w, live: false, perTrade: 0n, dailyCap: 0n, ruleVersion: 0, ruleText: null, rule: null, balance: 0n, spentDay: 0n, spentToday: 0n });
         break;
@@ -448,6 +474,20 @@ export class Engine {
   }
   private sellFails = new Map<string, { n: number; first: number }>();
 
+  /** Why an agent can't buy right now (null: it's ready), with a short code the site uses to offer a fix. */
+  blockedOf(ag: Agent): { code: "no-rule" | "unsupported" | "off" | "no-limit" | "max-positions" | "daily-limit" | "no-eth"; text: string } | null {
+    const today = BigInt(Math.floor(this.now() / 86400));
+    const spent = ag.spentDay === today ? ag.spentToday : 0n;
+    if (!ag.rule) return { code: "no-rule", text: "no rule" };
+    if (ag.rule.trigger === "dexupdate") return { code: "unsupported", text: "its DexScreener signal isn't supported yet" };
+    if (!ag.live || ag.setBy !== ag.owner) return { code: "off", text: "trading switched off" };
+    if (ag.perTrade === 0n) return { code: "no-limit", text: "no per-trade limit" };
+    if (this.book(ag.wallet).size >= ENV.MAX_POSITIONS) return { code: "max-positions", text: `holding the maximum ${ENV.MAX_POSITIONS} positions` };
+    if (spent >= ag.dailyCap) return { code: "daily-limit", text: "daily limit reached (resets 00:00 UTC)" };
+    if (ag.balance < 10_000_000_000n) return { code: "no-eth", text: "no ETH left in its wallet" };
+    return null;
+  }
+
   /** Why each agent is or isn't trading right now, for /health. */
   diag() {
     const now = this.now(), today = BigInt(Math.floor(now / 86400));
@@ -456,9 +496,7 @@ export class Engine {
       const book = this.book(ag.wallet), mine = this.trades.filter((x) => x.wallet === ag.wallet);
       const last = mine.length ? Math.max(...mine.map((x) => x.time)) : 0;
       const spent = ag.spentDay === today ? ag.spentToday : 0n;
-      const blocked = !ag.rule ? "no rule" : !ag.live || ag.setBy !== ag.owner ? "trading switched off" : ag.perTrade === 0n ? "no per-trade limit"
-        : book.size >= ENV.MAX_POSITIONS ? `holding the maximum ${ENV.MAX_POSITIONS} positions` : spent >= ag.dailyCap ? "daily limit reached (resets 00:00 UTC)"
-        : ag.balance < 10_000_000_000n ? "no ETH left in its wallet" : null;
+      const blocked = this.blockedOf(ag)?.text ?? null;
       return { id: ag.id, trigger: ag.rule?.trigger ?? null, ready: !blocked, waitingFor: blocked ?? `the next ${ag.rule!.trigger} signal`, open: book.size,
         balance: Number(formatEther(ag.balance)).toFixed(5), spentToday: `${formatEther(spent)} / ${formatEther(ag.dailyCap)} ETH`, lastTrade: ago(last) };
     }).filter((a) => a.trigger || a.open);
@@ -763,7 +801,8 @@ export class Engine {
       const best = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined).sort((a, b) => b.pnlPct! - a.pnlPct!)[0];
       const sells = week.filter((x) => x.side === "sell" && x.pnlPct !== undefined);
       rows.push({
-        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag),
+        id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), blocked: this.blockedOf(ag),
+        spentToday: Number(formatEther(ag.spentDay === BigInt(Math.floor(this.now() / 86400)) ? ag.spentToday : 0n)), dailyCap: Number(formatEther(ag.dailyCap)),
         coin: ag.coin && !/^0x0+$/.test(ag.coin) ? ag.coin : ([...this.agentCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? null), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
         nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,

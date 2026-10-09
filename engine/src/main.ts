@@ -87,6 +87,13 @@ const server = createServer(async (req, res) => {
     } else if (path === "/coins") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.coins()));
+    } else if (path === "/activity") {
+      if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
+      res.end(JSON.stringify({ items: engine.activityFeed(), feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return null; } })(), now: Date.now() }));
+    } else if (path === "/burns") {
+      if (!engine) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
+      if (Date.now() - engine.burns.updatedAt > 300_000) { const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
+      res.end(JSON.stringify(engine.burns.view()));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));

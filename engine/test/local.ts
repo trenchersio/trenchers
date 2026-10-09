@@ -214,6 +214,11 @@ async function main() {
   await sleep(8000);
   const woke = posts.slice(n1);
   check(woke.length === 1 && /Trencher #9 awakened/.test(cap(woke[0])) && /\/awake\/9\.png$/.test(woke[0].body.photo ?? ""), `Telegram: the awakening of #9 is posted with its art (${woke.length} post)`);
+  // Site ticker and agent status.
+  const act = engine.activityFeed();
+  check(act.some((x) => x.kind === "mint") && act.some((x) => x.kind === "awaken" && x.id === 9), `Activity ticker has mints and the awakening of #9 (${act.map((x) => `${x.kind}#${x.id}`).join(", ")})`);
+  const rows = (await engine.arena()).agents as { id: number; blocked: { code: string } | null }[];
+  check(rows.every((r) => r.blocked === null || typeof r.blocked.code === "string"), `Arena rows say why an agent can't buy (${rows.map((r) => `#${r.id}:${r.blocked?.code ?? "ready"}`).join(", ")})`);
   tg.close();
 
   // $TRENCHERS fee share: the engine enrols awake agents, closes each week and pays every agent its share.
