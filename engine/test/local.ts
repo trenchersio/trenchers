@@ -87,7 +87,7 @@ async function main() {
   // A fake Telegram API that records what the engine posts.
   const { createServer } = await import("node:http");
   const posts: { method: string; body: { caption?: string; text?: string; photo?: string; media?: { media: string }[] } }[] = [];
-  const tg = createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { posts.push({ method: req.url!.split("/").pop()!, body: JSON.parse(b) }); res.end('{"ok":true}'); }); }).listen(8977);
+  const tg = createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { const method = req.url!.split("/").pop()!; if (method.startsWith("send")) posts.push({ method, body: JSON.parse(b) }); res.end(method === "getChatMember" ? '{"ok":true,"result":{"status":"administrator","can_post_messages":true}}' : method === "getMe" ? '{"ok":true,"result":{"id":1,"username":"testbot"}}' : '{"ok":true,"result":{"title":"test"}}'); }); }).listen(8977);
 
   // The engine, in this process.
   Object.assign(process.env, {

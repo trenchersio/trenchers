@@ -51,7 +51,7 @@ export const ENV = {
   SITE_URL: opt("SITE_URL", "https://www.trenchers.io").replace(/\/$/, ""),
   EXPLORER_URL: opt("EXPLORER_URL", Number(opt("CHAIN_ID", "46630")) === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robin.etherscan.io").replace(/\/$/, ""),
   /** Where the Trenchers' PNG art is served: {IMAGE_BASE}{awake|dormant}/{id}.png */
-  IMAGE_BASE: opt("IMAGE_BASE", "https://www.trenchers.io/testnet-meta/png/"),
+  IMAGE_BASE: opt("IMAGE_BASE", "https://www.trenchers.io/meta/img/"),
   /** DRY_RUN=1 decides and logs trades without sending them. */
   DRY_RUN: opt("DRY_RUN", "0") === "1",
   /** The $TRENCHERS fee distributor: the engine enrols awake agents, closes each weekly epoch and pays the shares. */

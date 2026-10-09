@@ -91,6 +91,7 @@ export class Engine {
         this.pub, (m) => this.log(m),
         (id) => { const ag = [...this.agents.values()].find((a) => a.id === id); return ag ? `Its agent: ${Number(formatEther(ag.balance)).toFixed(4)} ETH · rule v${ag.ruleVersion}, and its track record moves with the NFT.` : null; },
       );
+      void this.telegram.check();
     }
   }
 

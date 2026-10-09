@@ -21,10 +21,34 @@ export class TelegramFeed {
   private seen = new Set<Hash>();
   posted = 0;
   lastError: string | null = null;
+  /** Result of the start-up check: can the bot post in the channel? */
+  ready: string = "checking";
 
   constructor(private cfg: TelegramConfig, private pub: PublicClient, private log: (m: string) => void,
     /** Extra line about the Trencher's agent (rank, return), if it has one. */
     private agentLine: (id: number) => string | null = () => null) {}
+
+  private call(method: string, body: unknown) {
+    return fetch(`${this.cfg.api ?? "https://api.telegram.org"}/bot${this.cfg.token}/${method}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }).then((r) => r.json() as Promise<{ ok: boolean; description?: string; result?: Record<string, unknown> }>);
+  }
+
+  /** Checks once at start-up that the token works and the bot is an admin that may post in the channel. */
+  async check() {
+    try {
+      const me = await this.call("getMe", {});
+      if (!me.ok) { this.ready = `the bot token is wrong (${me.description ?? "rejected"}): copy it again from @BotFather into TELEGRAM_BOT_TOKEN`; return this.log(`telegram: ${this.ready}`); }
+      const chat = await this.call("getChat", { chat_id: this.cfg.chat });
+      if (!chat.ok) { this.ready = `the bot can't find the channel "${this.cfg.chat}" (${chat.description ?? "not found"}): use the channel's @username (public channel) or its -100… id (private channel), and add the bot to the channel as an admin`; return this.log(`telegram: ${this.ready}`); }
+      const m = await this.call("getChatMember", { chat_id: this.cfg.chat, user_id: (me.result as { id: number }).id });
+      const st = (m.result ?? {}) as { status?: string; can_post_messages?: boolean };
+      if (!m.ok || (st.status !== "administrator" && st.status !== "creator")) { this.ready = `@${(me.result as { username?: string }).username} is not an admin of the channel: add it as an admin with "Post messages" allowed`; return this.log(`telegram: ${this.ready}`); }
+      if (st.status === "administrator" && st.can_post_messages === false) { this.ready = `@${(me.result as { username?: string }).username} is an admin but may not post: turn on "Post messages" for it`; return this.log(`telegram: ${this.ready}`); }
+      this.ready = `ok: @${(me.result as { username?: string }).username} can post in ${(chat.result as { title?: string }).title ?? this.cfg.chat}`;
+      this.log(`telegram: ${this.ready}`);
+    } catch (e) { this.ready = `couldn't reach Telegram: ${(e as Error).message.split("\n")[0]}`; this.log(`telegram: ${this.ready}`); }
+  }
 
   /** Called with all NFT Transfer logs of one sync range, in order (live blocks only). */
   async onTransfers(logs: { transactionHash: Hash | null; args: { from?: Address; to?: Address; tokenId?: bigint } }[]) {
