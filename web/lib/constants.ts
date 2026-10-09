@@ -13,10 +13,13 @@ export const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_URL || (MAINNET ? "http
 export const EXPLORER_NAME = process.env.NEXT_PUBLIC_EXPLORER_NAME || (MAINNET ? "Etherscan" : chain.blockExplorers?.default.name) || "Explorer";
 /** GMGN wallet page. {address} is replaced; set NEXT_PUBLIC_GMGN_URL if GMGN uses a different chain path. */
 export const GMGN_URL = process.env.NEXT_PUBLIC_GMGN_URL || "https://gmgn.ai/robinhood/address/{address}";
-/** Pons token page. Empty until confirmed: the site then shows a plain "Pons" label. {address} is replaced. */
-export const PONS_TOKEN_URL = process.env.NEXT_PUBLIC_PONS_TOKEN_URL || "";
-/** The $TRENCHERS token, once launched: set NEXT_PUBLIC_TRENCHERS_TOKEN (its address) and a "$TRENCHERS ↗" link appears in the menu. */
-export const TRENCHERS_TOKEN = (/^0x[0-9a-fA-F]{40}$/.test((process.env.NEXT_PUBLIC_TRENCHERS_TOKEN || "").trim()) ? (process.env.NEXT_PUBLIC_TRENCHERS_TOKEN || "").trim() : "");
+/** Pons token page. {address} is replaced. */
+export const PONS_TOKEN_URL = process.env.NEXT_PUBLIC_PONS_TOKEN_URL || "https://ponsfamily.com/launchpad/{address}";
+/** The $TRENCHERS token (launched on Pons). NEXT_PUBLIC_TRENCHERS_TOKEN overrides it; on testnet it stays empty unless set. */
+const TOKEN_ENV = (process.env.NEXT_PUBLIC_TRENCHERS_TOKEN || "").trim();
+export const TRENCHERS_TOKEN = /^0x[0-9a-fA-F]{40}$/.test(TOKEN_ENV) ? TOKEN_ENV : (process.env.NEXT_PUBLIC_CHAIN === "robinhood" ? "0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a" : "");
+/** $TRENCHERS on the Pons launchpad. */
+export const TRENCHERS_PONS = TRENCHERS_TOKEN ? PONS_TOKEN_URL.replace("{address}", TRENCHERS_TOKEN) : "";
 export const gmgnToken = (a: string) => GMGN_URL.replace("/address/{address}", "/token/{address}").replace("{address}", a);
 export const explorerAddress = (a: string) => `${EXPLORER}/address/${a}`;
 export const gmgnAddress = (a: string) => GMGN_URL.replace("{address}", a);

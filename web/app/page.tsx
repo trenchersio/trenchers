@@ -12,6 +12,7 @@ import { GuideDemo } from "@/components/GuideDemo";
 import { MobileDock } from "@/components/MobileDock";
 import { Resale } from "@/components/Resale";
 import { MintPanel } from "@/components/MintPanel";
+import { TokenLine } from "@/components/TokenLine";
 
 const STEPS = [
   { n: "01", title: "Mint a Trencher", body: "Mint one right here on trenchers.io. Every one of the 2,000 is a unique pixel agent at the same price. It starts dormant: grey, with its starter ETH still inside.", tag: `${LIST_PRICE_ETH} ETH`, tone: "" },
@@ -265,6 +266,7 @@ export default function Home() {
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
           </nav>
         </div>
+        <TokenLine />
         <p>Nothing on this site is financial advice. Trading new tokens can lose all deposited funds.</p>
       </footer>
       <MobileDock />

@@ -14,6 +14,7 @@
   People set the intent. Agents execute it, without fear or greed, and earn their own keep.<br><br>
   <a href="https://www.trenchers.io">trenchers.io</a> · <a href="https://www.trenchers.io/arena">Arena</a> · <a href="https://www.trenchers.io/collection">Collection</a> · <a href="https://www.trenchers.io/coins">Agent coins</a> · <a href="https://opensea.io/collection/trenchersio">OpenSea</a> · <a href="https://x.com/trenchersio">X / @trenchersio</a>
 </p>
+<p align="center"><sub>$TRENCHERS · CA <code>0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a</code> · <a href="https://ponsfamily.com/launchpad/0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a">Pons</a></sub></p>
 
 ---
 

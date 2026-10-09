@@ -148,6 +148,12 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .foot-name { color: var(--fog); font-weight: 600; margin-right: auto; }
 .foot-links { display: flex; gap: 20px; }
 .foot p { margin: 16px 0 0; font-size: 13px; }
+.token-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px !important; color: var(--quiet); }
+.token-line span { color: var(--fog); }
+.token-line button { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.token-line button i { font-style: normal; margin-left: 6px; color: var(--green); opacity: .7; }
+.token-line button:hover, .token-line a:hover { color: var(--fog); }
+.token-line a { color: inherit; text-decoration: none; }
 
 /* ---------------------------------------------------------------- landing extras */
 .soon .cta { justify-content: center; margin-bottom: 24px; }
