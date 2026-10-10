@@ -42,14 +42,23 @@ export function AgentCoinLine({ wallet, agent }: { wallet?: string | null; agent
   const symbol = onChain?.symbol ?? info?.symbol ?? "?";
   return (
     <div className="agent-coin-line">
-      <span className="mono agent-coin-tag">Agent coin</span>
-      <b className="mono">${symbol}</b>{onChain?.name && <span className="agent-coin-name">{onChain.name}</span>}
-      {info && <span className="mono agent-coin-fees">{ethFmt(info.feesEth)} ETH creator fees earned</span>}
-      <span className="agent-links">
+      <div className="acl-top">
+        <div className="acl-id">
+          <span className="mono agent-coin-tag">Agent coin</span>
+          <div className="acl-name"><b className="mono">${symbol}</b>{onChain?.name && <span className="agent-coin-name">{onChain.name}</span>}</div>
+        </div>
+        {info && (
+          <div className="acl-fees">
+            <b className="mono">{ethFmt(info.feesEth)} ETH</b>
+            <span>creator fees earned</span>
+          </div>
+        )}
+      </div>
+      <div className="acl-links">
         {id ? <CoinChartButton coin={info} fallback={{ agent: id, coin: address, symbol }} /> : info && <CoinChartButton coin={info} />}
         <a className="tbtn" href={gmgnToken(address)} target="_blank" rel="noreferrer">GMGN ↗</a>
         <a className="tbtn" href={`${EXPLORER}/token/${address}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
-      </span>
+      </div>
     </div>
   );
 }

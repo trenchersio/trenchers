@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { AgentCoinLine } from "@/components/coins/AgentCoinLink";
+import { CoinChip } from "@/components/coins/CoinChart";
+import { useCoins } from "@/components/coins/coins";
 import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
@@ -78,6 +80,8 @@ export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string
 export function LiveArena({ only }: { only?: number[] } = {}) {
   const { feed: full, error } = useFeed();
   const activity = useActivity();
+  const coins = useCoins();
+  const coinOf = (wallet?: string | null) => (wallet && coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase())) || null;
   const [selected, setSelected] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
@@ -104,7 +108,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
         </div>
         <div className="stat"><span className="stat-label">Trades this week</span><span className="stat-value mono">{weekTrades}</span><span className="stat-sub">on Pons{testnet ? " (test launchpad)" : ""}</span></div>
         {activity?.feeShare ? (
-          <div className="stat stat-fee"><span className="stat-label">$TRENCHERS fee share · week {activity.feeShare.week}</span><span className="stat-value mono">{activity.feeShare.closesIn}</span><span className="stat-sub">until payout · {activity.feeShare.agentsEarningThisWeek} earning, {activity.feeShare.joiningNextWeek} join next week</span></div>
+          <div className="stat stat-fee"><span className="stat-label">$TRENCHERS fee share</span><span className="stat-value mono">{activity.feeShare.closesIn}</span><span className="stat-sub">until week {activity.feeShare.week} payout{activity.feeShare.agentsEarningThisWeek ? ` · ${activity.feeShare.agentsEarningThisWeek} agents earning` : ""}{activity.feeShare.joiningNextWeek ? ` · ${activity.feeShare.joiningNextWeek} join next week` : ""}</span></div>
         ) : (
           <div className="stat"><span className="stat-label">Network</span><span className="stat-value mono">{testnet ? "Testnet" : "Mainnet"}</span><span className="stat-sub">Robinhood Chain</span></div>
         )}
@@ -128,7 +132,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <b>Trencher #{a.id}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
                         <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}</small>
                       </span>
                     </span>

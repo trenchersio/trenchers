@@ -22,6 +22,21 @@ export function CoinChartButton({ coin, fallback, label = "Chart" }: { coin: Coi
   );
 }
 
+/** A small "$T7" chip that opens the coin's chart; usable inside other buttons (e.g. a leaderboard row). */
+export function CoinChip({ coin }: { coin: CoinInfo }) {
+  const [open, setOpen] = useState(false);
+  const go = (e: React.SyntheticEvent) => { e.stopPropagation(); e.preventDefault(); setOpen(true); };
+  return (
+    <>
+      <span role="button" tabIndex={0} className="coin-chip mono" title={`$${coin.symbol}: open the chart`} onClick={go}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go(e); }}>
+        ${coin.symbol}<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 8l3-3 2 2 3-4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </span>
+      {open && <CoinChartModal coin={coin} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 const RANGES = ["1H", "6H", "24H", "7D", "All"] as const;
 type Range = (typeof RANGES)[number];
 const SPAN: Record<Range, number> = { "1H": 3600, "6H": 21600, "24H": 86400, "7D": 604800, All: Infinity };

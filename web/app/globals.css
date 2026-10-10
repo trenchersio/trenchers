@@ -1960,12 +1960,21 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .coin-step p { margin: 0; }
 .coin-own .agent-actions { align-items: center; }
 /* Agent coins: the public line on agent details, and the /coins page. */
-.agent-coin-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 14px 0; padding: 12px 14px; border: 1px solid rgba(57,255,136,.35); border-radius: 12px; background: rgba(57,255,136,.05); }
-.agent-coin-line b { color: var(--green); font-size: 15px; }
-.agent-coin-line > b, .agent-coin-line > span { line-height: 1; margin: 0; }
-.agent-coin-name { font-size: 14px; color: var(--quiet); }
+.agent-coin-line { display: flex; flex-direction: column; gap: 14px; margin: 14px 0; padding: 16px; border: 1px solid rgba(57,255,136,.22); border-radius: 14px; background: radial-gradient(ellipse 60% 120% at 0% 0%, rgba(57,255,136,.07), transparent 70%), var(--panel); }
+.acl-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.acl-id { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.acl-name { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.acl-name b { color: var(--green); font-size: 22px; line-height: 1; }
+.agent-coin-name { font-size: 14px; color: var(--quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-coin-tag { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
-.agent-coin-line .agent-links { margin-left: auto; display: flex; gap: 8px; }
+.acl-fees { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.acl-fees b { font-size: 16px; color: var(--fog); line-height: 1; }
+.acl-fees span { font-size: 12px; color: var(--quiet); }
+.acl-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.acl-links .tbtn { justify-content: center; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.02); color: var(--fog); font-size: 13px; text-decoration: none; white-space: nowrap; }
+.acl-links .tbtn::before, .acl-links .tbtn::after { content: none; }
+.acl-links .tbtn:hover { border-color: rgba(57,255,136,.45); color: var(--green); }
+@media (max-width: 420px) { .acl-fees { align-items: flex-start; text-align: left; } }
 .coins { display: grid; gap: 28px; }
 .coins-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 20px; }
 .coins-head h1 { margin: 6px 0 10px; }
@@ -2220,3 +2229,23 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .live-arena .board::-webkit-scrollbar { width: 8px; }
 .live-arena .board::-webkit-scrollbar-thumb { background: #2E3532; border-radius: 8px; border: 2px solid var(--panel); }
 .live-arena .board-head { position: sticky; top: 0; z-index: 2; background: var(--panel); }
+
+/* Leaderboard coin chip and the arena totals row */
+.coin-chip { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 18px; color: var(--green); background: rgba(57,255,136,.08); border: 1px solid rgba(57,255,136,.35); cursor: pointer; vertical-align: 1px; }
+.coin-chip:hover, .coin-chip:focus-visible { background: rgba(57,255,136,.16); outline: none; }
+.live-arena .arena-stats { grid-template-columns: 1.4fr 1fr 1.3fr 1fr; border-radius: 12px; }
+.live-arena .stat { padding: 16px 20px; gap: 6px; }
+.live-arena .stat-main { display: flex; }
+.live-arena .stat-delta { margin-top: auto; color: var(--quiet); font-family: inherit; font-size: 12px; }
+.live-arena .stat-sub { line-height: 1.45; }
+.live-arena .stat-value { font-size: 26px; line-height: 1.1; }
+.live-arena .stat-main { grid-column: auto; border-bottom: 0; }
+.live-arena .stat { border-bottom: 0; border-left: 1px solid var(--line); }
+.live-arena .stat:first-child { border-left: 0; }
+@media (max-width: 900px) {
+  .live-arena .arena-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .live-arena .stat { border-left: 0 !important; border-bottom: 1px solid var(--line); padding: 14px 16px; }
+  .live-arena .stat:nth-child(even) { border-left: 1px solid var(--line) !important; }
+  .live-arena .stat:nth-child(n+3) { border-bottom: 0; }
+  .live-arena .stat-value { font-size: 20px; }
+}
