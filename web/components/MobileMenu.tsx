@@ -5,7 +5,7 @@ import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } fr
 import { useChatUnread } from "@/lib/chat-unread";
 import { short, useWallet } from "@/lib/wallet";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground";
 
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
@@ -21,7 +21,7 @@ export function MobileMenu({ page }: { page: Page }) {
   }, [open]);
   const links: [Page | "github" | "x", string, string][] = [
     ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection], ["coins", "Agent coins", ROUTES.coins],
-    ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents],
+    ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents], ["playground", "Playground", ROUTES.playground],
     ...(CHAT_OPEN ? [["chat", "Holders' chat", ROUTES.chat] as [Page, string, string]] : []),
   ];
   return (

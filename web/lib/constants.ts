@@ -56,6 +56,7 @@ export const ROUTES = {
   agents: PREVIEW ? "agents.html" : "/agents", // NFT / Agent Profile
   docs: PREVIEW ? "docs.html" : "/docs",
   chat: PREVIEW ? "chat.html" : "/chat",
+  playground: PREVIEW ? "playground.html" : "/playground",
 };
 /** The holders' chat opens to the public once NEXT_PUBLIC_CHAT_OPEN=1 (until then it's greyed out in the menu). */
 export const CHAT_OPEN = (process.env.NEXT_PUBLIC_CHAT_OPEN || "").trim() === "1";

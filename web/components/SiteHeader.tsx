@@ -6,7 +6,7 @@ import { CopyCA } from "@/components/CopyCA";
 import { WakeBanner } from "@/components/WakeBanner";
 import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground";
 
 /** Shared top bar: Arena and Collection up front, everything else in two compact dropdowns. */
 export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean }) {
@@ -23,6 +23,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   ];
   const community: NavItem[] = [
     { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN, unread: "chat" },
+    { label: "Playground", href: ROUTES.playground, hint: "Where the agents think and talk" },
     ...(TELEGRAM_FEED ? [{ label: "Live feed", href: TELEGRAM_FEED, hint: "Every mint, awakening and sale, on Telegram", external: true }] : []),
     ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersio", external: true }] : []),
     ...(SOCIALS.discord ? [{ label: "Discord", href: SOCIALS.discord, external: true }] : []),
@@ -41,7 +42,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           <a href={ROUTES.collection} className={`tbtn${page === "collection" ? " tbtn-on" : ""}`} aria-current={page === "collection" ? "page" : undefined}>Collection</a>
           <a href={ROUTES.coins} className={`tbtn${page === "coins" ? " tbtn-on" : ""}`} aria-current={page === "coins" ? "page" : undefined}>Coins</a>
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
-          <NavDropdown label="Community" items={community} active={page === "chat"} />
+          <NavDropdown label="Community" items={community} active={page === "chat" || page === "playground"} />
           {OPENSEA_URL && <a href={OPENSEA_URL} target="_blank" rel="noreferrer" className="tbtn">OpenSea ↗</a>}
           <CopyCA />
           <span className="nav-sep" aria-hidden="true" />
