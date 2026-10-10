@@ -1274,6 +1274,8 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .gd-tpl-top { display: flex; justify-content: space-between; align-items: center; }
 .gd-tpl-top span { font-size: 11px; color: #FFD54A; border: 1px solid rgba(255,213,74,.4); border-radius: 3px; padding: 0 5px; }
 .gd-tpl-top em { font-style: normal; font-size: 10px; color: var(--quiet); }
+.gd-tpl li.gd-soon { opacity: .45; filter: grayscale(1); border-style: dashed; cursor: default; }
+.gd-tpl .gd-soon-tag { white-space: nowrap; text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
 .gd-tpl li b { font-size: 15px; }
 .gd-tpl li p { margin: 0; color: var(--quiet); font-size: 12px; line-height: 1.45; }
 @media (max-width: 1100px) { .gd-tpl ul { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -2117,14 +2119,21 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .act-mint-page { margin: 0 0 18px; }
 
 /* "Your Trencher is still asleep" reminder */
-.wake-banner { display: flex; align-items: center; gap: 12px; max-width: 1160px; margin: 8px auto 0; padding: 10px 12px 10px 16px; border: 1px solid rgba(255,176,32,.35); background: rgba(255,176,32,.06); border-radius: 12px; font-size: 14px; }
-.wake-banner p { margin: 0; flex: 1; color: var(--quiet); line-height: 1.45; }
-.wake-banner b { color: var(--fog); }
-.wake-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber, #FFB020); flex: none; animation: pulse 2s ease-in-out infinite; }
-.wake-go { flex: none; padding: 7px 14px; border-radius: 9px; background: rgba(255,176,32,.14); border: 1px solid rgba(255,176,32,.5); color: var(--amber, #FFB020); font-weight: 600; text-decoration: none; font-size: 13px; }
-.wake-go:hover { background: rgba(255,176,32,.22); }
-.wake-x { flex: none; background: none; border: 0; color: var(--quiet); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
-@media (max-width: 700px) { .wake-banner { margin: 8px 16px 0; flex-wrap: wrap; } }
+.wake-wrap { margin: 6px 0 18px; padding: 0 24px; }
+@media (max-width: 700px) { .wake-wrap { padding: 0 16px; } }
+.wake-banner { display: flex; align-items: center; gap: 14px; padding: 10px 10px 10px 12px; border: 1px solid rgba(255,196,80,.28); border-radius: 14px; background: linear-gradient(90deg, rgba(255,196,80,.10), rgba(255,196,80,.03) 60%, transparent), var(--panel); }
+.wake-arts { display: flex; align-items: center; flex: none; }
+.wake-art { width: 36px; height: 36px; border-radius: 9px; border: 2px solid var(--panel); filter: grayscale(.7) brightness(.8); }
+.wake-art + .wake-art { margin-left: -10px; }
+.wake-more { margin-left: 6px; font-size: 11px; color: var(--quiet); }
+.wake-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.4; }
+.wake-text b { color: var(--fog); font-size: 14px; font-weight: 600; }
+.wake-text span { color: var(--quiet); font-size: 13px; }
+.wake-go { flex: none; padding: 8px 16px; border-radius: 10px; background: #FFC450; color: #141414; font-weight: 700; font-size: 13px; text-decoration: none; transition: filter .15s; }
+.wake-go:hover { filter: brightness(1.08); }
+.wake-x { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: none; border: 0; color: var(--quiet); cursor: pointer; }
+.wake-x:hover { background: rgba(255,255,255,.06); color: var(--fog); }
+@media (max-width: 600px) { .wake-banner { flex-wrap: wrap; gap: 10px 12px; } .wake-text { flex-basis: calc(100% - 110px); } .wake-go { margin-left: auto; } .wake-arts .wake-art:nth-child(n+2), .wake-more { display: none; } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
 /* $TRENCHERS buyback and burn tracker */

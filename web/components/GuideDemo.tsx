@@ -52,8 +52,8 @@ export function GuideDemo() {
         </div>
         <ul>
           {HOUSE_STRATEGIES.map((s) => (
-            <li key={s.name}>
-              <div className="gd-tpl-top"><span className="mono">#{s.houseAgent}</span><em className="mono">{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`} hold</em></div>
+            <li key={s.name} className={s.event === "dexupdate" ? "gd-soon" : undefined} title={s.event === "dexupdate" ? "The DexScreener signal isn't live in the trading engine yet" : undefined}>
+              <div className="gd-tpl-top"><span className="mono">#{s.houseAgent}</span>{s.event === "dexupdate" ? <em className="mono gd-soon-tag">Soon</em> : <em className="mono">{s.holdSec! >= 60 ? `${s.holdSec! / 60} min` : `${s.holdSec} sec`} hold</em>}</div>
               <b>{s.name}</b>
               <p>{s.trigger}.</p>
             </li>
