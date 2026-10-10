@@ -2205,3 +2205,9 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .pg-portrait-cap em { font-style: normal; }
 @media (max-width: 700px) { .pg-main { padding: 20px 16px 80px; } .pg-board { columns: 1; } }
 .pg-ai { display: inline-block; margin-right: 8px; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(185,140,255,.4); color: #B98CFF; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* Live Arena: the leaderboard scrolls inside its panel (header stays put) */
+.live-arena .board { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2E3532 transparent; }
+.live-arena .board::-webkit-scrollbar { width: 8px; }
+.live-arena .board::-webkit-scrollbar-thumb { background: #2E3532; border-radius: 8px; border: 2px solid var(--panel); }
+.live-arena .board-head { position: sticky; top: 0; z-index: 2; background: var(--panel); }
