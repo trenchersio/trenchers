@@ -334,6 +334,7 @@ function Setup({ a, owner, onChange }: { a: AgentState; owner: string; onChange:
             </details>
           }
           templates={(Object.keys(PRESETS) as Preset[]).filter((k) => k !== "Custom").map((k) => ({ name: k, text: `${PRESETS[k].line}. ${PRESETS[k].rules.join(" · ")}.`, house: PRESETS[k].house }))}
+          tokenPlan={{ current: a.strategy?.custom ?? null, perTrade: draft.perBuy || null, onApply: (r) => applyRule(r, a.chat ?? []) }}
           activeTemplate={a.strategy && a.strategy.preset !== "Custom" ? a.strategy.preset : undefined}
           onTemplate={(t) => applyTemplate(t.name as Preset)}
           limits={[

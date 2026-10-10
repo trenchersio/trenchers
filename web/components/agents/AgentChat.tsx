@@ -11,7 +11,7 @@ const EXAMPLES = [
   "Buy when volume crosses $100k, hold for 2 minutes.",
   "Only tokens launched in the last 10 minutes.",
 ];
-const HELP = "I understand signals (new launches, graduations, volume or market-cap thresholds, dev sells; DexScreener updates are coming soon), exits (after a set time, or take profit / stop loss) and filters (token age, minimum liquidity).";
+const HELP = "I understand signals (new launches, graduations, volume or market-cap thresholds, dev sells; DexScreener updates are coming soon), or one specific coin you name (DCA over days, buy the dip below a market cap, or buy once), exits (after a set time, or take profit / stop loss) and filters (token age, minimum liquidity).";
 
 /**
  * Talk to your agent. Each message is read into a typed rule (deterministic, no language model in

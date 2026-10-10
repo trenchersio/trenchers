@@ -1,6 +1,9 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { AgentChat } from "./AgentChat";
+import { TokenPlanner } from "./TokenPlanner";
+import { TokenLogo } from "@/components/coins/TokenLogo";
+import { TOKEN_PICKS } from "@/lib/token-picks";
 import type { CustomRule } from "@/lib/custom-strategy";
 import type { ChatMsg } from "@/lib/agents-store";
 
@@ -22,6 +25,8 @@ export function GuideFlow(p: {
   templates: GuideTemplate[];
   activeTemplate?: string;
   onTemplate: (t: GuideTemplate) => void;
+  /** The "Specific token" strategy (pick a coin, DCA / buy the dip / once). */
+  tokenPlan?: { current: CustomRule | null; perTrade: number | null; onApply: (r: CustomRule) => void };
   limits: GuideLimit[];
   onSaveLimits?: () => void;
   trading: boolean;
@@ -32,6 +37,8 @@ export function GuideFlow(p: {
   const off = p.busy || !!p.locked;
   // Picking a template only selects it; it's applied after the holder confirms.
   const [pick, setPick] = useState<GuideTemplate | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const tokenOn = p.tokenPlan?.current?.trigger === "token";
   const s1 = p.rule ? "done" : "now";
   const s3 = p.trading ? "done" : p.rule ? "now" : "todo";
   return (
@@ -65,11 +72,24 @@ export function GuideFlow(p: {
               </div>
               <div className="gf-tpls" role="list" aria-label="House templates">
                 <span className="mono gf-sub">Or pick a ready-made strategy</span>
+                {p.tokenPlan && (
+                  <button type="button" role="listitem" className={`gf-tpl gf-tpl-token${tokenOn ? " on" : ""}${planning ? " picked" : ""}`} disabled={off} onClick={() => { setPick(null); setPlanning(!planning); }} aria-pressed={tokenOn || planning}>
+                    <span className="gf-radio" aria-hidden="true" />
+                    <span className="gf-tpl-txt"><b>Specific token</b><small>Buy one coin you pick: DCA over days, buy the dip below a market cap, or once. Holds by default.</small>
+                      <span className="gf-tk-row" aria-hidden="true">{TOKEN_PICKS.map((t) => <TokenLogo key={t.address} address={t.address} symbol={t.symbol} size={18} />)}<i className="mono">+ any Pons coin</i></span>
+                    </span>
+                    {tokenOn ? <span className="mono gf-tag on">Active</span> : <span className="mono gf-tag gf-tag-new">New</span>}
+                  </button>
+                )}
+                {planning && p.tokenPlan && (
+                  <TokenPlanner current={p.tokenPlan.current} perTrade={p.tokenPlan.perTrade} disabled={off}
+                    onApply={(r) => { setPlanning(false); p.tokenPlan!.onApply(r); }} onCancel={() => setPlanning(false)} />
+                )}
                 {p.templates.map((t) => {
                   const on = p.activeTemplate === t.name;
                   const picked = pick?.name === t.name;
                   return (
-                    <button key={t.name} type="button" role="listitem" className={`gf-tpl${on ? " on" : ""}${picked ? " picked" : ""}`} disabled={off || on} onClick={() => setPick(picked ? null : t)} aria-pressed={on || picked}>
+                    <button key={t.name} type="button" role="listitem" className={`gf-tpl${on ? " on" : ""}${picked ? " picked" : ""}`} disabled={off || on} onClick={() => { setPlanning(false); setPick(picked ? null : t); }} aria-pressed={on || picked}>
                       <span className="gf-radio" aria-hidden="true" />
                       <span className="gf-tpl-txt"><b>{t.name}</b><small>{t.text}</small></span>
                       {on ? <span className="mono gf-tag on">Active</span> : picked ? <span className="mono gf-tag on">Selected</span> : t.house ? <span className="mono gf-tag">#{t.house}</span> : t.tag ? <span className="mono gf-tag">{t.tag}</span> : null}

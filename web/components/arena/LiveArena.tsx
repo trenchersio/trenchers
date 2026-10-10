@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { AgentCoinLine } from "@/components/coins/AgentCoinLink";
 import { CoinChip } from "@/components/coins/CoinChart";
+import { TokenLogo } from "@/components/coins/TokenLogo";
 import { useCoins } from "@/components/coins/coins";
 import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
 import { badgeOf, type Blocked } from "@/lib/agent-status";
 import { useActivity } from "@/lib/activity";
-import { ENGINE_URL, openseaItem } from "@/lib/constants";
+import { ENGINE_URL, PONS_TOKEN_URL, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
 import { STRATEGIES } from "@/lib/strategies";
@@ -17,8 +18,11 @@ import { Loader } from "@/components/Loader";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
-export const strategyName = (rule: string | null, version: number) =>
-  !rule ? "No strategy yet" : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
+export type Target = { token: string; symbol: string | null; logo: string | null; mode: "once" | "dca" | "below"; status: string | null } | null;
+const tokenStrategy = (t: NonNullable<Target>) => { const s = t.symbol ? `$${t.symbol}` : "a token"; return t.mode === "dca" ? `DCA ${s}` : t.mode === "below" ? `${s} dip buyer` : `Holds ${s}`; };
+export const strategyName = (rule: string | null, version: number, target?: Target) =>
+  !rule ? "No strategy yet" : target ? tokenStrategy(target) : /^buy token 0x/i.test(rule) ? "Specific token"
+    : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
 type LiveTrade = { agent: number; wallet: string; token: string; symbol?: string; side: "buy" | "sell"; eth: string; time: number; tx: string; pnlPct?: number };
@@ -29,6 +33,8 @@ type LiveAgent = {
   positions: { token: string; symbol?: string; cost: number; value: number; since: number }[];
   history: { t: number; v: number }[]; recent: LiveTrade[];
   blocked?: Blocked; spentToday?: number; dailyCap?: number;
+  /** Specific-token strategy: the coin it buys (shown with its logo next to the agent). */
+  target?: Target;
 };
 type Feed = { updatedAt: number; chainId: number; nft: string; paused: boolean; agents: LiveAgent[]; feed: LiveTrade[] };
 
@@ -65,7 +71,7 @@ export function cardFromLive(a: LiveAgent, of: number): PnlCardData {
   return {
     id: a.id, returnPct: a.pnlPct, pnlEth: a.pnlEth, balanceEth: a.nav,
     biggest: a.biggest ? { sym: a.biggest.symbol, pct: a.biggest.pct } : null,
-    strategy: strategyName(a.rule, a.ruleVersion),
+    strategy: strategyName(a.rule, a.ruleVersion, a.target),
     rank: { pos: a.rank, of }, period: "This week",
   };
 }
@@ -132,8 +138,8 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
-                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion)}`}</small>
+                        <b>Trencher #{a.id}{a.target && <TokenLogo address={a.target.token} logo={a.target.logo} symbol={a.target.symbol} size={18} className="tk-row" title={`${strategyName(a.rule, a.ruleVersion, a.target)}`} />}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion, a.target)}`}</small>
                       </span>
                     </span>
                     <span className="col-num"><em className={`pnl mono ${a.pnlPct >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(a.pnlPct)}</em></span>
@@ -223,7 +229,17 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
       <LiveValueChart history={a.history} />
 
       <div className="panel-block">
-        <h3>Strategy · {strategyName(a.rule, a.ruleVersion)}</h3>
+        <h3>Strategy · {strategyName(a.rule, a.ruleVersion, a.target)}</h3>
+        {a.target && (
+          <div className="tk-target">
+            <TokenLogo address={a.target.token} logo={a.target.logo} symbol={a.target.symbol} size={40} />
+            <div>
+              <b>{a.target.symbol ? `$${a.target.symbol}` : `${a.target.token.slice(0, 8)}…`}</b>
+              <span className="mono">{a.target.status ?? (a.target.mode === "dca" ? "DCA plan" : a.target.mode === "below" ? "Buys the dip" : "One buy")}</span>
+            </div>
+            <a className="tbtn" href={PONS_TOKEN_URL.replace("{address}", a.target.token)} target="_blank" rel="noreferrer">Pons ↗</a>
+          </div>
+        )}
         {a.rule ? <blockquote className="guide"><span className="mono">Its rule, as stored on-chain</span>“{a.rule}”</blockquote> : <p className="empty">The holder hasn&apos;t given this agent a rule yet.</p>}
         {a.understood.length > 0 && <div className="tags">{a.understood.map((u) => <span key={u} className="mono">{u}</span>)}</div>}
         {a.ruleWarning && <p className="live-warn">{a.ruleWarning}</p>}

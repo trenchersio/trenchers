@@ -5,12 +5,12 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { TelegramFeed } from "./telegram";
-import { parse, type CustomRule } from "./custom-strategy";
+import { dcaBuys, defaultEvery, parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
 import { BurnTracker } from "./burns";
 import {
-  ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
+  PONS_RECORD_ABI, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
 } from "./abis";
 
 /**
@@ -22,12 +22,16 @@ import {
  * events, rules from RuleApplied, positions and trade history from the adapter's Bought/Sold events.
  */
 
-type Token = { token: Address; curve: Address; deployer: Address; launchedAt: number; volumeEth: number; graduated: boolean; symbol?: string; supply?: bigint };
+type Token = { token: Address; curve: Address; deployer: Address; launchedAt: number; volumeEth: number; graduated: boolean; symbol?: string; supply?: bigint; tx?: Hash };
+/** What the site shows for a specific-token strategy: the coin's ticker, name and logo (read from its Pons launch). */
+export type TokenMeta = { token: Address; symbol: string; name: string; logo: string | null; graduated: boolean; mcapEth: number | null };
 /** An agent's own coin (launched by its agent wallet): creator fees and a price history, from Pons's own trade events. */
 type AgentCoin = { token: Address; curve: Address; agent: number; wallet: Address; launchedAt: number; feeWei: bigint; taxWei: bigint; volumeEth: number; trades: number; points: { t: number; p: number }[] };
 type Agent = {
   id: number; wallet: Address; owner?: Address; coin?: Address; live: boolean; perTrade: bigint; dailyCap: bigint; setBy?: Address;
   ruleVersion: number; ruleText: string | null; rule: CustomRule | null; balance: bigint; spentDay: bigint; spentToday: bigint;
+  /** When the current rule was applied (chain time): a specific-token plan (DCA, budget) counts from here. */
+  ruleAt?: number;
   /** How the engine read the rule, and a warning when it can't follow all of it (shown to the holder). */
   understood?: string[]; ruleWarning?: string | null;
 };
@@ -148,6 +152,7 @@ export class Engine {
     if (ENV.FEE_KEEPER && ENV.DIST && Date.now() - this.feeKeeper.last > 600_000) await this.feeKeeper.run().catch((e) => this.log(`fee share upkeep failed: ${(e as Error).message.split("\n")[0]}`));
     if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
+    await this.runTokenPlans();
     await this.runExits();
   }
 
@@ -257,7 +262,7 @@ export class Engine {
     switch (l.eventName) {
       case "TokenLaunched": {
         if (a.pairToken !== "0x0000000000000000000000000000000000000000") return; // ETH launches only
-        const tok: Token = { token: lc(a.token), curve: lc(a.curve), deployer: lc(a.deployer), launchedAt: t, volumeEth: 0, graduated: false };
+        const tok: Token = { token: lc(a.token), curve: lc(a.curve), deployer: lc(a.deployer), launchedAt: t, volumeEth: 0, graduated: false, tx: l.transactionHash ?? undefined };
         this.tokens.set(tok.token, tok); this.curves.set(tok.curve, tok.token);
         // Launched by an agent wallet: follow it as that agent's coin (fees, chart).
         const ag = this.agents.get(tok.deployer);
@@ -308,7 +313,8 @@ export class Engine {
       }
       case "RuleApplied": {
         const ag = this.agents.get(lc(l.address)); if (!ag) return;
-        ag.ruleVersion = Number(a.version); ag.ruleText = (a.ruleUri as string) || null;
+        ag.ruleVersion = Number(a.version); ag.ruleText = (a.ruleUri as string) || null; ag.ruleAt = t || this.now();
+        for (const k of [...this.planNext.keys()]) if (k.startsWith(ag.wallet)) this.planNext.delete(k); // a new plan is checked straight away
         const parsed = ag.ruleText ? parse(ag.ruleText) : null;
         ag.rule = parsed?.rule ?? null;
         ag.understood = parsed?.understood ?? [];
@@ -480,6 +486,8 @@ export class Engine {
     const spent = ag.spentDay === today ? ag.spentToday : 0n;
     if (!ag.rule) return { code: "no-rule", text: "no rule" };
     if (ag.rule.trigger === "dexupdate") return { code: "unsupported", text: "its DexScreener signal isn't supported yet" };
+    if (ag.rule.trigger === "token" && ag.rule.token && this.notPons.has(lc(ag.rule.token))) return { code: "unsupported", text: "its token isn't a Pons coin paired with ETH, so the agent can't buy it" };
+    if (ag.rule.trigger === "token" && ag.coin && ag.rule.token && lc(ag.rule.token) === ag.coin) return { code: "unsupported", text: "an agent can't buy its own coin" };
     if (!ag.live || ag.setBy !== ag.owner) return { code: "off", text: "trading switched off" };
     if (ag.perTrade === 0n) return { code: "no-limit", text: "no per-trade limit" };
     if (this.book(ag.wallet).size >= ENV.MAX_POSITIONS) return { code: "max-positions", text: `holding the maximum ${ENV.MAX_POSITIONS} positions` };
@@ -497,7 +505,7 @@ export class Engine {
       const last = mine.length ? Math.max(...mine.map((x) => x.time)) : 0;
       const spent = ag.spentDay === today ? ag.spentToday : 0n;
       const blocked = this.blockedOf(ag)?.text ?? null;
-      return { id: ag.id, trigger: ag.rule?.trigger ?? null, ready: !blocked, waitingFor: blocked ?? `the next ${ag.rule!.trigger} signal`, open: book.size,
+      return { id: ag.id, trigger: ag.rule?.trigger ?? null, ready: !blocked, waitingFor: blocked ?? (ag.rule!.trigger === "token" ? this.planStatus(ag) : `the next ${ag.rule!.trigger} signal`), open: book.size,
         balance: Number(formatEther(ag.balance)).toFixed(5), spentToday: `${formatEther(spent)} / ${formatEther(ag.dailyCap)} ETH`, lastTrade: ago(last) };
     }).filter((a) => a.trigger || a.open);
     const launches = [...this.tokens.values()].reduce((m, x) => Math.max(m, x.launchedAt), 0);
@@ -608,17 +616,163 @@ export class Engine {
     }
   }
 
+  // ------------------------------------------------------------------ specific-token plans
+
+  /** Coins confirmed not to be ETH-paired Pons launches (a rule pointing at one can't trade). */
+  notPons = new Set<Address>();
+  private lookedUp = new Map<Address, number>();
+  /** The coin a specific-token rule names: followed already, or looked up on the Pons factory (older launches). */
+  async ensureToken(addr: Address): Promise<Token | null> {
+    const a = lc(addr);
+    const known = this.tokens.get(a); if (known) return known;
+    if (this.notPons.has(a) || Date.now() - (this.lookedUp.get(a) ?? 0) < 120_000) return null;
+    this.lookedUp.set(a, Date.now());
+    try {
+      const rec = await this.pub.readContract({ address: ENV.PONS_FACTORY, abi: PONS_RECORD_ABI, functionName: "getLaunchedToken", args: [a] }) as { token: Address; curve: Address; deployer: Address; pairToken: Address };
+      if (!rec || /^0x0+$/.test(rec.token) || !/^0x0+$/.test(rec.pairToken)) { this.notPons.add(a); this.log(`${a} isn't an ETH-paired Pons coin`); return null; }
+      const tok: Token = { token: a, curve: lc(rec.curve), deployer: lc(rec.deployer), launchedAt: 0, volumeEth: 0, graduated: false };
+      this.tokens.set(a, tok); this.curves.set(tok.curve, a);
+      await this.onPool(tok).catch(() => false);
+      this.log(`Following ${a} (${await this.symbolOf(a)}) for a specific-token strategy`);
+      return tok;
+    } catch (e) {
+      const m = (e as Error).message;
+      if (/revert|NotFound|Unknown|invalid/i.test(m)) { this.notPons.add(a); this.log(`${a} isn't a Pons coin (${m.split("\n")[0].slice(0, 80)})`); }
+      return null;
+    }
+  }
+
+  /** Market cap in ETH right now (curve or Uniswap pool). */
+  private mcapCache = new Map<Address, { t: number; v: number }>();
+  async mcapOf(tok: Token): Promise<number> {
+    const c = this.mcapCache.get(tok.token);
+    if (c && Date.now() - c.t < 15_000) return c.v;
+    tok.supply ??= await this.pub.readContract({ address: tok.token, abi: ERC20_ABI, functionName: "totalSupply" });
+    let v: number;
+    if (!(await this.onPool(tok))) {
+      const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
+      v = k > 0n ? Number(formatEther((q * tok.supply) / k)) : 0;
+    } else {
+      const r = await this.poolReserves(tok);
+      v = r.coins > 0n ? Number(formatEther((r.eth * tok.supply) / r.coins)) : 0;
+    }
+    this.mcapCache.set(tok.token, { t: Date.now(), v });
+    return v;
+  }
+
+  /** The buys an agent made into its rule's token since the rule was applied. */
+  private planBuys(ag: Agent) {
+    const token = lc(ag.rule!.token!), from = ag.ruleAt ?? 0;
+    const buys = this.trades.filter((x) => x.wallet === ag.wallet && x.token === token && x.side === "buy" && x.time >= from);
+    const spent = buys.reduce((s, x) => s + Number(x.eth), 0);
+    return { buys, spent, last: buys.length ? Math.max(...buys.map((x) => x.time)) : 0 };
+  }
+
+  /** In words, where a specific-token plan stands (for /health). */
+  planStatus(ag: Agent) {
+    const r = ag.rule!; const { buys, spent } = this.planBuys(ag);
+    const budget = r.budgetEth ? ` · ${spent.toFixed(4)} / ${r.budgetEth} ETH` : "";
+    if (r.budgetEth && spent >= r.budgetEth * 0.999) return `plan complete: budget spent${budget}`;
+    if (r.tokenMode === "once") return buys.length ? "plan complete: bought" : "its one buy";
+    if (r.tokenMode === "dca") { const n = dcaBuys(r); return buys.length >= n ? `plan complete: ${n} buys${budget}` : `DCA buy ${buys.length + 1} of ${n}${budget}`; }
+    return `market cap below ${r.threshold} ETH${budget}`;
+  }
+
+  private planNext = new Map<string, number>();
+  /** Specific-token strategies run on time and price, not on Pons events: checked every few seconds. */
+  private async runTokenPlans() {
+    const ts = this.now();
+    for (const ag of this.agents.values()) {
+      const r = ag.rule;
+      if (!r || r.trigger !== "token" || !r.token || !this.tradable(ag)) continue;
+      const key = `${ag.wallet}:${lc(r.token)}`;
+      if ((this.planNext.get(key) ?? 0) > Date.now()) continue;
+      this.planNext.set(key, Date.now() + 20_000);
+      const tok = await this.ensureToken(r.token as Address);
+      if (!tok || (ag.coin && ag.coin === tok.token)) continue;
+      const { buys, spent, last } = this.planBuys(ag);
+      const budgetLeft = r.budgetEth ? r.budgetEth - spent : Infinity;
+      if (budgetLeft <= r.budgetEth! * 0.001) continue;
+      const every = (r.everyHours ?? defaultEvery(r)) * 3600;
+      const from = ag.ruleAt ?? ts;
+      let due = false, cap = Number.isFinite(budgetLeft) ? budgetLeft : Infinity, why = "";
+      if (r.tokenMode === "dca") {
+        const n = dcaBuys(r), slots = Math.min(n, Math.floor((ts - from) / every) + 1);
+        // One buy per slot; after downtime it catches up one buy at a time, never two within half an interval.
+        due = buys.length < slots && ts - last >= every / 2;
+        if (r.budgetEth) cap = Math.min(budgetLeft, r.budgetEth / n);
+        why = `DCA ${buys.length + 1}/${n}`;
+      } else if (r.tokenMode === "below") {
+        if (ts - last < every) continue;
+        const mcap = await this.mcapOf(tok).catch(() => null);
+        if (mcap === null) continue;
+        due = mcap <= (r.threshold ?? 0);
+        why = `mcap ${mcap.toFixed(2)} ETH <= ${r.threshold}`;
+      } else { due = buys.length === 0; why = "buy once"; }
+      if (!due) continue;
+      // Don't fire again before this buy's Bought event is read back.
+      this.planNext.set(key, Date.now() + 60_000);
+      await this.refreshAgents(false, new Set([ag.wallet]));
+      if (!this.tradable(ag)) continue;
+      const max = Number.isFinite(cap) ? BigInt(Math.round(cap * 1e18)) : undefined;
+      // Sent: the next tick reads its Bought event first, so a few seconds is enough. Not sent: wait a minute.
+      const ok = await this.buy(ag, tok, why, max);
+      this.planNext.set(key, Date.now() + (ok ? 5_000 : 60_000));
+    }
+  }
+
+  /** Ticker, name and logo of a coin; the logo is the image link in its Pons launch transaction. Cached. */
+  private metas = new Map<Address, TokenMeta & { at: number }>();
+  async tokenMeta(addr: Address): Promise<TokenMeta | null> {
+    const a = lc(addr);
+    const c = this.metas.get(a);
+    if (c && Date.now() - c.at < 600_000) return { ...c, mcapEth: await this.mcapOf(this.tokens.get(a)!).catch(() => c.mcapEth) };
+    const tok = await this.ensureToken(a);
+    if (!tok) return null;
+    const [symbol, name] = await Promise.all([this.symbolOf(a), this.pub.readContract({ address: a, abi: ERC20_ABI, functionName: "name" }).catch(() => "") as Promise<string>]);
+    let logo = c?.logo ?? null;
+    if (!logo) logo = await this.launchLogo(tok).catch(() => null);
+    const meta = { token: a, symbol, name, logo, graduated: tok.graduated, mcapEth: await this.mcapOf(tok).catch(() => null), at: Date.now() };
+    this.metas.set(a, meta);
+    const { at: _at, ...out } = meta; return out;
+  }
+
+  /** The image link among the strings in the coin's launch transaction (name, symbol, logo, description...). */
+  private async launchLogo(tok: Token): Promise<string | null> {
+    let hash = tok.tx;
+    if (!hash) {
+      // Launched before the engine's history: find its launch block (the coin's code appears there), then the event.
+      const head = await this.pub.getBlockNumber();
+      const has = async (n: bigint) => { const code = await this.pub.getCode({ address: tok.token, blockNumber: n }); return !!code && code !== "0x"; };
+      let lo = 0n, hi = head;
+      while (lo < hi) { const mid = (lo + hi) / 2n; if (await has(mid)) hi = mid; else lo = mid + 1n; }
+      const logs = await this.pub.getLogs({ address: ENV.PONS_FACTORY, event: TOKEN_LAUNCHED, args: { token: tok.token }, fromBlock: lo, toBlock: lo });
+      hash = logs[0]?.transactionHash ?? undefined;
+      if (!hash) return null;
+      tok.tx = hash;
+      if (!tok.launchedAt) tok.launchedAt = await this.blockTime(lo).catch(() => 0);
+    }
+    const tx = await this.pub.getTransaction({ hash });
+    const bytes = Buffer.from(tx.input.slice(2), "hex");
+    // ABI-encoded strings sit in the calldata as plain text padded with zeros; the logo comes before the socials.
+    const urls = bytes.toString("latin1").match(/(?:https?|ipfs):\/\/[\x21-\x7e]+/gi) ?? [];
+    const url = urls.find((u) => /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(u)) ?? urls.find((u) => !/(x|twitter)\.com|t\.me|discord|warpcast|farcaster/i.test(u)) ?? null;
+    if (!url) { const d = bytes.toString("latin1").match(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/); return d && d[0].length < 200_000 ? d[0] : null; }
+    return url.startsWith("ipfs://") ? `https://ipfs.io/ipfs/${url.slice(7).replace(/^ipfs\//, "")}` : url;
+  }
+
   // ------------------------------------------------------------------ trades
 
-  private async buy(ag: Agent, tok: Token, reason: string) {
-    const key = `${ag.wallet}:${tok.token}`; if (this.busy.has(key)) return; this.busy.add(key);
+  private async buy(ag: Agent, tok: Token, reason: string, maxSize?: bigint): Promise<boolean> {
+    const key = `${ag.wallet}:${tok.token}`; if (this.busy.has(key)) return false; this.busy.add(key);
     try {
       const today = BigInt(Math.floor(this.now() / 86400));
       const spent = ag.spentDay === today ? ag.spentToday : 0n;
       let size = ag.perTrade;
+      if (maxSize !== undefined && maxSize < size) size = maxSize;
       if (spent + size > ag.dailyCap) size = ag.dailyCap > spent ? ag.dailyCap - spent : 0n;
       if (size > ag.balance) size = ag.balance;
-      if (size < 10_000_000_000n) { this.noteOnce(`size:${ag.wallet}`, `Agent #${ag.id} skipped ${tok.token}: ${spent >= ag.dailyCap ? "daily limit reached" : "no ETH left in its wallet"}`); return; } // nothing worth trading
+      if (size < 10_000_000_000n) { this.noteOnce(`size:${ag.wallet}`, `Agent #${ag.id} skipped ${tok.token}: ${spent >= ag.dailyCap ? "daily limit reached" : "no ETH left in its wallet"}`); return false; } // nothing worth trading
       // What the trade would really get right now (fees, snipe tax, price impact, graduation all included).
       const sim = await this.simulateTrade(ag.wallet, size, encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, 0n] }));
       const fair = await this.quoteBuy(tok, size).catch(() => 0n);
@@ -626,14 +780,15 @@ export class Engine {
         // Much worse than the fee-free price: most likely Pons's anti-snipe tax. Try again shortly.
         if (this.now() - tok.launchedAt < 120) { this.entries.push({ wallet: ag.wallet, token: tok.token, notBefore: this.now() + 3, reason }); this.log(`Agent #${ag.id} waits: ${tok.token} is still taxed (${Number(sim * 100n / fair)}% of fair)`); }
         else this.log(`Agent #${ag.id} skipped ${tok.token}: price ${Number(sim * 100n / fair)}% of fair`);
-        return;
+        return false;
       }
       const minOut = (sim * BigInt(100 - ENV.SLIPPAGE_PCT)) / 100n;
       const data = encodeFunctionData({ abi: ADAPTER_ABI, functionName: "buy", args: [tok.token, minOut] });
       this.log(`Agent #${ag.id} BUY ${tok.token} for ${formatEther(size)} ETH (${reason})`);
       const hash = await this.send(ag.wallet, "trade", [size, data]);
       if (hash) { ag.spentToday = spent + size; ag.spentDay = today; ag.balance -= size; }
-    } catch (e) { this.log(`Agent #${ag.id} buy failed: ${(e as Error).message.split("\n")[0]}`); }
+      return !!hash;
+    } catch (e) { this.log(`Agent #${ag.id} buy failed: ${(e as Error).message.split("\n")[0]}`); return false; }
     finally { this.busy.delete(key); }
   }
 
@@ -653,7 +808,7 @@ export class Engine {
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
         else if (r?.exit === "tpsl" && r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
         else if (r?.exit === "tpsl" && r.stopLossPct && pnl <= -r.stopLossPct) why = `stop loss ${pnl.toFixed(1)}%`;
-        else if (age >= ENV.MAX_HOLD_SEC) why = "max hold";
+        else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && r.token === p.token)) why = "max hold";
         else if (!r) why = "no rule any more";
         if (why) await this.sell(ag, tok, p, value, why);
       }
@@ -803,6 +958,7 @@ export class Engine {
       rows.push({
         id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), blocked: this.blockedOf(ag),
         spentToday: Number(formatEther(ag.spentDay === BigInt(Math.floor(this.now() / 86400)) ? ag.spentToday : 0n)), dailyCap: Number(formatEther(ag.dailyCap)),
+        target: ag.rule?.trigger === "token" && ag.rule.token ? await this.tokenMeta(ag.rule.token as Address).then((m) => (m ? { token: m.token, symbol: m.symbol, logo: m.logo, mode: ag.rule!.tokenMode ?? "once", status: this.planStatus(ag) } : { token: lc(ag.rule!.token!), symbol: null, logo: null, mode: ag.rule!.tokenMode ?? "once", status: null })).catch(() => null) : null,
         coin: ag.coin && !/^0x0+$/.test(ag.coin) ? ag.coin : ([...this.agentCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? null), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
         nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,

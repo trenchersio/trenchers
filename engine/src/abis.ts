@@ -56,6 +56,12 @@ export const ERC20_ABI = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function totalSupply() view returns (uint256)",
   "function symbol() view returns (string)",
+  "function name() view returns (string)",
+]);
+/** Pons V2 LaunchedToken record: the first 11 fields (enough to tell a genuine ETH-paired Pons coin). */
+export const PONS_RECORD_ABI = parseAbi([
+  "struct LaunchedToken { address token; address curve; address deployer; address creatorFeeRecipient; address pairToken; uint256 graduationThreshold; uint24 poolFee; int24 tickSpacing; uint16 creatorTaxBps; bool buybackEnabled; uint8 phase; }",
+  "function getLaunchedToken(address token) view returns (LaunchedToken)",
 ]);
 
 export const CONFIG_ABI = parseAbi(["function paused() view returns (bool)", "function router() view returns (address)"]);

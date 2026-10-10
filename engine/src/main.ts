@@ -94,6 +94,14 @@ const server = createServer(async (req, res) => {
       if (!engine) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       if (Date.now() - engine.burns.updatedAt > 300_000) { const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
       res.end(JSON.stringify(engine.burns.view()));
+    } else if (path === "/token") {
+      // A coin for a specific-token strategy: ticker, name, logo and market cap, or why it can't be traded.
+      if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
+      const a = new URLSearchParams((req.url ?? "").split("?")[1] ?? "").get("address") ?? "";
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: "not an address" })); return; }
+      const m = await engine.tokenMeta(a as `0x${string}`);
+      res.setHeader("cache-control", "public, max-age=30");
+      res.end(JSON.stringify(m ? { ok: true, ...m } : { ok: false, error: engine.notPons.has(a.toLowerCase() as `0x${string}`) ? "This isn't a Pons coin paired with ETH, so agents can't trade it." : "Couldn't read this coin right now. Try again in a minute." }));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify(await engine.arena()));

@@ -46,6 +46,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
 const check = (ok: boolean, msg: string) => { console.log(`${ok ? "  ✓" : "  ✗"} ${msg}`); if (!ok) failures++; };
 
+const rpc0 = (method: string, params: unknown[] = []) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
 async function main() {
   const block0 = await pub.getBlockNumber();
   const registry = await deploy("MockERC6551Registry");
@@ -220,6 +221,37 @@ async function main() {
   const rows = (await engine.arena()).agents as { id: number; blocked: { code: string } | null }[];
   check(rows.every((r) => r.blocked === null || typeof r.blocked.code === "string"), `Arena rows say why an agent can't buy (${rows.map((r) => `#${r.id}:${r.blocked?.code ?? "ready"}`).join(", ")})`);
   tg.close();
+
+  // Specific token: #7 DCAs into a coin on a schedule (one buy every 15 min, budget split over the plan), and holds it.
+  const dcaTx = await call(pons, "MockPonsFactory", "launch", ["DCAX", parseEther("100")], parseEther("1"), dev);
+  const dcax = (parseEventLogs({ abi: artifact("MockPonsFactory").abi, logs: dcaTx.logs, eventName: "TokenLaunched" })[0] as unknown as { args: { token: Address } }).args.token;
+  await sleep(4000); // #7's "buy every launch" may take it first; the plan counts only buys after the new rule
+  const dcaRule = `Buy token ${dcax.toLowerCase()} every 15 min for 1 day, up to 0.0096 ETH in total, hold it (no automatic sell).`;
+  const d0 = engine.trades.length;
+  await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.05"), parseEther("0.5"), true, keccak256(toHex(dcaRule)), dcaRule], 0n, alice);
+  await sleep(6000);
+  const dcaBuys1 = engine.trades.slice(d0).filter((t) => t.agent === 7 && t.side === "buy" && t.token === dcax.toLowerCase());
+  check(engine.agents.get(w7.toLowerCase() as Address)?.rule?.tokenMode === "dca" && dcaBuys1.length === 1 && Math.abs(Number(dcaBuys1[0].eth) - 0.0001) < 1e-9,
+    `specific token: DCA plan made its first buy of 0.0096/96 ETH straight away (${dcaBuys1.map((t) => t.eth).join(", ")})`);
+  await rpc0("evm_increaseTime", [16 * 60]); await rpc0("evm_mine");
+  await sleep(25000);
+  const dcaBuys2 = engine.trades.slice(d0).filter((t) => t.agent === 7 && t.side === "buy" && t.token === dcax.toLowerCase());
+  check(dcaBuys2.length === 2, `specific token: the next DCA buy came 15 minutes later (${dcaBuys2.length} buys)`);
+  const row7 = ((await engine.arena()).agents as { id: number; target: { symbol: string; mode: string; status: string } | null }[]).find((r) => r.id === 7);
+  check(row7?.target?.symbol === "DCAX" && row7.target.mode === "dca" && /DCA buy 3 of 96/.test(row7.target.status), `Arena shows #7's target token (${JSON.stringify(row7?.target)})`);
+  check(engine.trades.slice(d0).every((t) => !(t.agent === 7 && t.side === "sell" && t.token === dcax.toLowerCase())), "specific token: the DCA position is held, not sold");
+  // Below a market cap: a level far above the coin's market cap buys at once; the plan then waits its spacing.
+  const belowRule = `Buy token ${dcax.toLowerCase()} when its market cap is below 100000 ETH, at most every 6h, take profit at +500%.`;
+  const b0 = engine.trades.length;
+  await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.002"), parseEther("0.5"), true, keccak256(toHex(belowRule)), belowRule], 0n, alice);
+  await sleep(8000);
+  const belowBuys = engine.trades.slice(b0).filter((t) => t.agent === 7 && t.side === "buy" && t.token === dcax.toLowerCase());
+  check(belowBuys.length === 1 && Number(belowBuys[0].eth) === 0.002, `specific token: bought once below the market cap level, at the per-trade limit (${belowBuys.map((t) => t.eth).join(", ")})`);
+  const notPons = `Buy token ${"0x" + "12".repeat(20)} once, hold it (no automatic sell).`;
+  await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.002"), parseEther("0.5"), true, keccak256(toHex(notPons)), notPons], 0n, alice);
+  await sleep(4000);
+  const row7b = ((await engine.arena()).agents as { id: number; blocked: { code: string } | null }[]).find((r) => r.id === 7);
+  check(row7b?.blocked?.code === "unsupported", `specific token: a coin that isn't on Pons shows as can't trade (${row7b?.blocked?.code})`);
 
   // $TRENCHERS fee share: the engine enrols awake agents, closes each week and pays every agent its share.
   const rpc = (method: string, params: unknown[] = []) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });

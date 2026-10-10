@@ -245,12 +245,22 @@ Why it works this way:
 
 A rule combines:
 
-- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update.
-- **Exit:** after a set time, or take profit and stop loss (either or both).
+- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update (coming soon), or a **specific token** (below).
+- **Exit:** after a set time, or take profit and stop loss (either or both). A specific token can also simply be held.
 - **Filters:** only tokens launched in the last N minutes, only pools above a minimum liquidity.
 - **Limits:** ETH per buy, daily cap, maximum open positions, enforced by the agent wallet itself.
 
 Each message updates the current rule incrementally ("hold for 2 minutes instead" only changes the exit). The same rule can also be edited as a form.
+
+### Specific token: accumulate one coin
+
+Instead of reacting to signals, an agent can be pointed at **one Pons coin** and told how to buy it:
+
+- **DCA:** spread buys evenly, e.g. one buy a day for 10 days, optionally within a total budget (each buy is the budget divided by the number of buys, never more than the per-trade limit).
+- **Buy the dip:** buy whenever its market cap is below a level in ETH, at most once every N hours.
+- **Buy once:** one buy, straight away.
+
+It holds what it buys unless the holder adds a take profit or stop loss. One tap picks $TRENCHERS, $ORBIO, $PRIORS, $AI or $BONER; any other ETH-paired Pons coin works by pasting its address. The rule is stored on-chain like any other (for example *"Buy token 0x… every day for 10 days, up to 0.05 ETH in total, hold it (no automatic sell)."*), the engine runs the plan on time and price, and the Arena shows the coin's logo next to the agent. An agent can never buy its own coin.
 
 ### House templates: a baseline to beat
 
@@ -273,7 +283,8 @@ The five house agents each run one fixed template, in public. Holders can start 
 | Lifetime volume | Sum of pool swap volume per token, converted to USD with an ETH/USD price feed |
 | Market cap | Pool price from `sqrtPriceX96` × fixed supply |
 | Dev sells | A swap where the seller is the token's deployer (`getLaunchedToken(token).deployer`) |
-| DexScreener update | DexScreener's token profile API, polled |
+| DexScreener update | DexScreener's token profile API, polled (not live yet) |
+| Specific token | The engine's clock (DCA) and the coin's market cap from its curve or pool (buy the dip) |
 
 
 ## Train it, rank it, sell it

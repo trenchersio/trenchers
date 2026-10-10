@@ -1,4 +1,5 @@
-import { describe, parse, validate, DEFAULT_RULE, type CustomRule, type CustomTrigger } from "./custom-strategy";
+import { describe, parse, validate, isAddress, DEFAULT_RULE, type CustomRule, type CustomTrigger } from "./custom-strategy";
+import { TOKEN_PICKS } from "./token-picks";
 
 /**
  * The agent's mind: an AI model (through Orbio's inference gateway) reads what the holder says and
@@ -11,21 +12,27 @@ export const ORBIO_MODEL = process.env.ORBIO_MODEL || "anthropic/claude-sonnet-5
 
 export type MindReply = { reply: string; rule: CustomRule | null; understood: string[]; source: "ai" | "rules" };
 
-const TRIGGERS: CustomTrigger[] = ["launch", "graduation", "volume", "mcap", "devsell"];
+const TRIGGERS: CustomTrigger[] = ["launch", "graduation", "volume", "mcap", "devsell", "token"];
 
 const SYSTEM = `You are the mind of a Trenchers trading agent: an autonomous agent that trades memecoins launched on Pons (a launchpad on Robinhood Chain). Its holder talks to you in plain language; you turn what they want into ONE exact trading rule, and explain it briefly.
 
 The rule must fit this schema exactly (JSON):
 {
-  "trigger": "launch" | "graduation" | "volume" | "mcap" | "devsell",
-  "threshold": number | null,      // volume: lifetime volume in USD (e.g. 50000); mcap: market cap in ETH (e.g. 5); otherwise null
-  "exit": "time" | "tpsl",         // sell after a fixed time, OR on take profit / stop loss
+  "trigger": "launch" | "graduation" | "volume" | "mcap" | "devsell" | "token",
+  "threshold": number | null,      // volume: lifetime volume in USD (e.g. 50000); mcap: market cap in ETH (e.g. 5); token "below": market cap in ETH; otherwise null
+  "exit": "time" | "tpsl" | "hold",// sell after a fixed time, OR on take profit / stop loss, OR (trigger "token" only) hold: never sell automatically
   "holdSec": number | null,        // exit "time": seconds to hold (>= 1)
   "takeProfitPct": number | null,  // exit "tpsl": e.g. 40 for +40%
   "stopLossPct": number | null,    // exit "tpsl": e.g. 20 for -20%
   "maxAgeMin": number | null,      // only coins launched in the last N minutes
-  "minLiquidityEth": number | null // only coins with at least this much ETH in their curve
+  "minLiquidityEth": number | null,// only coins with at least this much ETH in their curve
+  "token": string | null,          // trigger "token": the coin's address (0x + 40 hex)
+  "tokenMode": "once" | "dca" | "below" | null, // trigger "token": buy once now; DCA on a schedule; or buy when its market cap is below threshold
+  "dcaDays": number | null,        // tokenMode "dca": spread the buys over this many days
+  "everyHours": number | null,     // "dca": hours between buys (default 24, or 4 for plans under 2 days); "below": at least this many hours between buys (default 6)
+  "budgetEth": number | null       // trigger "token", optional: total ETH to spend on the plan (the only place an ETH amount is allowed)
 }
+Specific token (trigger "token"): the holder names ONE coin to accumulate, e.g. "DCA into $ORBIO over 10 days" or "buy $AI when its market cap is under 20 ETH". It must be a Pons coin; use the address the holder gives, or one of these known coins: ${TOKEN_PICKS.map((p) => `$${p.symbol} ${p.address}`).join(", ")}. If they name a coin you don't have an address for, ask for its contract address. Default exit for a specific token is "hold". Filters (maxAgeMin, minLiquidityEth) don't apply to it.
 Signals: launch = a new coin launches; graduation = a coin's curve sells out and it moves to Uniswap; volume = a coin crosses a lifetime volume in USD; mcap = a coin's market cap crosses a value in ETH; devsell = the coin's creator sells.
 Only one exit type: either a holding time, or take profit and/or stop loss. Spending limits per trade and per day are set separately by the holder; never put amounts of ETH to spend in the rule.
 If the holder asks for something the schema can't express, choose the closest rule and say plainly what you left out. If you need one essential detail, ask one short question and return "rule": null.
@@ -37,7 +44,26 @@ function clean(r: unknown): CustomRule | null {
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v > 0 ? +v.toFixed(4) : null);
   const trigger = TRIGGERS.includes(o.trigger as CustomTrigger) ? (o.trigger as CustomTrigger) : null;
   if (!trigger) return null;
-  const exit = o.exit === "tpsl" ? "tpsl" : "time";
+  const token = trigger === "token" && typeof o.token === "string" && isAddress(o.token) ? o.token.toLowerCase() : null;
+  if (trigger === "token" && !token) return null;
+  const mode = o.tokenMode === "dca" || o.tokenMode === "below" ? o.tokenMode : "once";
+  const exit = o.exit === "tpsl" ? "tpsl" : o.exit === "hold" && token ? "hold" : token && o.exit !== "time" ? "hold" : "time";
+  if (token) {
+    const rule: CustomRule = {
+      ...DEFAULT_RULE, trigger, token, tokenMode: mode, exit,
+      threshold: mode === "below" ? n(o.threshold) : null,
+      dcaDays: mode === "dca" ? n(o.dcaDays) ?? 7 : null,
+      everyHours: mode === "once" ? null : n(o.everyHours) ?? (mode === "below" ? 6 : (n(o.dcaDays) ?? 7) >= 2 ? 24 : 4),
+      budgetEth: n(o.budgetEth),
+      holdSec: exit === "time" ? (n(o.holdSec) ? Math.round(n(o.holdSec)!) : null) : null,
+      takeProfitPct: exit === "tpsl" ? n(o.takeProfitPct) : null,
+      stopLossPct: exit === "tpsl" ? n(o.stopLossPct) : null,
+      maxAgeMin: null, minLiquidityEth: null,
+    };
+    if (validate(rule)) return null;
+    const text = describe(rule);
+    return describe(parse(text).rule) === text ? parse(text).rule : null;
+  }
   const rule: CustomRule = {
     ...DEFAULT_RULE, trigger,
     threshold: trigger === "volume" || trigger === "mcap" ? n(o.threshold) : null,
