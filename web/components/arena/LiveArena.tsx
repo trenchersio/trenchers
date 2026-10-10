@@ -19,9 +19,9 @@ import { Loader } from "@/components/Loader";
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
 export type Target = { token: string; symbol: string | null; logo: string | null; mode: "once" | "dca" | "below"; status: string | null } | null;
-const tokenStrategy = (t: NonNullable<Target>) => { const s = t.symbol ? `$${t.symbol}` : "a token"; return t.mode === "dca" ? `DCA ${s}` : t.mode === "below" ? `${s} dip buyer` : `Holds ${s}`; };
+const tokenStrategy = (t: NonNullable<Target>) => { const s = t.symbol ? `$${t.symbol}` : "a token"; return `Treasury · ${t.mode === "dca" ? `DCA ${s}` : t.mode === "below" ? `${s} dip buys` : `holds ${s}`}`; };
 export const strategyName = (rule: string | null, version: number, target?: Target) =>
-  !rule ? "No strategy yet" : target ? tokenStrategy(target) : /^buy token 0x/i.test(rule) ? "Specific token"
+  !rule ? "No strategy yet" : target ? tokenStrategy(target) : /^buy token 0x/i.test(rule) ? "Treasury"
     : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
@@ -138,9 +138,15 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}{a.target && <TokenLogo address={a.target.token} logo={a.target.logo} symbol={a.target.symbol} size={18} className="tk-row" title={`${strategyName(a.rule, a.ruleVersion, a.target)}`} />}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
-                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${strategyName(a.rule, a.ruleVersion, a.target)}`}</small>
+                        <b>Trencher #{a.id}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${a.target ? ({ dca: "DCA plan", below: "Buys dips", once: "Holds" } as const)[a.target.mode] : strategyName(a.rule, a.ruleVersion, a.target)}`}</small>
                       </span>
+                      {a.target && (
+                        <span className="tk-badge" title={`Trenchers Treasury: ${strategyName(a.rule, a.ruleVersion, a.target)}`}>
+                          <TokenLogo address={a.target.token} logo={a.target.logo} symbol={a.target.symbol} size={22} />
+                          <span><em className="mono">Treasury</em><b className="mono">{a.target.symbol ? `$${a.target.symbol}` : "token"}</b></span>
+                        </span>
+                      )}
                     </span>
                     <span className="col-num"><em className={`pnl mono ${a.pnlPct >= 0 ? "pnl-up" : "pnl-down"}`}>{signed(a.pnlPct)}</em></span>
                     <span className="mono col-num col-val">{ethTxt(a.nav)}<small> ETH</small></span>

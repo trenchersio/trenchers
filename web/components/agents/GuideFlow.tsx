@@ -75,7 +75,7 @@ export function GuideFlow(p: {
                 {p.tokenPlan && (
                   <button type="button" role="listitem" className={`gf-tpl gf-tpl-token${tokenOn ? " on" : ""}${planning ? " picked" : ""}`} disabled={off} onClick={() => { setPick(null); setPlanning(!planning); }} aria-pressed={tokenOn || planning}>
                     <span className="gf-radio" aria-hidden="true" />
-                    <span className="gf-tpl-txt"><b>Specific token</b><small>Buy one coin you pick: DCA over days, buy the dip below a market cap, or once. Holds by default.</small>
+                    <span className="gf-tpl-txt"><b>Trenchers Treasury</b><small>Build a treasury in one coin you pick: DCA over days, buy the dip below a market cap, or buy once. Holds by default.</small>
                       <span className="gf-tk-row" aria-hidden="true">{TOKEN_PICKS.map((t) => <TokenLogo key={t.address} address={t.address} symbol={t.symbol} size={18} />)}<i className="mono">+ any Pons coin</i></span>
                     </span>
                     {tokenOn ? <span className="mono gf-tag on">Active</span> : <span className="mono gf-tag gf-tag-new">New</span>}

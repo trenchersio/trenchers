@@ -1617,7 +1617,7 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 .live-badge { color: var(--green); border-color: rgba(57,255,136,.5); }
 .live-rows { list-style: none; margin: 0; padding: 0; }
-.live-row { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) 84px 110px minmax(0, 170px); align-items: center; gap: 10px; padding: 9px 18px; background: none; border: 0; border-bottom: 1px solid var(--line); color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.live-row { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) 84px 110px minmax(0, 132px); align-items: center; gap: 10px; padding: 9px 18px; background: none; border: 0; border-bottom: 1px solid var(--line); color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .live-row:hover, .live-row.active { background: rgba(57,255,136,.05); }
 .live-row .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .live-row .who canvas { border-radius: 6px; flex: none; }
@@ -2320,3 +2320,10 @@ img.tk-logo { flex: none; }
   .gf-tpls { max-height: 720px; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; scrollbar-color: #2E3532 transparent; overscroll-behavior: contain; }
   .gf-tpls .gf-sub { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 2px 0 6px; }
 }
+/* Treasury badge on the right of an Arena row */
+.live-row .who-txt { flex: 1; }
+.tk-badge { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; border-radius: 999px; border: 1px solid rgba(255,196,80,.35); background: linear-gradient(90deg, rgba(255,196,80,.10), rgba(255,196,80,.02)); }
+.tk-badge > span { display: flex; flex-direction: column; line-height: 1.1; }
+.tk-badge em { font-style: normal; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: #FFC450; }
+.tk-badge b { font-size: 10.5px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--fog); }
+@media (max-width: 640px) { .tk-badge > span { display: none; } .tk-badge { padding: 3px; } }

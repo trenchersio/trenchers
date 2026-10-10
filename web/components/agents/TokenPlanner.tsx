@@ -42,10 +42,10 @@ export function TokenPlanner({ current, perTrade, disabled, onApply, onCancel }:
   }, [rule, perTrade]);
 
   return (
-    <div className="tp" aria-label="Specific token strategy">
+    <div className="tp" aria-label="Trenchers Treasury strategy">
       <div className="tp-head">
-        <b>Specific token</b>
-        <span>Pick a coin and how your agent buys it. It holds what it buys unless you set a take profit or stop loss.</span>
+        <b>Trenchers Treasury</b>
+        <span>Pick a coin and how your agent buys it into its treasury. It holds what it buys unless you set a take profit or stop loss.</span>
       </div>
 
       <div className="tp-picks" role="radiogroup" aria-label="Token">

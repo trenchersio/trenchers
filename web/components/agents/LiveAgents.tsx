@@ -408,7 +408,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           warning={live?.ruleWarning}
           chat={{ rule: currentRule, msgs: chat, onChat: saveChat, onApply: applyRule,
             context: live ? `${live.trades} trades this week, ${live.pnlPct >= 0 ? "+" : ""}${live.pnlPct.toFixed(1)}% this week, win rate ${live.closed ? Math.round((live.wins / live.closed) * 100) : 0}%${live.biggest ? `, biggest trade ${live.biggest.pct.toFixed(0)}% on $${live.biggest.symbol}` : ""}, balance ${live.nav.toFixed(4)} ETH` : undefined }}
-          tokenPlan={{ current: currentRule, perTrade: Number(perTrade) || null, onApply: (r) => { void applyText(describe(r), `Applying a specific-token strategy to Trencher #${a.id}`); } }}
+          tokenPlan={{ current: currentRule, perTrade: Number(perTrade) || null, onApply: (r) => { void applyText(describe(r), `Applying a Trenchers Treasury strategy to Trencher #${a.id}`); } }}
           templates={TEMPLATES}
           activeTemplate={tpl}
           onTemplate={(t) => applyText(t.text, `Applying ${t.name} to Trencher #${a.id}`)}
