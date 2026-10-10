@@ -71,7 +71,7 @@ export function TokenPlanner({ current, perTrade, disabled, onApply, onCancel }:
         <div className={`tp-coin${info && !info.ok ? " bad" : ""}`}>
           <TokenLogo address={rule.token} logo={info?.ok ? info.logo : null} symbol={info?.ok ? info.symbol : null} size={40} />
           <div>
-            <b>{info?.ok ? `$${info.symbol}` : info ? "Can't trade this coin" : "Reading the coin…"}{info?.ok && info.name && info.name.toUpperCase() !== info.symbol ? <small> {info.name}</small> : null}</b>
+            <b>{info?.ok ? `$${info.symbol}` : info ? (/reach|try again/i.test(info.error) ? "Couldn't read this coin" : "Can't trade this coin") : "Reading the coin…"}{info?.ok && info.name && info.name.toUpperCase() !== info.symbol ? <small> {info.name}</small> : null}</b>
             <span className="mono">{info?.ok ? `${info.mcapEth !== null ? `Market cap ${mcapTxt(info.mcapEth)} ETH · ` : ""}${info.graduated ? "on Uniswap" : "on its Pons curve"}` : info ? info.error : `${rule.token.slice(0, 10)}…${rule.token.slice(-6)}`}</span>
           </div>
         </div>
