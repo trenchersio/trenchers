@@ -1,4 +1,4 @@
-import { askMind, lastMindError, orbioKey } from "@/lib/agent-mind";
+import { askMind, lastMindError, orbioKey, orbioModel } from "@/lib/agent-mind";
 import type { CustomRule } from "@/lib/custom-strategy";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ export async function GET() {
   if (stale) {
     const t0 = Date.now();
     const out = configured ? await askMind("Buy every new launch and sell after 30 seconds.", null) : null;
-    lastCheck = { t: Date.now(), body: { configured, model: process.env.ORBIO_MODEL || "anthropic/claude-sonnet-5.5", gateway: (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1"), working: !!out?.rule, ms: Date.now() - t0, sample: out, error: configured ? (out?.rule ? null : lastMindError) : "ORBIO_API_KEY is not set on this service" } };
+    lastCheck = { t: Date.now(), body: { configured, model: orbioModel, gateway: (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1"), working: !!out?.rule, ms: Date.now() - t0, sample: out, error: configured ? (out?.rule ? null : lastMindError) : "ORBIO_API_KEY is not set on this service" } };
   }
   return Response.json(lastCheck!.body, { headers: { "Cache-Control": "no-store" } });
 }

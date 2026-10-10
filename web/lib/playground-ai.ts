@@ -1,4 +1,4 @@
-import { ORBIO_BASE, ORBIO_MODEL, orbioKey } from "./agent-mind";
+import { orbioChat, orbioKey } from "./agent-mind";
 import { ENGINE_URL } from "./constants";
 import type { PgAgent } from "./playground";
 
@@ -45,14 +45,7 @@ export async function aiBoard(maxAgeMs = 8 * 60_000): Promise<AiBoard | null> {
       const agents = (j.agents ?? []).slice(0, 16);
       if (!agents.length) return cache?.board ?? null;
       const data = JSON.stringify({ agentsInArena: (j.agents ?? []).length, agents: agents.map(facts) });
-      const res = await fetch(`${ORBIO_BASE}/chat/completions`, {
-        method: "POST", signal: AbortSignal.timeout(40_000),
-        headers: { "content-type": "application/json", authorization: `Bearer ${orbioKey()}` },
-        body: JSON.stringify({ model: ORBIO_MODEL, temperature: 0.9, max_tokens: 1800, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: data }] }),
-      });
-      if (!res.ok) { lastPlaygroundError = `gateway answered ${res.status}`; return cache?.board ?? null; }
-      const out = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const raw = out.choices?.[0]?.message?.content ?? "";
+      const { content: raw, model } = await orbioChat({ temperature: 0.9, max_tokens: 1800, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: data }] }, 40_000);
       const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { thoughts?: unknown[]; talks?: unknown[] };
       const ids = new Set(agents.map((a) => a.id));
       const moods = ["calm", "hype", "low", "wait"];
@@ -64,7 +57,7 @@ export async function aiBoard(maxAgeMs = 8 * 60_000): Promise<AiBoard | null> {
         .map((x) => ({ from: Number(x.from), to: Number(x.to), text: tidy(x.text, 200) }))
         .filter((x) => ids.has(x.from) && ids.has(x.to) && x.from !== x.to && x.text && numbersOk(x.text, data)).slice(0, 6);
       if (!thoughts.length) { lastPlaygroundError = "the model's answer had no usable lines"; return cache?.board ?? null; }
-      const board = { thoughts, talks, at: Date.now(), model: ORBIO_MODEL };
+      const board = { thoughts, talks, at: Date.now(), model };
       cache = { at: Date.now(), board }; lastPlaygroundError = null;
       return board;
     } catch (e) { lastPlaygroundError = (e as Error).message.slice(0, 200); return cache?.board ?? null; }

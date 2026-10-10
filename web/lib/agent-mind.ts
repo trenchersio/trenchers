@@ -9,6 +9,33 @@ import { TOKEN_PICKS } from "./token-picks";
  */
 export const ORBIO_BASE = (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1").replace(/\/$/, "");
 export const ORBIO_MODEL = process.env.ORBIO_MODEL || "anthropic/claude-sonnet-5.5";
+/** The model actually used: ORBIO_MODEL, or (if the gateway says it doesn't exist) the closest one it lists. */
+export let orbioModel = ORBIO_MODEL;
+async function pickModel(): Promise<string | null> {
+  const r = await fetch(`${ORBIO_BASE}/models`, { headers: { authorization: `Bearer ${orbioKey()}` }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  if (!r?.ok) return null;
+  const j = await r.json().catch(() => null) as { data?: { id?: string }[]; models?: { id?: string }[] } | null;
+  const ids = (j?.data ?? j?.models ?? []).map((m) => String(m.id ?? "")).filter(Boolean);
+  return ids.find((i) => /claude/i.test(i) && /sonnet/i.test(i)) ?? ids.find((i) => /claude/i.test(i)) ?? ids[0] ?? null;
+}
+/** One chat completion through Orbio. If the configured model isn't found (404), switches to one the gateway lists and retries once. */
+export async function orbioChat(body: Record<string, unknown>, timeoutMs: number): Promise<{ content: string; model: string }> {
+  const call = (model: string) => fetch(`${ORBIO_BASE}/chat/completions`, {
+    method: "POST", signal: AbortSignal.timeout(timeoutMs),
+    headers: { "content-type": "application/json", authorization: `Bearer ${orbioKey()}` },
+    body: JSON.stringify({ ...body, model }),
+  });
+  let r = await call(orbioModel);
+  if (r.status === 404 || r.status === 400) {
+    const first = (await r.text()).slice(0, 300);
+    const alt = await pickModel();
+    if (alt && alt !== orbioModel) { console.error(`orbio: model ${orbioModel} not available (${r.status}), switching to ${alt}`); orbioModel = alt; r = await call(alt); }
+    else throw new Error(`gateway answered ${r.status}: ${first}${alt === null ? " (and it lists no models at /models: check ORBIO_BASE_URL)" : ""}`);
+  }
+  if (!r.ok) throw new Error(`gateway answered ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const j = await r.json() as { choices?: { message?: { content?: string } }[] };
+  return { content: j.choices?.[0]?.message?.content ?? "", model: orbioModel };
+}
 
 export type MindReply = { reply: string; rule: CustomRule | null; understood: string[]; source: "ai" | "rules" };
 
@@ -93,21 +120,8 @@ export async function askMind(message: string, current: CustomRule | null, conte
     context ? `Recent performance: ${context}` : "",
     `The holder says: """${message.slice(0, 600)}"""`,
   ].filter(Boolean).join("\n");
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 20_000);
   try {
-    const r = await fetch(`${ORBIO_BASE}/chat/completions`, {
-      method: "POST", signal: ctl.signal,
-      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: ORBIO_MODEL, temperature: 0.2, max_tokens: 500,
-        response_format: { type: "json_object" },
-        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
-      }),
-    });
-    if (!r.ok) { const t = (await r.text()).slice(0, 300); lastMindError = `gateway answered ${r.status}: ${t}`; console.error("agent-mind:", lastMindError); return null; }
-    const j = await r.json() as { choices?: { message?: { content?: string } }[] };
-    const raw = j.choices?.[0]?.message?.content ?? "";
+    const { content: raw } = await orbioChat({ temperature: 0.2, max_tokens: 500, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }] }, 20_000);
     const json = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { reply?: string; understood?: unknown; rule?: unknown };
     const rule = json.rule === null ? null : clean(json.rule);
     if (json.rule !== null && !rule) { lastMindError = "model answered, but its rule didn't validate"; return null; } // let the plain reader handle it
@@ -118,8 +132,8 @@ export async function askMind(message: string, current: CustomRule | null, conte
       rule, source: "ai",
     };
   } catch (e) {
-    lastMindError = (e as Error).name === "AbortError" ? "gateway timed out (20s)" : (e as Error).message.slice(0, 300);
+    lastMindError = /abort|timeout/i.test((e as Error).name) ? "gateway timed out (20s)" : (e as Error).message.slice(0, 300);
     console.error("agent-mind:", lastMindError);
     return null;
-  } finally { clearTimeout(timer); }
+  }
 }
