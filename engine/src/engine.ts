@@ -811,7 +811,7 @@ export class Engine {
         recent: mine.slice(-30).reverse(),
       });
     }
-    rows.sort((a, b) => b.pnlPct - a.pnlPct);
+    rows.sort((a, b) => b.pnlPct - a.pnlPct || b.nav - a.nav || b.trades - a.trades);
     return { updatedAt: this.now(), chainId: ENV.CHAIN_ID, nft: ENV.NFT, paused: this.paused, agents: rows.map((r, i) => ({ rank: i + 1, ...r })), feed: this.trades.slice(-50).reverse() };
   }
 
