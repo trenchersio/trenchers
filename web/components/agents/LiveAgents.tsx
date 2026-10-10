@@ -50,6 +50,8 @@ const NAV = [
   { id: "trades", label: "Trades" }, { id: "track", label: "Track all" },
 ];
 const EXPLORER = chain.blockExplorers?.default.url ?? "";
+/** Agent wallet versions the profile offers holders (checked by the engine's /verify): wallet version 3 on mainnet. */
+const OFFERED_VERSIONS = ["0xb2f69a48b4e314e0f21ceeb0e8287a4cfe738a80", ...(process.env.NEXT_PUBLIC_OFFERED_VERSIONS ?? "").toLowerCase().split(",").filter(Boolean)];
 const fmt = (v?: bigint, d = 5) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(d).replace(/\.?0+$/, "") || "0");
 const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 const ago = (s: number) => (s < 60 ? `${Math.max(0, Math.floor(s))}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`);
@@ -247,7 +249,8 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   const unlock = a.lockedAt ? new Date((Number(a.lockedAt) + LOCK_DAYS * 86400) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const tpl = a.ruleText ? TEMPLATES.find((t) => t.text === a.ruleText)?.name : undefined;
   const currentRule: CustomRule | null = a.ruleText ? parse(a.ruleText).rule : null;
-  const upgrade = !!a.offers && a.offers > 1 && !!a.offered && a.version?.toLowerCase() !== a.offered.toLowerCase();
+  // Only the current wallet version 3 is offered to holders; earlier versions stay hidden even while they are the live offer.
+  const upgrade = !!a.offers && a.offers > 1 && !!a.offered && OFFERED_VERSIONS.includes(a.offered.toLowerCase()) && a.version?.toLowerCase() !== a.offered.toLowerCase();
   const onCustom = !!a.version && !!a.original && a.version.toLowerCase() !== a.original.toLowerCase();
   const now = Date.now() / 1000;
 
