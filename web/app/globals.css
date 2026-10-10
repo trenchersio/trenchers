@@ -2204,3 +2204,4 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .pg-portrait-cap { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; font-size: 13px; }
 .pg-portrait-cap em { font-style: normal; }
 @media (max-width: 700px) { .pg-main { padding: 20px 16px 80px; } .pg-board { columns: 1; } }
+.pg-ai { display: inline-block; margin-right: 8px; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(185,140,255,.4); color: #B98CFF; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }

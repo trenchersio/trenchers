@@ -11,9 +11,9 @@ export type PgAgent = {
   trades: number; wins: number; closed: number; biggest: { symbol: string; pct: number } | null; recent: PgTrade[]; blocked?: Blocked;
 };
 export type PgItem =
-  | { kind: "thought"; key: string; id: number; text: string; mood: "calm" | "hype" | "low" | "wait"; time: number }
+  | { kind: "thought"; key: string; id: number; text: string; mood: "calm" | "hype" | "low" | "wait"; time: number; ai?: boolean }
   | { kind: "trade"; key: string; id: number; text: string; t: PgTrade }
-  | { kind: "talk"; key: string; from: number; to: number; text: string; time: number }
+  | { kind: "talk"; key: string; from: number; to: number; text: string; time: number; ai?: boolean }
   | { kind: "rule"; key: string; id: number; text: string; version: number }
   | { kind: "portrait"; key: string; id: number; rank: number; pnlPct: number; of: number };
 
@@ -70,14 +70,16 @@ function talks(agents: PgAgent[]): PgItem[] {
 }
 
 /** The whole board, interleaved so different kinds of cards sit next to each other. */
-export function buildBoard(agents: PgAgent[]): PgItem[] {
+export function buildBoard(agents: PgAgent[], ai?: { thoughts: { id: number; text: string; mood: "calm" | "hype" | "low" | "wait" }[]; talks: { from: number; to: number; text: string }[] } | null): PgItem[] {
   const of = agents.length;
-  const thoughts = agents.map((a) => thought(a, of));
+  // AI-written voices when the agent's mind is available; plain templates for anyone it didn't cover.
+  const aiBy = new Map((ai?.thoughts ?? []).map((t) => [t.id, t]));
+  const thoughts = agents.map((a): PgItem => { const t = aiBy.get(a.id); return t ? { kind: "thought", key: `th-${a.id}`, id: a.id, text: t.text, mood: t.mood, time: a.recent[0]?.time ?? 0, ai: true } : thought(a, of); });
   const trades = agents.flatMap((a) => a.recent.slice(0, 2).map((t) => tradeNote(a, t))).sort((p, q) => (q as { t: PgTrade }).t.time - (p as { t: PgTrade }).t.time).slice(0, 14);
   const seenRules = new Set<string>();
   const rules = agents.filter((a) => a.rule && !seenRules.has(a.rule.trim().toLowerCase()) && seenRules.add(a.rule.trim().toLowerCase())).slice(0, 8).map((a): PgItem => ({ kind: "rule", key: `ru-${a.id}-${a.ruleVersion}`, id: a.id, text: a.rule!, version: a.ruleVersion }));
   const portraits = [...agents].sort((p, q) => p.rank - q.rank).slice(0, 6).map((a): PgItem => ({ kind: "portrait", key: `po-${a.id}`, id: a.id, rank: a.rank, pnlPct: a.pnlPct, of }));
-  const tk = talks(agents);
+  const tk = ai?.talks?.length ? ai.talks.map((t, i): PgItem => ({ kind: "talk", key: `tk-ai-${i}-${t.from}-${t.to}`, from: t.from, to: t.to, text: t.text, time: 0, ai: true })) : talks(agents);
   const lanes = [thoughts, tk, trades, portraits, rules];
   const board: PgItem[] = [];
   for (let i = 0; board.length < lanes.reduce((n, l) => n + l.length, 0); i++) for (const l of lanes) if (l[i]) board.push(l[i]);

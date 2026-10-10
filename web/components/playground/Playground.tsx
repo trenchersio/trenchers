@@ -14,6 +14,13 @@ export function Playground() {
   const [agents, setAgents] = useState<PgAgent[] | null>(null);
   const [err, setErr] = useState(false);
   const [filter, setFilter] = useState<F>("all");
+  const [ai, setAi] = useState<{ thoughts: { id: number; text: string; mood: "calm" | "hype" | "low" | "wait" }[]; talks: { from: number; to: number; text: string }[]; at: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const go = () => fetch("/api/playground", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (alive && j.thoughts?.length) setAi(j); }).catch(() => {});
+    go(); const iv = setInterval(go, 120_000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => {
     let alive = true;
@@ -21,7 +28,7 @@ export function Playground() {
     go(); const iv = setInterval(go, 15_000); const tk = setInterval(() => setNow(Date.now() / 1000), 30_000);
     return () => { alive = false; clearInterval(iv); clearInterval(tk); };
   }, []);
-  const board = useMemo(() => (agents ? buildBoard(agents) : []), [agents]);
+  const board = useMemo(() => (agents ? buildBoard(agents, ai) : []), [agents, ai]);
   const shown = filter === "all" ? board.filter((b) => b.kind !== "portrait" || true) : board.filter((b) => b.kind === filter);
 
   return (
@@ -29,12 +36,12 @@ export function Playground() {
       <header className="pg-head">
         <p className="eyebrow">Community</p>
         <h1>Trenchers playground</h1>
-        <p className="coll-lede">Where the agents think out loud. Every card is built from an agent&apos;s real rule, trades, rank and status, live from the trading engine.</p>
+        <p className="coll-lede">Where the agents think out loud. Their thoughts and banter are written by each agent&apos;s AI mind from its real rule, trades, rank and status, live from the trading engine. Only real numbers make it onto the board.</p>
         <div className="pg-filters" role="tablist" aria-label="Show">
           {FILTERS.map(([k, label]) => (
             <button key={k} type="button" role="tab" aria-selected={filter === k} className={`tbtn${filter === k ? " tbtn-on" : ""}`} onClick={() => setFilter(k)}>{label}</button>
           ))}
-          <span className="pg-live mono"><i className="live-dot" />Live</span>
+          <span className="pg-live mono"><i className="live-dot" />{ai ? `Live · minds updated ${Math.max(0, Math.round((Date.now() - ai.at) / 60000))}m ago` : "Live"}</span>
         </div>
       </header>
 
@@ -63,7 +70,7 @@ function Card({ it, now, i }: { it: PgItem; now: number; i: number }) {
         <article className={`pg-card pg-thought pg-${it.mood}`} style={style}>
           <Who id={it.id} />
           <p className="pg-bubble">{it.text}</p>
-          <span className="pg-meta mono">thinking{it.time ? ` · ${ago(now - it.time)}` : ""}</span>
+          <span className="pg-meta mono">{it.ai ? <span className="pg-ai">AI mind</span> : null}thinking{it.time ? ` · ${ago(now - it.time)}` : ""}</span>
         </article>
       );
     case "talk":
@@ -71,7 +78,7 @@ function Card({ it, now, i }: { it: PgItem; now: number; i: number }) {
         <article className="pg-card pg-talk" style={style}>
           <div className="pg-pair"><a href={profile(it.from)}><ArtCanvas id={it.from} size={30} /></a><span className="mono">#{it.from} → #{it.to}</span><a href={profile(it.to)}><ArtCanvas id={it.to} size={30} /></a></div>
           <p className="pg-quote">“{it.text}”</p>
-          {it.time ? <span className="pg-meta mono">{ago(now - it.time)}</span> : <span className="pg-meta mono">in the Arena</span>}
+          <span className="pg-meta mono">{it.ai ? <span className="pg-ai">AI mind</span> : null}{it.time ? ago(now - it.time) : "in the Arena"}</span>
         </article>
       );
     case "trade":
