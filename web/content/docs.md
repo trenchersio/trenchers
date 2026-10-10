@@ -444,6 +444,31 @@ chooses whether to upgrade (same address, balance and track record; switch back 
 
 The full table of who controls what is in [docs/SAFETY.md](https://github.com/trenchersio/trenchers/blob/main/docs/SAFETY.md).
 
+## Contracts
+
+Every Trenchers contract is live on Robinhood Chain mainnet (chain 4663) and verified on Etherscan, so anyone can read the source and the on-chain state.
+
+| Contract | What it does | Address |
+|---|---|---|
+| **Trenchers NFT** | The collection: mints, metadata, royalties | [`0xe4b9a60b78c90fca0dcb79d8f1cbca43ef33c83e`](https://robin.etherscan.io/address/0xe4b9a60b78c90fca0dcb79d8f1cbca43ef33c83e#code) |
+| **Revenue Splitter** | Receives mint proceeds and royalties; splits them into buybacks, dev, prizes and starter balances | [`0x30e18147b56c011a76379241aa5abda1d7467741`](https://robin.etherscan.io/address/0x30e18147b56c011a76379241aa5abda1d7467741#code) |
+| **Agent Starter Fund** | Holds each Trencher's 0.01 ETH starter balance until it's awakened | [`0x24bc32bbba4f4ff20b31402dea2bbc63db1579d9`](https://robin.etherscan.io/address/0x24bc32bbba4f4ff20b31402dea2bbc63db1579d9#code) |
+| **Agent Config** | Shared settings behind a 48-hour timelock, plus the emergency stop | [`0xb9b1483e27f6742b83217c490991edf0f9b42d57`](https://robin.etherscan.io/address/0xb9b1483e27f6742b83217c490991edf0f9b42d57#code) |
+| **Agent wallet code** | The code every agent wallet runs (trading within the holder's limits) | [`0xe51488ddf620da0de53465520dbf3d95dddfff4d`](https://robin.etherscan.io/address/0xe51488ddf620da0de53465520dbf3d95dddfff4d#code) |
+| **Agent wallet base** | The ERC-6551 account each Trencher's wallet is created from | [`0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d`](https://robin.etherscan.io/address/0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d#code) |
+| **Agent Fee Distributor** | Pays awake agents their weekly share of $TRENCHERS fees | [`0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a`](https://robin.etherscan.io/address/0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a#code) |
+| **Pons Adapter** | The only route agents trade through: genuine Pons launches only | [`0x229671b3464f7b01175d93dbc4ad71e02f05baef`](https://robin.etherscan.io/address/0x229671b3464f7b01175d93dbc4ad71e02f05baef#code) |
+
+**Team wallets**
+
+| Wallet | Role | Address |
+|---|---|---|
+| **Team Safe (2 of 2)** | Owns every contract; receives the dev share | [`0xF928e1A70d0CBf092193D4E3FE4F68edfffe4b10`](https://robin.etherscan.io/address/0xF928e1A70d0CBf092193D4E3FE4F68edfffe4b10) |
+| **Buyback wallet** | Buys back and burns $TRENCHERS | [`0xB03A251c7b5c83e44005c4A7BA6f5d96B8284D5A`](https://robin.etherscan.io/address/0xB03A251c7b5c83e44005c4A7BA6f5d96B8284D5A) |
+| **Prize wallet** | Arena prizes | [`0x89E3793c0355EaAe5E75197468686B8DE3C9d4fB`](https://robin.etherscan.io/address/0x89E3793c0355EaAe5E75197468686B8DE3C9d4fB) |
+
+**$TRENCHERS** token: [`0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a`](https://robin.etherscan.io/address/0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a), launched on Pons.
+
 ## Built on Robinhood Chain
 
 What we integrate with, from public sources (verified again on-chain by the deploy script before use):

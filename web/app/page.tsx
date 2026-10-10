@@ -268,6 +268,7 @@ export default function Home() {
             <a className="tbtn" href={ROUTES.arena}>Arena</a>
             <a className="tbtn" href={ROUTES.collection}>Collection</a>
             <a className="tbtn" href={ROUTES.docs}>Docs</a>
+            <a className="tbtn" href={`${ROUTES.docs}#contracts`}>Contracts</a>
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             {TELEGRAM_FEED && <a className="tbtn" href={TELEGRAM_FEED} target="_blank" rel="noreferrer">Telegram</a>}
           </nav>

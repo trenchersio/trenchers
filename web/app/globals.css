@@ -2249,3 +2249,14 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   .live-arena .stat:nth-child(n+3) { border-bottom: 0; }
   .live-arena .stat-value { font-size: 20px; }
 }
+
+/* Docs: contract address links (Contracts section) */
+.docs a:has(> code) { border-bottom: 0; }
+.docs a > code { color: var(--green); border-color: rgba(57,255,136,.3); transition: background .15s; }
+.docs a > code::after { content: " ↗"; color: var(--quiet); }
+.docs a:hover > code { background: rgba(57,255,136,.08); border-color: var(--green); }
+@media (max-width: 700px) {
+  .docs table:has(a[href*="etherscan.io/address"]) th:nth-child(2),
+  .docs table:has(a[href*="etherscan.io/address"]) td:nth-child(2) { display: none; }
+  .docs table:has(a[href*="etherscan.io/address"]) a > code { display: inline-block; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+}

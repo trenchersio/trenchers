@@ -50,6 +50,7 @@ export default function DocsPage() {
           <div className="docs-side-links">
             <a className="tbtn" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             <a className="tbtn" href={ROUTES.arena}>Arena</a>
+            <a className="tbtn" href="#contracts">Contracts</a>
           </div>
         </aside>
         <article className="docs">
