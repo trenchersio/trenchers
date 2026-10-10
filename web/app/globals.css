@@ -2327,3 +2327,5 @@ img.tk-logo { flex: none; }
 .tk-badge em { font-style: normal; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: #FFC450; }
 .tk-badge b { font-size: 10.5px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--fog); }
 @media (max-width: 640px) { .tk-badge > span { display: none; } .tk-badge { padding: 3px; } }
+.tp-pick.soon { opacity: .55; cursor: default; border-style: dashed; }
+.tp-pick.soon em { color: var(--quiet); border-color: var(--line); }
