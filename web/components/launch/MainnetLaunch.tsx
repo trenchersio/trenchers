@@ -46,6 +46,23 @@ export function MainnetLaunch() {
   const [account, setAccount] = useState<Address | null>(null);
   const [walletV2, setWalletV2] = useState<Address | null>(null);
   const [walletV4, setWalletV4] = useState<Address | null>(null);
+  const [v4Paste, setV4Paste] = useState("");
+  const [v4Err, setV4Err] = useState<string | null>(null);
+  /** Accept an already deployed version 4 (e.g. the page lost track of it): it must report version 4 and the right settings. */
+  const applyDeployedV4 = async (addr: string) => {
+    setV4Err(null);
+    try {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addr.trim())) throw new Error("Paste the contract address (0x…).");
+      const a = addr.trim() as Address, c = pub();
+      const abi = A("TrenchersAgentAccountV4");
+      const [ver, cfg, fund, fac, tok] = await Promise.all(["VERSION", "config", "starterFund", "programmableFactory", "trenchersToken"].map((f) =>
+        c.readContract({ address: a, abi, functionName: f }).catch(() => null)));
+      if (Number(ver) !== 4) throw new Error("That address isn't agent wallet version 4.");
+      if (String(cfg).toLowerCase() !== MAINNET_DEPLOYMENT.config.toLowerCase() || String(fund).toLowerCase() !== MAINNET_DEPLOYMENT.fund.toLowerCase()
+        || String(fac).toLowerCase() !== PG_FACTORY.toLowerCase() || String(tok).toLowerCase() !== TRENCHERS_TOKEN.toLowerCase()) throw new Error("That version 4 was built with different settings. Deploy a new one.");
+      setWalletV4(a); try { localStorage.setItem("trenchers:walletV4", a); } catch { /* */ }
+    } catch (e) { setV4Err(errText(e)); }
+  };
   useEffect(() => { try { const v = localStorage.getItem("trenchers:walletV4"); if (v) setWalletV4(v as Address); } catch { /* */ } }, []);
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
@@ -350,14 +367,22 @@ export function MainnetLaunch() {
               ))}
             </ol>
           </>
-        ) : (
+        ) : (<>
           <TextButton onClick={async () => {
-            setBusy(true); setError(null);
+            setBusy(true); setError(null); setV4Err(null);
             try { const a = await deploy("Agent wallet version 4", "TrenchersAgentAccountV4", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund, PG_FACTORY, TRENCHERS_TOKEN, PG_LAUNCH_SELECTOR]); setWalletV4(a); try { localStorage.setItem("trenchers:walletV4", a); } catch { /* */ } }
-            catch (e) { setError(errText(e)); }
+            catch (e) { setV4Err(errText(e)); }
             setBusy(false);
           }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 4</TextButton>
-        )}
+          {!isDeployer && <p className="muted-note">Connect the Deployer wallet ({R.deployer}) on Robinhood Chain to deploy.</p>}
+          {isDeployer && !chainOk && <p className="muted-note">Switch your wallet to Robinhood Chain to deploy.</p>}
+          {v4Err && <p className="notice">{v4Err}</p>}
+          <p className="muted-note">Already deployed it (your wallet confirmed it, but the Safe steps didn&apos;t appear)? Paste its address from the explorer:</p>
+          <p className="mono">
+            <input className="tn-input" placeholder="0x… version 4 contract" value={v4Paste} onChange={(e) => setV4Paste(e.target.value)} style={{ width: "min(420px, 100%)" }} />{" "}
+            <button type="button" className="tbtn" onClick={() => applyDeployedV4(v4Paste)}>Use this contract</button>
+          </p>
+        </>)}
       </section>
     </div>
   );
