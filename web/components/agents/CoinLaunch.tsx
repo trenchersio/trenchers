@@ -38,7 +38,7 @@ const SITE = "https://www.trenchers.io";
 const fmt = (v: bigint) => Number(formatEther(v)).toFixed(6).replace(/\.?0+$/, "") || "0";
 
 type Props = { id: number; wallet: Address; me: Address; bal: bigint; busy: boolean; run: (label: string, fn: (ph: (p: "sign" | "chain") => void) => Promise<unknown>, refreshId?: number) => Promise<boolean> };
-type State = { ready: boolean; opens: number | null; v2: Address | null; v2n: number; onV2: boolean; fee: bigint | null; walletVersion: number; free: bigint; need: bigint };
+type State = { ready: boolean; opens: number | null; v2: Address | null; v2n: number; onV2: boolean; fee: bigint | null; walletVersion: number; free: bigint; need: bigint; v3: Address | null; v3At: number | null };
 
 export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const [st, setSt] = useState<State | undefined>(undefined);
@@ -78,7 +78,9 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
       const f0 = fee ?? 0n;
       const need = free >= f0 ? 0n : lockedNow > 0n && balance <= starterLocked ? starterLocked + f0 - balance : f0 - free;
       // Coin launches only need Pons as the launcher: the original wallet code (1) and version 3 launch directly on it.
-      setSt({ ready: launcherOk, opens: launcherOk ? null : (pL[0].toLowerCase() === PONS_FACTORY.toLowerCase() ? Number(pL[1]) : null), v2, v2n, onV2: !!v2 && logic.toLowerCase() === v2.toLowerCase(), fee, walletVersion, free, need });
+      setSt({ ready: launcherOk, opens: launcherOk ? null : (pL[0].toLowerCase() === PONS_FACTORY.toLowerCase() ? Number(pL[1]) : null), v2, v2n, onV2: !!v2 && logic.toLowerCase() === v2.toLowerCase(), fee, walletVersion, free, need,
+        // Version 3 (fee paid from the starter) once it's switched on for holders, or when its 48-hour notice ends.
+        v3: vc >= 3 ? current : null, v3At: vc < 3 && vp >= 3 ? Number(pV[1]) : null });
       if (own !== zeroAddress) {
         const [symbol, name] = await Promise.all([c.readContract({ address: own, abi: ERC20, functionName: "symbol" }).catch(() => "?"), c.readContract({ address: own, abi: ERC20, functionName: "name" }).catch(() => "")]);
         setCoin({ address: own, symbol, name });
@@ -128,6 +130,9 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
   const toOriginal = () => run(`Switching Trencher #${id} back to the original wallet code`, (ph) =>
     sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "setAgentVersion", args: [zeroAddress] }, ph), id).then((ok) => { if (ok) setVer((v) => v + 1); });
 
+  const toV3 = () => run(`Switching Trencher #${id} to agent wallet version 3`, (ph) =>
+    sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "setAgentVersion", args: [st!.v3!] }, ph), id).then((ok) => { if (ok) setVer((v) => v + 1); });
+
   const collect = () => run(`Collecting $${shown?.symbol ?? ""} creator fees for Trencher #${id}`, (ph) =>
     sendCall(me, { address: wallet, abi: AGENT_V2, functionName: "claimCoinFees" }, ph), id).then((ok) => { if (ok) setMsg("Creator fees collected into the agent wallet. They're free balance: withdraw them any time."); });
 
@@ -162,13 +167,19 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
         <div className={st.ready ? "" : "coin-soon"}>
           {!st.ready && <p className="coin-soon-tag">{opens ? `Opens ${opens.toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : "Coming soon"}</p>}
           <p className="muted-note">Launch your agent&apos;s own coin on Pons, once. <b>The agent wallet deploys it itself</b>, so it is the coin&apos;s creator: every trade in it pays creator fees into the agent&apos;s wallet, and its art becomes the coin&apos;s logo. Pons charges a launch fee of {st.fee === null ? "…" : `${fmt(st.fee)} ETH`}{st.walletVersion >= 3 ? ", taken from the agent's balance (the starter can pay it)." : ", paid from the agent's free balance: deposit it first."}</p>
-          {st.ready && st.walletVersion === 2 && (
+          {st.ready && st.walletVersion < 3 && st.v3 && (st.walletVersion === 2 || (st.fee !== null && st.free < st.fee)) && (
             <div className="coin-step">
-              <p><b>Step 1 · Switch back to the original wallet code.</b> Instant, one transaction. Version 2 can&apos;t launch on the live Pons factory; the original can. Same address, balance, rules and track record.</p>
+              <p><b>Step 1 · Switch to agent wallet version 3.</b> Instant, one transaction. Version 3 pays the launch fee from the agent&apos;s starter, so there&apos;s nothing to deposit. Same address, balance, rules and track record.</p>
+              <button type="button" className="gf-btn go" onClick={toV3} disabled={busy}>Switch to version 3</button>
+            </div>
+          )}
+          {st.ready && st.walletVersion === 2 && !st.v3 && (
+            <div className="coin-step">
+              <p><b>Step 1 · Switch back to the original wallet code.</b> Instant, one transaction. Version 2 can&apos;t launch on the live Pons factory; the original can. Same address, balance, rules and track record.{st.v3At ? ` Or wait for version 3 (free launches), which can be switched on from ${new Date(st.v3At * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}.` : ""}</p>
               <button type="button" className="gf-btn go" onClick={toOriginal} disabled={busy}>Switch to the original</button>
             </div>
           )}
-          {st.ready && st.walletVersion < 2 && st.fee !== null && st.free < st.fee && (
+          {st.ready && st.walletVersion < 2 && !st.v3 && st.fee !== null && st.free < st.fee && (
             <div className="coin-step">
               <p><b>Step 1 · Deposit the launch fee.</b> Deposit at least <b>{fmt(st.need)} ETH</b> into the agent (Balance → Deposit, just left). The locked starter can&apos;t pay it on this wallet version.{st.need > st.fee ? " This agent holds less than its starter right now, so a deposit first tops the locked starter back up: only what's above it can pay the fee. Waiting for the next wallet version (free launches) is cheaper for this agent." : ""}</p>
             </div>
