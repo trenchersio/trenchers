@@ -9,7 +9,9 @@
     "prestart": "node scripts/sync-rules.mjs",
     "start": "tsx src/main.ts",
     "typecheck": "node scripts/sync-rules.mjs && tsc --noEmit",
-    "test:local": "tsx test/local.ts"
+    "test:local": "tsx test/local.ts",
+    "test:inference": "tsx test/inference-local.ts",
+    "test:icm": "node --import tsx --test test/icm/*.test.ts"
   },
   "dependencies": {
     "tsx": "^4.19.0",

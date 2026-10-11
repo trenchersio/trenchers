@@ -38,6 +38,47 @@ a { color: inherit; }
 .tbtn .dot { margin: 0 6px 0 2px; }
 .tbtn-lg { font-size: 14px; padding: 8px 0; text-shadow: 0 0 18px rgba(0,0,0,.9); }
 
+/* intro: two doors, the agents and the inference markets */
+.intro-doors { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 14px; margin-top: 8px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; }
+.intro-doors.show { opacity: 1; transform: none; pointer-events: auto; }
+.door { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left; padding: 20px 20px 18px; border-radius: 12px; border: 1px solid rgba(232,236,233,.14); background: rgba(8,10,9,.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--fog); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.door::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 80% at 0% 0%, var(--door, rgba(57,255,136,.14)), transparent 60%); opacity: .8; pointer-events: none; transition: opacity .2s ease; }
+.door > * { position: relative; }
+.door:hover, .door:focus-visible { border-color: var(--door-line, rgba(57,255,136,.6)); transform: translateY(-2px); box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 0 1px var(--door-line, rgba(57,255,136,.25)); outline: none; }
+.door:hover::before { opacity: 1; }
+.door-i { --door: rgba(255,176,32,.16); --door-line: rgba(255,176,32,.65); }
+.door-k { display: inline-flex; align-items: center; gap: 8px; min-height: 18px; color: var(--quiet); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.door-k em { font-style: normal; color: #0B0D0C; background: var(--amber); border-radius: 4px; padding: 2px 6px; font-size: 10px; letter-spacing: .06em; }
+.door-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+.door-i .door-dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.door b { font-size: 26px; line-height: 1.05; letter-spacing: -.01em; font-weight: 700; }
+.door-p { color: var(--quiet); font-size: 14px; line-height: 1.5; }
+.door-go { margin-top: 4px; font-size: 12px; color: var(--green); }
+.door-i .door-go { color: var(--amber); }
+.door-go span { display: inline-block; transition: transform .2s ease; }
+.door:hover .door-go span { transform: translateX(4px); }
+@media (max-width: 640px) {
+  .intro-doors { grid-template-columns: 1fr; width: min(340px, 88vw); }
+  .door { padding: 16px; gap: 8px; }
+  .door b { font-size: 22px; }
+}
+
+/* the strip above every header: AI Agents | Inference Markets */
+.secsw { border-bottom: 1px solid var(--line-soft); background: #070908; position: relative; z-index: 11; }
+.secsw-in { max-width: 1160px; margin: 0 auto; padding: 0 24px; display: flex; align-items: stretch; gap: 26px; height: 38px; }
+.secsw-in a { position: relative; display: inline-flex; align-items: center; gap: 8px; color: var(--quiet); text-decoration: none; font: 500 12px/1 var(--mono); letter-spacing: .03em; transition: color .15s ease; }
+.secsw-in a:hover { color: var(--fog); }
+.secsw-in a.on { color: var(--fog); }
+.secsw-in a.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--green); box-shadow: 0 0 12px rgba(57,255,136,.6); }
+.secsw-in a.on:nth-child(2)::after { background: var(--amber); box-shadow: 0 0 12px rgba(255,176,32,.6); }
+.secsw-ic { width: 12px; height: 12px; display: inline-block; border-radius: 2px; }
+.secsw-ic-a { background: radial-gradient(circle, var(--green) 0 2px, transparent 2.5px) center/12px 12px, conic-gradient(from 0deg, var(--fog) 0 25%, transparent 0 50%, var(--fog) 0 75%, transparent 0) 0 0/6px 6px; opacity: .9; }
+.secsw-ic-i { border: 1.5px solid var(--amber); border-radius: 50%; box-shadow: inset 0 0 0 2.5px #070908, inset 0 0 0 6px var(--amber); }
+.secsw-new { font: 600 9px/1 var(--mono); color: #0B0D0C; background: var(--amber); border-radius: 3px; padding: 3px 5px; letter-spacing: .06em; text-transform: uppercase; }
+.secsw-note { margin-left: auto; align-self: center; color: #5E6762; font: 400 11px/1 var(--mono); letter-spacing: .03em; }
+.secsw-wide .secsw-in { max-width: 1440px; }
+@media (max-width: 640px) { .secsw-note { display: none; } .secsw-in { gap: 20px; padding: 0 16px; height: 36px; } }
+
 .site { opacity: 0; }
 .site-in { opacity: 1; transition: opacity .6s ease; }
 
@@ -655,6 +696,10 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
   .mm-panel nav a span:last-child { color: var(--quiet); }
   .mm-panel nav a.on, .mm-panel nav a.on span:last-child { color: var(--green); }
   .mm-row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .mm-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-top: 8px; }
+  .mm-switch a { text-align: center; padding: 11px 6px; border-radius: 7px; color: var(--quiet); text-decoration: none; font: 500 13px/1 var(--mono); }
+  .mm-switch a.on { background: #18201C; color: var(--green); box-shadow: inset 0 0 0 1px rgba(57,255,136,.35); }
+  .mm-switch a.on-i { background: #221B0E; color: var(--amber); box-shadow: inset 0 0 0 1px rgba(255,176,32,.4); }
   .mm-wallet { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--panel); margin-top: auto; }
   .mm-addr { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
   html.menu-open, html.menu-open body { overflow: hidden; }
@@ -1779,6 +1824,7 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 .launch-checks small { color: var(--quiet); }
 .launch-steps { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 16px; font-size: 12px; color: var(--quiet); }
 .launch-steps li.done { color: var(--green); }
+.launch-env { background: var(--black); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; }
 .launch-safe { display: flex; flex-direction: column; gap: 12px; padding-left: 18px; }
 .launch-safe li { display: flex; flex-direction: column; gap: 4px; }
 .launch-safe .mono { font-size: 12px; color: var(--quiet); overflow-wrap: anywhere; }

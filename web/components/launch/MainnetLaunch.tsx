@@ -64,6 +64,11 @@ export function MainnetLaunch() {
     } catch (e) { setV4Err(errText(e)); }
   };
   useEffect(() => { try { const v = localStorage.getItem("trenchers:walletV4"); if (v) setWalletV4(v as Address); } catch { /* */ } }, []);
+  // Trenchers Inference Markets: the burn-only desk, the ETH router and the P2P market (no owner, no Safe steps).
+  const [inf, setInf] = useState<{ desk?: Address; router?: Address; otc?: Address; block?: string }>({});
+  const [infErr, setInfErr] = useState<string | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem("trenchers:inference"); if (v) setInf(JSON.parse(v)); } catch { /* */ } }, []);
+  const saveInf = (v: typeof inf) => { setInf(v); try { localStorage.setItem("trenchers:inference", JSON.stringify(v)); } catch { /* */ } };
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
     try { const v = localStorage.getItem("trenchers:walletV3b"); if (v) setWalletV2(v as Address); } catch { /* */ }
@@ -382,6 +387,38 @@ export function MainnetLaunch() {
             <input className="tn-input" placeholder="0x… version 4 contract" value={v4Paste} onChange={(e) => setV4Paste(e.target.value)} style={{ width: "min(420px, 100%)" }} />{" "}
             <button type="button" className="tbtn" onClick={() => applyDeployedV4(v4Paste)}>Use this contract</button>
           </p>
+        </>)}
+      </section>
+      <section className="tn-card">
+        <h2>8 · Trenchers Inference Markets</h2>
+        <p>Three small contracts with <b>no owner</b> (nothing to hand to the Safe): the <b>Inference desk</b>, where $TRENCHERS is paid for credit and which can only ever send it to the dead address; the <b>Inference router</b>, which turns ETH into $TRENCHERS through the Trenchers Pons adapter and delivers it to the desk in one transaction; and the <b>P2P market</b>, an escrowed order book for $TRENCHERS and agent coins against ETH, with no fee. Deploy them in this order from the Deployer wallet.</p>
+        <ol className="launch-safe">
+          {([
+            ["desk", "Inference desk", "InferenceDesk", () => [TRENCHERS_TOKEN]],
+            ["router", "Inference router", "InferenceRouter", (v: typeof inf) => [MAINNET_DEPLOYMENT.adapter, TRENCHERS_TOKEN, v.desk]],
+            ["otc", "P2P market", "TrenchersOTC", () => []],
+          ] as [keyof typeof inf, string, Name, (v: typeof inf) => unknown[]][]).map(([k, label, name, args], i) => (
+            <li key={k}><b>{i + 1}. {label}</b>
+              {inf[k] ? <span className="mono"><a href={`${EXPLORER}/address/${inf[k]}`} target="_blank" rel="noreferrer">{inf[k]}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(String(inf[k]))}>Copy</button></span>
+                : <TextButton onClick={async () => {
+                    setBusy(true); setInfErr(null);
+                    try {
+                      const block = inf.block ?? (await pub().getBlockNumber()).toString();
+                      // the router buys through whatever route agents trade through today (AgentConfig.router)
+                      const route = k === "router" ? await pub().readContract({ address: MAINNET_DEPLOYMENT.config as Address, abi: parseAbi(["function router() view returns (address)"]), functionName: "router" }).catch(() => MAINNET_DEPLOYMENT.adapter) : null;
+                      const a = await deploy(label, name, route ? [route, TRENCHERS_TOKEN, inf.desk] : args(inf));
+                      saveInf({ ...inf, block, [k]: a });
+                    } catch (e) { setInfErr(errText(e)); }
+                    setBusy(false);
+                  }} disabled={busy || !isDeployer || !chainOk || (k === "router" && !inf.desk)}>Deploy {label.toLowerCase()}</TextButton>}
+            </li>
+          ))}
+        </ol>
+        {infErr && <p className="notice">{infErr}</p>}
+        {inf.desk && inf.router && inf.otc && (<>
+          <p><b>Then</b> add these variables to the <b>Mainnet</b> service on Railway (Variables tab), add a volume mounted at <span className="mono">/data</span>, and redeploy:</p>
+          <pre className="mono launch-env">{[`ICM_DESK=${inf.desk}`, `ICM_ROUTER=${inf.router}`, `ICM_OTC=${inf.otc}`, `ICM_START_BLOCK=${inf.block}`, "ICM_FILE=/data/icm.log", "ICM_TOKENS_PER_USD=<whole $TRENCHERS per $1 of credit>", "ICM_MARGIN_BPS=<your margin in basis points, kept private>", "OPENROUTER_API_KEY=<your OpenRouter key>", "ICM_ADMIN_TOKEN=<a long random password>"].join("\n")}</pre>
+          <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText([`ICM_DESK=${inf.desk}`, `ICM_ROUTER=${inf.router}`, `ICM_OTC=${inf.otc}`, `ICM_START_BLOCK=${inf.block}`, "ICM_FILE=/data/icm.log"].join("\n"))}>Copy the first five</button>
         </>)}
       </section>
     </div>

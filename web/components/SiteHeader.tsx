@@ -4,6 +4,7 @@ import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
 import { CopyCA } from "@/components/CopyCA";
 import { WakeBanner } from "@/components/WakeBanner";
+import { SectionSwitch } from "@/components/SectionSwitch";
 import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 
 type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground";
@@ -32,6 +33,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   ];
   return (
     <>
+      <SectionSwitch on="agents" wide={wide} />
       <header className={`bar${wide ? " bar-wide" : ""}`}>
         <a href={page === "home" ? "#top" : ROUTES.home} aria-label="Trenchers home">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />

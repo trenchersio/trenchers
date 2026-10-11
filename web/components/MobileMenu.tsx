@@ -5,7 +5,7 @@ import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } fr
 import { useChatUnread } from "@/lib/chat-unread";
 import { short, useWallet } from "@/lib/wallet";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground";
+type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground" | "inference";
 
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
@@ -19,7 +19,11 @@ export function MobileMenu({ page }: { page: Page }) {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
-  const links: [Page | "github" | "x", string, string][] = [
+  const inference = page === "inference";
+  const links: [Page | "github" | "x" | string, string, string][] = inference ? [
+    ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P market", "#p2p"],
+    ["inf-account", "Account and keys", "#account"], ["inf-start", "Get $TRENCHERS", "#start"], ["docs", "Docs", `${ROUTES.docs}#trenchers-inference-markets`],
+  ] : [
     ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection], ["coins", "Agent coins", ROUTES.coins],
     ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents], ["playground", "Playground", ROUTES.playground],
     ...(CHAT_OPEN ? [["chat", "Holders' chat", ROUTES.chat] as [Page, string, string]] : []),
@@ -31,6 +35,10 @@ export function MobileMenu({ page }: { page: Page }) {
       </button>
       {open && (
         <div id="mobile-menu" className="mm-panel">
+          <div className="mm-switch" role="group" aria-label="Trenchers sections">
+            <a href={ROUTES.home} className={!inference ? "on" : undefined}>AI Agents</a>
+            <a href={ROUTES.inference} className={inference ? "on on-i" : undefined}>Inference Markets</a>
+          </div>
           <nav aria-label="Pages">
             {links.map(([k, label, href]) => (
               <a key={k} href={href} className={page === k ? "on" : undefined} onClick={() => setOpen(false)}>
@@ -38,7 +46,7 @@ export function MobileMenu({ page }: { page: Page }) {
               </a>
             ))}
           </nav>
-          {!CHAT_OPEN && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
+          {!CHAT_OPEN && !inference && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
             <CopyCA />

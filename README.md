@@ -35,13 +35,14 @@
 13. [Agent coins](#agent-coins)
 14. [Holders' chat](#holders-chat)
 15. [The $TRENCHERS flywheel](#the-trenchers-flywheel)
-16. [Security model](#security-model)
-17. [Contracts](#contracts)
-18. [Built on Robinhood Chain](#built-on-robinhood-chain)
-19. [Repository](#repository)
-20. [Tests](#tests)
-21. [Roadmap and status](#roadmap-and-status)
-22. [Risk](#risk)
+16. [Trenchers Inference Markets](#trenchers-inference-markets)
+17. [Security model](#security-model)
+18. [Contracts](#contracts)
+19. [Built on Robinhood Chain](#built-on-robinhood-chain)
+20. [Repository](#repository)
+21. [Tests](#tests)
+22. [Roadmap and status](#roadmap-and-status)
+23. [Risk](#risk)
 
 ---
 
@@ -496,6 +497,57 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 ---
 
+## Trenchers Inference Markets
+
+Trenchers has two halves. **Trenchers AI Agents** is the collection of 2,000 NFT trading agents described above.
+**Trenchers Inference Markets** is an inference desk: every frontier model family (Claude, GPT, Gemini, Grok,
+DeepSeek, Llama, Qwen, Kimi and more) through **one endpoint and one API key**, paid in **$TRENCHERS**. Every
+$TRENCHERS spent on it is **burned**. The site opens on a choice between the two, and a strip above every page
+switches between them.
+
+**Three ways to pay.**
+
+| Route | How | Contract |
+|---|---|---|
+| $TRENCHERS | One transfer to the Inference desk. The credit lands on the wallet it came from | `InferenceDesk` |
+| ETH | One transaction: the Inference router buys $TRENCHERS through the Trenchers Pons adapter and delivers it to the desk | `InferenceRouter` |
+| From holders | Fill the cheapest $TRENCHERS asks on the P2P market with the desk as the recipient | `TrenchersOTC` |
+
+**The burn is enforced by the contract.** The Inference desk has no owner and no withdraw function: the only thing
+it can do with what it holds is `burn()`, which anyone can call and which sends every $TRENCHERS it holds to the
+dead address. The engine calls it on a schedule, so a payment is out of circulation the moment it lands and out of
+the supply shortly after.
+
+**Billing.** Credit is in dollars. When a call opens, an estimate is held from the balance; when it finishes, it is
+settled on the provider's own usage figure and the rest of the hold goes straight back. A call that never ran costs
+nothing, and a hold that is never resolved is swept back after 15 minutes. Money is integer micro-dollars
+throughout, never floats.
+
+**Keys.** Your wallet is the account. Sign one message (a signature, not a transaction) to open it and make API
+keys, each with its own optional spending ceiling, revocable one by one. Keys read `trench_live_…` and work with
+any OpenAI-compatible client:
+
+```bash
+curl https://<endpoint>/icm/v1/chat/completions \
+  -H "Authorization: Bearer trench_live_…" \
+  -d '{"model": "anthropic/claude-sonnet-4.5", "messages": [{"role": "user", "content": "gm"}]}'
+```
+
+**The P2P market.** An on-chain order book for $TRENCHERS and agent coins against ETH. No curve, no slippage, no fee
+and no owner: an ask escrows the tokens being sold, a bid escrows the ETH offered, anyone can fill any part of an
+open order at its price (or only the named buyer, for a private order), the maker can cancel at any time and anyone
+can return an expired order's escrow to its maker. Agent coins are marked as verified; anything else is flagged.
+
+| Part | Where |
+|---|---|
+| The page | [`web/app/inference`](https://github.com/trenchersio/trenchers/tree/main/web/app/inference), [`web/components/inference`](https://github.com/trenchersio/trenchers/tree/main/web/components/inference) |
+| The desk (ledger, billing, gateway) | [`engine/src/icm`](https://github.com/trenchersio/trenchers/tree/main/engine/src/icm): a generic core with no token, chain or brand compiled in |
+| The Trenchers integration (payments, burn keeper, P2P index, sign-in) | [`engine/src/inference.ts`](https://github.com/trenchersio/trenchers/blob/main/engine/src/inference.ts) |
+| The contracts | [`InferenceDesk`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/InferenceDesk.sol), [`InferenceRouter`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/InferenceRouter.sol), [`TrenchersOTC`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/TrenchersOTC.sol) |
+
+Credit is held by the desk's ledger, not by a contract, so only buy what you plan to use. The contracts are small,
+open source and reviewed before launch.
+
 ## Security model
 
 **The rule: our servers can make an agent trade, but can never take its money.**
@@ -551,6 +603,9 @@ Every Trenchers contract is live on Robinhood Chain mainnet (chain 4663) and ver
 | **Agent wallet base** | The ERC-6551 account each Trencher's wallet is created from | [`0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d`](https://robin.etherscan.io/address/0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d#code) |
 | **Agent Fee Distributor** | Pays awake agents their weekly share of $TRENCHERS fees | [`0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a`](https://robin.etherscan.io/address/0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a#code) |
 | **Pons Adapter** | The only route agents trade through: genuine Pons launches only | [`0x229671b3464f7b01175d93dbc4ad71e02f05baef`](https://robin.etherscan.io/address/0x229671b3464f7b01175d93dbc4ad71e02f05baef#code) |
+| **Inference Desk** | Takes $TRENCHERS for inference credit; can only ever burn it (no owner) | Deploying |
+| **Inference Router** | ETH to $TRENCHERS to the desk, in one transaction (no owner) | Deploying |
+| **P2P market (TrenchersOTC)** | Escrowed orders for $TRENCHERS and agent coins against ETH, no fee (no owner) | Deploying |
 
 **Team wallets**
 
@@ -602,7 +657,7 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 81 tests |
+| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), `InferenceDesk`, `InferenceRouter` and `TrenchersOTC` (Trenchers Inference Markets: the burn-only desk, ETH in one step, the P2P market), 92 tests |
 | [`web/`](web) | Next.js site: landing page, mint, the Arena, the Collection, the Coins page, the holders' chat, the NFT / Agent Profile with its own-coin launch, and these docs |
 | [`web/components/coins/`](web/components/coins) | Agent coins read from the chain: the Coins page, the coin line on profiles and cards, the chart popup (market cap and price in USD, time frames) |
 | [`web/components/chat/`](web/components/chat) | The holders' chat: wallet sign-in, the Trencher check, messages and moderation |
@@ -649,6 +704,7 @@ cd contracts && npm install && npx hardhat test
 | 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | Launching; the weekly fee share is paid automatically by the engine |
 | 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opens with the $TRENCHERS launch |
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
+| 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P market for $TRENCHERS and agent coins | Built and tested; contracts deploying |
 
 ---
 

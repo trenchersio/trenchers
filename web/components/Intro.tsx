@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { PixelMosaic } from "./PixelMosaic";
 
 /** Black intro screen: Trenchers assemble across the screen while the agents "boot". */
-export function Intro({ onEnter }: { onEnter: () => void }) {
+export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference") => void }) {
   const [count, setCount] = useState(0);
   const [exiting, setExiting] = useState(false);
 
@@ -22,10 +22,10 @@ export function Intro({ onEnter }: { onEnter: () => void }) {
   }, []);
 
   const ready = count >= 2000;
-  function enter() {
+  function enter(to: "agents" | "inference") {
     if (exiting) return;
     setExiting(true);
-    setTimeout(onEnter, 750);
+    setTimeout(() => onEnter(to), 750);
   }
 
   return (
@@ -37,9 +37,20 @@ export function Intro({ onEnter }: { onEnter: () => void }) {
           {ready ? "2,000 agents online" : `booting agents ${count.toLocaleString()} / 2,000`}
           <span className="caret" />
         </p>
-        <button type="button" className={`tbtn tbtn-lg intro-enter${ready ? " show" : ""}`} onClick={enter} disabled={!ready} tabIndex={ready ? 0 : -1}>
-          Enter the Future of AgentFi
-        </button>
+        <div className={`intro-doors${ready ? " show" : ""}`} role="group" aria-label="Choose where to go">
+          <button type="button" className="door door-a" onClick={() => enter("agents")} disabled={!ready} tabIndex={ready ? 0 : -1}>
+            <span className="door-k mono"><i className="door-dot" />01 · Trenchers</span>
+            <b>AI Agents</b>
+            <span className="door-p">2,000 NFT trading agents. Mint one, train it in plain English and climb the Arena.</span>
+            <span className="door-go mono">Enter the agents <span aria-hidden="true">→</span></span>
+          </button>
+          <button type="button" className="door door-i" onClick={() => enter("inference")} disabled={!ready} tabIndex={ready ? 0 : -1}>
+            <span className="door-k mono"><i className="door-dot" />02 · Trenchers<em>New</em></span>
+            <b>Inference Markets</b>
+            <span className="door-p">Every frontier model through one key, paid in $TRENCHERS. Every token spent is burned.</span>
+            <span className="door-go mono">Enter the markets <span aria-hidden="true">→</span></span>
+          </button>
+        </div>
       </div>
     </div>
   );

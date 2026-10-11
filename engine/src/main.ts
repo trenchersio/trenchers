@@ -5,6 +5,7 @@ import { Chat } from "./chat";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
 import { verifyDeployment } from "./verify";
+import { InferenceDesk } from "./inference";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
@@ -60,17 +61,31 @@ async function loop() {
 }
 
 const chat = new Chat();
+
+// Trenchers Inference Markets. Runs whatever state the trading engine is in: a desk with settings missing says
+// which ones on /icm and /health, and keeps answering.
+const inference = new InferenceDesk(undefined, (t) => {
+  for (const c of engine?.agentCoins.values() ?? []) if (c.token.toLowerCase() === t) return { verified: true, agent: c.agent };
+  for (const c of engine?.pgCoins.values() ?? []) if (c.token.toLowerCase() === t) return { verified: true, agent: c.agent };
+  return { verified: false, agent: null };
+});
+const every = (ms: number, f: () => Promise<unknown> | unknown) => { const run = async () => { try { await f(); } catch (e) { console.warn(`[inference] ${(e as Error).message}`); } setTimeout(run, ms); }; setTimeout(run, 5_000); };
+every(30_000, () => inference.poll());
+every(600_000, () => inference.burn());
+every(300_000, () => { const swept = inference.sweep(); if (swept.length) console.warn(`[inference] swept ${swept.length} stale hold(s)`); });
+every(20_000, () => inference.updateBook());
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
   const path = (req.url ?? "/").split("?")[0];
   try {
     if (await chat.handle(req, res, path)) return;
+    if (await inference.handle(req, res, path)) return;
     if (path === "/health" || path === "/") {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
+      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.
