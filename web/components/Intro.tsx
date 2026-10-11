@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { PixelMosaic } from "./PixelMosaic";
 
 /** Black intro screen: Trenchers assemble across the screen while the agents "boot". */
-export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference") => void }) {
+export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference" | "builder") => void }) {
   const [count, setCount] = useState(0);
   const [exiting, setExiting] = useState(false);
 
@@ -22,7 +22,7 @@ export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference") => vo
   }, []);
 
   const ready = count >= 2000;
-  function enter(to: "agents" | "inference") {
+  function enter(to: "agents" | "inference" | "builder") {
     if (exiting) return;
     setExiting(true);
     setTimeout(() => onEnter(to), 750);
@@ -45,10 +45,16 @@ export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference") => vo
             <span className="door-go mono">Enter the agents <span aria-hidden="true">→</span></span>
           </button>
           <button type="button" className="door door-i" onClick={() => enter("inference")} disabled={!ready} tabIndex={ready ? 0 : -1}>
-            <span className="door-k mono"><i className="door-dot" />02 · Trenchers<em>New</em></span>
+            <span className="door-k mono"><i className="door-dot" />02 · Trenchers</span>
             <b>Inference Markets</b>
             <span className="door-p">Burn $TRENCHERS, run any model. Claude, GPT, Gemini, Grok and more behind one address.</span>
             <span className="door-go mono">Enter the markets <span aria-hidden="true">→</span></span>
+          </button>
+          <button type="button" className="door door-b" onClick={() => enter("builder")} disabled={!ready} tabIndex={ready ? 0 : -1}>
+            <span className="door-k mono"><i className="door-dot" />03 · Trenchers<em>New</em></span>
+            <b>V4 Builder</b>
+            <span className="door-p">Launch a Uniswap v4 hook coin with its own rules, fees and mechanics in one transaction.</span>
+            <span className="door-go mono">Enter the builder <span aria-hidden="true">→</span></span>
           </button>
         </div>
       </div>
