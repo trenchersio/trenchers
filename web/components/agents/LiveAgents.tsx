@@ -249,9 +249,26 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   const unlock = a.lockedAt ? new Date((Number(a.lockedAt) + LOCK_DAYS * 86400) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const tpl = a.ruleText ? TEMPLATES.find((t) => t.text === a.ruleText)?.name : undefined;
   const currentRule: CustomRule | null = a.ruleText ? parse(a.ruleText).rule : null;
+  // The wallet version is read fresh from the chain for this Trencher (with retries), so a copy saved in the browser
+  // before a new version was offered, or a failed read, never hides the upgrade.
+  const [vs, setVs] = useState<Pick<Agent, "version" | "original" | "offered" | "offers"> | null>(null);
+  useEffect(() => {
+    if (!a.wallet || a.deployed === false || busy) return;
+    let alive = true, tries = 0;
+    const read = () => {
+      const c = reader(), w = { address: a.wallet!, abi: ABI.agent } as const;
+      Promise.all([c.readContract({ ...w, functionName: "agentLogic" }), c.readContract({ ...w, functionName: "ORIGINAL_VERSION" }),
+        c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogic" }), c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogicVersions" })])
+        .then(([version, original, offered, offers]) => { if (alive) setVs({ version, original, offered, offers: Number(offers) }); })
+        .catch(() => { if (alive && ++tries < 5) setTimeout(read, 1500 * tries); });
+    };
+    read();
+    return () => { alive = false; };
+  }, [a.wallet, a.deployed, a.version, busy, d.config]);
+  const v = { ...a, ...(vs ?? {}) };
   // Only the current wallet version 3 is offered to holders; earlier versions stay hidden even while they are the live offer.
-  const upgrade = !!a.offers && a.offers > 1 && !!a.offered && OFFERED_VERSIONS.includes(a.offered.toLowerCase()) && a.version?.toLowerCase() !== a.offered.toLowerCase();
-  const onCustom = !!a.version && !!a.original && a.version.toLowerCase() !== a.original.toLowerCase();
+  const upgrade = !!v.offers && v.offers > 1 && !!v.offered && OFFERED_VERSIONS.includes(v.offered.toLowerCase()) && v.version?.toLowerCase() !== v.offered.toLowerCase();
+  const onCustom = !!v.version && !!v.original && v.version.toLowerCase() !== v.original.toLowerCase();
   const now = Date.now() / 1000;
 
   const limits = () => {
@@ -368,8 +385,8 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
             <h3>A new version of the agent wallet is available</h3>
             <p>The new version lets your agent launch its own coin with the launch fee paid from its starter balance, collect its coin&apos;s creator fees at any time, and keeps your own deposits withdrawable even after trading losses (only the starter stays locked). It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
             <div className="actions">
-              <TextButton onClick={() => setVersion(a.offered!, `Switching #${a.id} to the new agent wallet version`)} disabled={busy}>Switch to the new version</TextButton>
-              <TextButton href={`${EXPLORER}/address/${a.offered}#code`} external>View the new code</TextButton>
+              <TextButton onClick={() => setVersion(v.offered!, `Switching #${a.id} to the new agent wallet version`)} disabled={busy}>Switch to the new version</TextButton>
+              <TextButton href={`${EXPLORER}/address/${v.offered}#code`} external>View the new code</TextButton>
             </div>
           </section>
         )}
@@ -448,7 +465,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         </Fold>
 
         {onCustom && (
-          <p className="muted-note live-version">This wallet runs a newer version you opted in to. <button type="button" className="tbtn" onClick={() => setVersion(a.original!, `Switching #${a.id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button></p>
+          <p className="muted-note live-version">This wallet runs a newer version you opted in to. <button type="button" className="tbtn" onClick={() => setVersion(v.original!, `Switching #${a.id} back to the original wallet code`)} disabled={busy}>Switch back to the original</button></p>
         )}
       </>)}
     </div>
