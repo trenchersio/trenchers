@@ -156,7 +156,7 @@ export function ProgrammableLaunch({ id, wallet, me, busy, form, valid, agentFac
       </div>
 
       <div className="pg-mods">
-        <div className="pg-mods-head"><span className="mono">Modules</span><em>{catErr ? "" : cat ? `${pickedCount} selected · optional` : "Loading Programmable…"}</em></div>
+        <div className="pg-mods-head"><span className="mono">Modules <em className="pg-hooks">V4 Hooks</em></span><em>{catErr ? "" : cat ? `${pickedCount} selected · optional` : "Loading Programmable…"}</em></div>
         {catErr && <p className="tp-err">{catErr}</p>}
         {live.map((m) => {
           const on = !!picked[m.id];

@@ -218,7 +218,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
               <b>Pons</b><small>Paired with ETH. The agent wallet launches it; fees in ETH.</small>
             </button>
             <button type="button" role="radio" aria-checked={venue === "programmable"} className={`cv${venue === "programmable" ? " on" : ""}`} onClick={() => setVenue("programmable")}>
-              <b>Programmable <em className="mono">New</em></b><small>Paired with $TRENCHERS. Pick any of Programmable&apos;s modules.</small>
+              <b>Programmable <em className="mono">V4 Hooks</em></b><small>Paired with $TRENCHERS. Uniswap v4 hooks: pick any of Programmable&apos;s modules.</small>
             </button>
           </div>
           {venue === "programmable" ? (<>
