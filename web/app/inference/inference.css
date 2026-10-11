@@ -36,7 +36,7 @@
 .ihero::after { content: ""; position: absolute; z-index: -1; right: -6%; top: 0; width: 46%; height: 560px; background: radial-gradient(closest-side, rgba(255,176,32,.07), transparent); pointer-events: none; }
 .ihero-pitch { min-width: 0; }
 .ihero-title { font-size: clamp(38px, 4.4vw, 66px); line-height: 1.02; letter-spacing: -.035em; margin: 0 0 20px; }
-.ihero-title mark { background: var(--green); color: #07130C; padding: .02em .16em .06em; margin: 0 .02em; border-radius: .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; line-height: 1.12; box-shadow: 0 0 40px rgba(57,255,136,.25); }
+.ihero-title mark { background: none; color: var(--green); padding: 0; text-shadow: 0 0 40px rgba(57,255,136,.25); }
 .ihero-lede { font-size: 17px; margin: 0 0 24px; max-width: 40em; }
 .ifigs { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; background: rgba(14,17,16,.7); overflow: hidden; }
 .ifigs li { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
