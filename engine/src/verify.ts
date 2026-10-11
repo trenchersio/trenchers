@@ -6,6 +6,15 @@ import {
 } from "viem";
 import { FORWARDER_RUNTIME, REHEARSAL_RUNTIME } from "./livecheck-code";
 import { findLiveCoins } from "./selfcheck";
+import { FOUNDATION_FACTORY_ABI, TRENCHERS_TOKEN, encodeFundingPath, encodeLaunch, mineHookSalt, randomSalt, startTick, type ComposeResult, type LaunchParams } from "./programmable";
+
+/** Agent wallet version 4: Programmable's Module Mode factory on Robinhood Chain and its ETH-funded launch (fixed in the code). */
+export const PROGRAMMABLE = {
+  api: process.env.PROGRAMMABLE_API_URL || "https://programmable.market",
+  factory: "0x18cab14c69d0fe6df4a96256318b51c51c98da3f" as Address,
+  launchSelector: "0x79082bf9" as Hex,
+};
+export const v4Args = (d: { config: Address; fund: Address }) => [d.config, d.fund, PROGRAMMABLE.factory, TRENCHERS_TOKEN, PROGRAMMABLE.launchSelector] as const;
 
 /**
  * Verifies the Trenchers mainnet deployment, read-only (no transaction is ever sent):
@@ -122,24 +131,26 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   const liveLogic = await read<Address>(d.config, "AgentConfig", "accountLogic").catch(() => zeroAddress);
   const versions = await read<bigint>(d.config, "AgentConfig", "accountLogicVersions").catch(() => 0n);
   const runtime = (name: string) => c.call({ account: R.deployer, data: encodeDeployData({ abi: ART[name].abi, bytecode: ART[name].bytecode, args: [d.config, d.fund] }) }).then((r) => r.data ?? null).catch(() => null);
-  const [v2Runtime, v3Runtime] = await Promise.all([runtime("TrenchersAgentAccountV2"), runtime("TrenchersAgentAccountV3")]);
+  const [v2Runtime, v3Runtime, v4Runtime] = await Promise.all([runtime("TrenchersAgentAccountV2"), runtime("TrenchersAgentAccountV3"),
+    c.call({ account: R.deployer, data: encodeDeployData({ abi: ART.TrenchersAgentAccountV4.abi, bytecode: ART.TrenchersAgentAccountV4.bytecode, args: v4Args(d) as never }) }).then((r) => r.data ?? null).catch(() => null)]);
   const offered = opts.walletV2 ?? (!same(pendingLogic, zeroAddress) ? pendingLogic : !same(liveLogic, d.logic) && !same(liveLogic, zeroAddress) ? liveLogic : null);
-  checks.push({ what: "settings: agent wallet code versions offered", ok: versions >= 1n && versions <= 3n, value: String(versions) });
-  let newIsV3 = false;
+  checks.push({ what: "settings: agent wallet code versions offered", ok: versions >= 1n && versions <= 4n, value: String(versions) });
+  let newIsV3 = false, newIsV4 = false;
   if (offered) {
     const onchain = await c.getCode({ address: offered });
     newIsV3 = !!v3Runtime && same(v3Runtime, onchain);
+    newIsV4 = !!v4Runtime && same(v4Runtime, onchain);
     const isV2 = !!v2Runtime && same(v2Runtime, onchain);
     let earlier: string | null = null;
-    if (!newIsV3 && !isV2) for (const [commit, b] of Object.entries(V3_HISTORY)) {
+    if (!newIsV3 && !isV2 && !newIsV4) for (const [commit, b] of Object.entries(V3_HISTORY)) {
       const r = await c.call({ account: R.deployer, data: encodeDeployData({ abi: b.abi, bytecode: b.bytecode, args: [d.config, d.fund] }) }).then((x) => x.data ?? null).catch(() => null);
       if (r && same(r, onchain)) { earlier = commit; break; }
     }
     if (earlier) {
       checks.push({ what: "newest agent wallet version: code is the current TrenchersAgentAccountV3", ok: false, value: `${offered} · ${V3_LABEL[earlier] ?? `an earlier build (${earlier})`}. Deploy the current version 3 from the launch page and offer that one instead.` });
       problems.push(`agent wallet code ${offered} is ${V3_LABEL[earlier] ?? "an earlier build of version 3"}`);
-    } else checks.push({ what: "newest agent wallet version: code is TrenchersAgentAccountV3 (or V2) for these settings", ok: newIsV3 || isV2, value: `${offered} · ${newIsV3 ? "version 3" : isV2 ? "version 2 (launch format may not match the live factory: offer version 3)" : "unknown code"}` });
-    if (!newIsV3 && !isV2 && !earlier) problems.push(`agent wallet code ${offered} is not the expected version 2 or 3`);
+    } else checks.push({ what: "newest agent wallet version: code is TrenchersAgentAccountV4, V3 (or V2) for these settings", ok: newIsV4 || newIsV3 || isV2, value: `${offered} · ${newIsV4 ? "version 4 (Programmable launches)" : newIsV3 ? "version 3" : isV2 ? "version 2 (launch format may not match the live factory: offer version 3)" : "unknown code"}` });
+    if (!newIsV4 && !newIsV3 && !isV2 && !earlier) problems.push(`agent wallet code ${offered} is not the expected version 2 or 3`);
     checks.push({ what: same(pendingLogic, offered) ? "newest agent wallet version: proposed, can be switched on at" : "newest agent wallet version: offered to holders", ok: true, value: same(pendingLogic, offered) ? new Date(Number(logicEta) * 1000).toISOString() : "yes" });
   } else checks.push({ what: "agent wallet version 3: not deployed yet", ok: true, value: "—" });
 
@@ -204,6 +215,9 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
       problems.push(`agent coins rehearsal: ${m}`);
     }
   }
+  // ---- Agent wallet version 4: house agent #1's wallet (on version 4, by state override) launches a coin on Programmable's real
+  // factory, paired with $TRENCHERS, as its creator: Programmable composes it (like the site does), then one eth_call. Nothing is sent.
+  await rehearseProgrammable(c, d, R, wallet1, holder1, offered && newIsV4 ? offered : null, v4Runtime, checks, problems);
   for (const k of [0, 1, 3]) await expect(`settings: no pending change for key ${k}`, () => read(d.config, "AgentConfig", "pending", [k]), allZero);
   // the agent wallet
   await expect("agent wallet: original code", () => read(d.impl, "TrenchersAgentWallet", "ORIGINAL_VERSION"), d.logic);
@@ -295,4 +309,56 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
   report.ok = problems.length === 0;
   report.problems = problems;
   return report;
+}
+
+/** Agent wallet version 4 rehearsal against Programmable's live factory (read-only). */
+async function rehearseProgrammable(c: PublicClient, d: Deployment, R: Roles, wallet1: Address, holder1: Address, offeredV4: Address | null, v4Runtime: Hex | null,
+  checks: { what: string; ok: boolean; value: string }[], problems: string[]) {
+  const what = "agent wallet v4 rehearsal: house agent #1's wallet launches a coin on Programmable, paired with $TRENCHERS, as its creator";
+  if (!v4Runtime) { checks.push({ what, ok: false, value: "version 4 code didn't build" }); return; }
+  try {
+    const cat = await fetch(`${PROGRAMMABLE.api}/api/module-foundation?chainId=4663`, { signal: AbortSignal.timeout(30_000) }).then((r) => r.json());
+    const factory = cat?.binding?.factory?.address as Address, hookDeployer = cat?.binding?.hookDeployer?.address as Address;
+    checks.push({ what: "agent wallet v4: Programmable's live launch factory is the one version 4 is built for", ok: same(factory, PROGRAMMABLE.factory), value: `${factory} (${cat?.binding?.factoryVersion})` });
+    if (!same(factory, PROGRAMMABLE.factory)) { problems.push(`Programmable's launch factory is now ${factory}; version 4 is built for ${PROGRAMMABLE.factory}`); return; }
+    const img = await fetch("https://www.trenchers.io/meta/img/awake/1.png", { signal: AbortSignal.timeout(15_000) }).then((r) => r.arrayBuffer());
+    const sha = `0x${Buffer.from(await crypto.subtle.digest("SHA-256", img)).toString("hex")}`;
+    const tokenSalt = randomSalt();
+    const limit = (cat.catalog?.document?.entries ?? []).find((e: any) => e.manifest?.sourceDescriptor?.name === "Initial wallet buy limit");
+    const composeRes = await fetch(`${PROGRAMMABLE.api}/api/module-foundation/compose`, { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(90_000), body: JSON.stringify({
+      account: wallet1, releaseDigest: cat.binding.releaseDigest, tokenSalt, launchFlow: "single-eth-v1", chainId: 4663,
+      draft: { name: "Trenchers check", symbol: "TCHK", description: "", image: { url: "https://www.trenchers.io/meta/img/awake/1.png", sha256: sha },
+        socialLinks: { website: "https://www.trenchers.io/collection#1" }, quoteAsset: TRENCHERS_TOKEN, creatorFeeBps: 500, initialBuy: "0.0015", additionalLiquidity: "0",
+        modules: limit ? [{ id: limit.manifest.packageId, version: limit.manifest.sourceDescriptor.version, digest: limit.release.manifestHash, configuration: { "/supplyLimitBps": "2", "/durationMinutes": "3" } }] : [] },
+    }) });
+    const comp = await composeRes.json() as ComposeResult & { error?: string };
+    if (!composeRes.ok || !comp.ethFunding) throw new Error(`Programmable compose: ${comp.error ?? composeRes.status}`);
+    const block = await c.getBlock();
+    const p: LaunchParams = { metadata: comp.metadata, quote: TRENCHERS_TOKEN, quoteDecimals: 18, initialTick: startTick(comp.token, 18, comp.startPrice), creatorFeeBps: 500,
+      additionalQuoteAmount: 0n, initialBuyQuoteAmount: BigInt(comp.ethFunding.quoteAmount), initialBuyMinimumTokenAmount: 1n, deadline: block.timestamp + 900n,
+      tokenSalt, hookSalt: zeroHash, modules: comp.modules };
+    const initCodeHash = await c.readContract({ address: factory, abi: FOUNDATION_FACTORY_ABI, functionName: "hookInitCodeHash", args: [wallet1, comp.token, p] });
+    p.hookSalt = (await mineHookSalt(hookDeployer, initCodeHash)).salt;
+    const value = BigInt(comp.ethFunding.maximumEth);
+    const fake = (offeredV4 ?? "0x0000000000000000000000000000000000c0ffe4") as Address;
+    const slot = (key: Hex | bigint, base: bigint) => keccak256(encodeAbiParameters([{ type: typeof key === "bigint" ? "uint256" : "address" }, { type: "uint256" }], [key as never, base]));
+    const word = (v: Address | bigint) => pad(typeof v === "bigint" ? toHex(v) : v, { size: 32 });
+    const r = await c.call({
+      account: holder1, to: wallet1,
+      data: encodeFunctionData({ abi: parseAbi(["function launchProgrammable(bytes data, uint256 value) returns (address coin)"]), functionName: "launchProgrammable", args: [encodeLaunch(p, comp.ethFunding.path), value] }),
+      stateOverride: [
+        ...(offeredV4 ? [] : [{ address: fake, code: v4Runtime }]),
+        { address: d.config, stateDiff: [{ slot: slot(fake, 3n), value: word(1n) }] },
+        { address: wallet1, balance: parseEther("0.01"), stateDiff: [{ slot: "0xb7b5a01d4aafd4bfc48752d90fbca5d48b765dd637cd324b455d0308dee35ef8", value: word(fake) }] },
+        { address: holder1, balance: parseEther("1") },
+      ],
+    });
+    const [coin] = decodeAbiParameters([{ type: "address" }], r.data!);
+    checks.push({ what, ok: same(coin, comp.token), value: `${coin}${limit ? " · with the Initial wallet buy limit module" : ""}` });
+    if (!same(coin, comp.token)) problems.push("agent wallet v4 rehearsal: the launched coin isn't the predicted one");
+  } catch (e) {
+    const m = (e as { shortMessage?: string }).shortMessage ?? (e as Error).message.split("\n")[0];
+    checks.push({ what, ok: false, value: m.slice(0, 300) });
+    problems.push(`agent wallet v4 rehearsal: ${m.slice(0, 200)}`);
+  }
 }

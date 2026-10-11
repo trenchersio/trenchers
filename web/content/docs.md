@@ -179,6 +179,17 @@ Rules:
 - **Newest agent wallet version.** Free launches from the starter and fee collection come with the newest agent wallet code. Holders switch with one click on the profile (same address, balance and history; they can switch back), offered behind the usual 48-hour notice. Until then a coin can be launched on the original code by depositing the launch fee first.
 - **Coin fees aren't Arena returns.** Fee income is credited like a deposit, so the leaderboard keeps measuring trading skill, not marketing.
 
+#### On Programmable, paired with $TRENCHERS
+
+The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (Uniswap v4 Module Mode) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules (for example Initial wallet buy limit, Hot potato, Plague, Entangled or Reactive pair) and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
+
+| Who signs | Creator (gets the fees) | First buy paid by |
+| --- | --- | --- |
+| Agent wallet version 4 | The agent wallet: its creator fees ($TRENCHERS) are collected through the agent and sent straight to the holder, any time | The agent's free balance (not the locked starter: deposit it first) |
+| Any wallet version | The holder's own wallet (the coin is linked to the Trencher through its collection page) | The holder's wallet |
+
+Version 4 only calls Programmable's own launch factory and checks the coin's record after the launch: the agent wallet must be the creator and $TRENCHERS the pair, or the launch is undone. One coin per agent still applies: Pons or Programmable, never both, and the engine never trades it.
+
 ### 2. Option B, and every agent: 10% of all $TRENCHERS fees
 
 **10% of all $TRENCHERS trading fees go to awakened agents** through the `AgentFeeDistributor` contract. Every Trencher that is awake and has an agent wallet receives an equal share, paid each week straight into its agent wallet. There is nothing to claim or stake: the trading engine enrols every newly awakened agent, closes each week and pays every share, and anyone can check the current week, the pot and the last payout on the engine's `/health` page. An agent earns from the first full week after it is enrolled. More trading in $TRENCHERS means more capital for every agent.

@@ -1,4 +1,5 @@
 "use client";
+import { TRENCHERS_TOKEN } from "@/lib/programmable";
 import { MAINNET_DEPLOYMENT } from "@/lib/mainnet/deployment";
 import { TextButton } from "@/components/TextButton";
 import { useCallback, useEffect, useState } from "react";
@@ -19,6 +20,9 @@ import { useWallet } from "@/lib/wallet";
  * The mint stays closed: the Safe opens awakening and the mint afterwards.
  */
 type Name = keyof typeof artifacts;
+/** Agent wallet version 4: Programmable's Module Mode factory on Robinhood Chain, $TRENCHERS, and the factory's ETH-funded launch. */
+const PG_FACTORY = "0x18cab14c69d0fe6df4a96256318b51c51c98da3f" as Address;
+const PG_LAUNCH_SELECTOR = "0x79082bf9" as `0x${string}`;
 const A = (n: Name) => artifacts[n].abi as Abi;
 const chain = robinhood;
 const EXPLORER = "https://robin.etherscan.io";
@@ -41,6 +45,8 @@ export function MainnetLaunch() {
   const [prov, setProv] = useState<EIP1193Provider | null>(null);
   const [account, setAccount] = useState<Address | null>(null);
   const [walletV2, setWalletV2] = useState<Address | null>(null);
+  const [walletV4, setWalletV4] = useState<Address | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem("trenchers:walletV4"); if (v) setWalletV4(v as Address); } catch { /* */ } }, []);
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
     try { const v = localStorage.getItem("trenchers:walletV3b"); if (v) setWalletV2(v as Address); } catch { /* */ }
@@ -320,6 +326,37 @@ export function MainnetLaunch() {
             catch (e) { setError(errText(e)); }
             setBusy(false);
           }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 3</TextButton>
+        )}
+      </section>
+
+      <section className="tn-card">
+        <h2>7 · Agent coins on Programmable (agent wallet version 4)</h2>
+        <p>Version 4 is version 3 plus one thing: the agent wallet can launch its own coin on <b>Programmable</b> (Module Mode), paired with <b>$TRENCHERS</b>, with any of Programmable&apos;s modules. The agent wallet itself is the coin&apos;s creator; its creator fees ($TRENCHERS) are collected through it and sent to the holder. The first buy is paid from the agent&apos;s free balance, never the locked starter. The wallet only accepts Programmable&apos;s launch factory {PG_FACTORY} and checks the coin&apos;s record afterwards (creator = the agent wallet, pair = $TRENCHERS). Holders switch with one click on their agent&apos;s profile; nothing changes unless they do.</p>
+        <p><b>Step 1.</b> Deploy agent wallet version 4 from the Deployer wallet.</p>
+        {walletV4 ? (
+          <>
+            <p className="mono">Agent wallet version 4: <a href={`${EXPLORER}/address/${walletV4}`} target="_blank" rel="noreferrer">{walletV4}</a> <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(walletV4)}>Copy</button></p>
+            <p><b>Step 2.</b> In the Safe, send these to the agent settings contract (each: To, Data, Value 0). Offering version 4 starts a 48-hour notice; after that it shows to holders.</p>
+            <ol className="launch-safe">
+              {[
+                { what: "Now: offer agent wallet version 4", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "propose", args: [4, walletV4] }) },
+                { what: "After 48 hours: switch on version 4", data: encodeFunctionData({ abi: A("AgentConfig"), functionName: "execute", args: [4] }) },
+              ].map((c) => (
+                <li key={c.what}><b>{c.what}</b>
+                  <span className="mono">To: {MAINNET_DEPLOYMENT.config} <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(MAINNET_DEPLOYMENT.config)}>Copy</button></span>
+                  <span className="mono">Data: {short(c.data)} <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(c.data)}>Copy</button></span>
+                  <span className="mono">Value: 0</span>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : (
+          <TextButton onClick={async () => {
+            setBusy(true); setError(null);
+            try { const a = await deploy("Agent wallet version 4", "TrenchersAgentAccountV4", [MAINNET_DEPLOYMENT.config, MAINNET_DEPLOYMENT.fund, PG_FACTORY, TRENCHERS_TOKEN, PG_LAUNCH_SELECTOR]); setWalletV4(a); try { localStorage.setItem("trenchers:walletV4", a); } catch { /* */ } }
+            catch (e) { setError(errText(e)); }
+            setBusy(false);
+          }} disabled={busy || !isDeployer || !chainOk}>Deploy agent wallet version 4</TextButton>
         )}
       </section>
     </div>

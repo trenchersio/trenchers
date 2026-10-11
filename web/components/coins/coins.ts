@@ -9,6 +9,8 @@ export type CoinInfo = {
   price: number | null; chart: { t: number; p: number }[];
   /** Total supply in whole coins (Pons coins: 1 billion). */
   supply?: number;
+  /** Where the coin trades: Pons (ETH pair, default) or Programmable (paired with $TRENCHERS). */
+  venue?: "pons" | "programmable";
 };
 
 let cache: { at: number; coins: CoinInfo[] } | null = null;

@@ -1,4 +1,5 @@
 "use client";
+import { programmableCoinUrl } from "@/lib/programmable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
@@ -26,6 +27,12 @@ export function CoinChartButton({ coin, fallback, label = "Chart" }: { coin: Coi
 export function CoinChip({ coin }: { coin: CoinInfo }) {
   const [open, setOpen] = useState(false);
   const go = (e: React.SyntheticEvent) => { e.stopPropagation(); e.preventDefault(); setOpen(true); };
+  // A Programmable coin (paired with $TRENCHERS): its chart lives on programmable.market.
+  if (coin.venue === "programmable") return (
+    <a className="coin-chip mono" href={programmableCoinUrl(coin.coin)} target="_blank" rel="noreferrer" title={`$${coin.symbol} on Programmable, paired with $TRENCHERS`} onClick={(e) => e.stopPropagation()}>
+      ${coin.symbol}<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1h6v6M9 1L2 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </a>
+  );
   return (
     <>
       <span role="button" tabIndex={0} className="coin-chip mono" title={`$${coin.symbol}: open the chart`} onClick={go}

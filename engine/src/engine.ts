@@ -10,7 +10,7 @@ import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
 import { BurnTracker } from "./burns";
 import {
-  PONS_RECORD_ABI, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED,
+  PONS_RECORD_ABI, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED, FOUNDATION_LAUNCHED, FOUNDATION_TOKEN_ABI, FOUNDATION_LEDGER_ABI, NFT_OWNER_ABI,
 } from "./abis";
 
 /**
@@ -26,6 +26,9 @@ type Token = { token: Address; curve: Address; deployer: Address; launchedAt: nu
 /** What the site shows for a specific-token strategy: the coin's ticker, name and logo (read from its Pons launch). */
 export type TokenMeta = { token: Address; symbol: string; name: string; logo: string | null; graduated: boolean; mcapEth: number | null };
 /** An agent's own coin (launched by its agent wallet): creator fees and a price history, from Pons's own trade events. */
+/** An agent's coin on Programmable, paired with $TRENCHERS: launched by its agent wallet (version 4) or by its holder,
+ *  linked to the Trencher by the coin's website (its collection page) and the holder's address at launch. */
+type ProgrammableCoin = { token: Address; agent: number; wallet: Address; creator: Address; ledger: Address; hook: Address; launchedAt: number; byAgent: boolean; tx?: Hash };
 type AgentCoin = { token: Address; curve: Address; agent: number; wallet: Address; launchedAt: number; feeWei: bigint; taxWei: bigint; volumeEth: number; trades: number; points: { t: number; p: number }[] };
 type Agent = {
   id: number; wallet: Address; owner?: Address; coin?: Address; live: boolean; perTrade: bigint; dailyCap: bigint; setBy?: Address;
@@ -52,6 +55,7 @@ export class Engine {
   agents = new Map<Address, Agent>();
   /** Coins launched by agent wallets, keyed by token. */
   agentCoins = new Map<Address, AgentCoin>();
+  pgCoins = new Map<Address, ProgrammableCoin>();
   private feeShare = new Map<Address, number>();
   positions = new Map<Address, Map<Address, Position>>();
   trades: Trade[] = [];
@@ -214,12 +218,13 @@ export class Engine {
         const [ba, bb] = await Promise.all([this.pub.getBlock({ blockNumber: from }), this.pub.getBlock({ blockNumber: to })]);
         this.interp = { a: from, b: to, ta: Number(ba.timestamp), tb: Number(bb.timestamp) };
       } else this.interp = null;
-      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves] = await Promise.all([
+      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves, pgLaunches] = await Promise.all([
         this.pub.getLogs({ address: ENV.PONS_FACTORY, events: [TOKEN_LAUNCHED, POOL_GRADUATED, LAUNCH_SWEPT], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: this.adapter, events: [BOUGHT, SOLD], fromBlock: from, toBlock: to }),
         (this.telegram && (live || to >= this.catchUpFrom)) || live || to >= this.activityFrom ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
+        this.pub.getLogs({ address: ENV.PROGRAMMABLE_FACTORY, event: FOUNDATION_LAUNCHED, fromBlock: from, toBlock: to }).catch(() => []),
       ]);
       const launches = factoryLogs.filter((l) => l.eventName === "TokenLaunched");
       const grads = factoryLogs.filter((l) => l.eventName !== "TokenLaunched");
@@ -231,6 +236,7 @@ export class Engine {
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
+      for (const l of pgLaunches) await this.onProgrammableLaunch(l as unknown as Log & { args: Record<string, any> }).catch((e) => this.log(`programmable: ${(e as Error).message.split("\n")[0]}`));
       // While catching up after a restart, mints and sales made since this process started are still posted
       // (the previous process stopped when this one came up, so it never saw them).
       // Mints for the site's ticker (grouped per transaction).
@@ -360,6 +366,38 @@ export class Engine {
 
   private symbols = new Map<Address, string>();
   /** The coin's ticker (cached); falls back to a short address. */
+  /**
+   * A Programmable launch paired with $TRENCHERS becomes an agent's coin when it was launched by that agent's wallet, or by the
+   * Trencher's holder with the Trencher's collection page as the coin's website. One coin per agent (Pons or Programmable).
+   */
+  private async onProgrammableLaunch(l: Log & { args: Record<string, any> }) {
+    const a = l.args;
+    if (lc(a.quote) !== ENV.TRENCHERS_TOKEN) return;
+    const token = lc(a.token), creator = lc(a.creator);
+    if (this.pgCoins.has(token)) return;
+    let ag = this.agents.get(creator), byAgent = !!ag;
+    if (!ag) {
+      const site = await this.pub.readContract({ address: token, abi: FOUNDATION_TOKEN_ABI, functionName: "website" }).catch(() => "") as string;
+      const m = /^https:\/\/(?:www\.)?trenchers\.io\/collection#(\d{1,4})$/.exec(site.trim());
+      if (!m) return;
+      const id = Number(m[1]);
+      const cand = [...this.agents.values()].find((x) => x.id === id);
+      if (!cand) return;
+      // The holder at the launch block (falls back to today's holder if the RPC can't read old state).
+      const holder = await this.pub.readContract({ address: ENV.NFT, abi: NFT_OWNER_ABI, functionName: "ownerOf", args: [BigInt(id)], blockNumber: l.blockNumber! })
+        .catch(() => this.pub.readContract({ address: ENV.NFT, abi: NFT_OWNER_ABI, functionName: "ownerOf", args: [BigInt(id)] })).catch(() => null);
+      if (!holder || lc(holder as Address) !== creator) return;
+      ag = cand;
+    }
+    // One coin per agent: a Pons coin (or an earlier Programmable one) wins.
+    if ((ag.coin && !/^0x0+$/.test(ag.coin) && lc(ag.coin) !== token) || [...this.agentCoins.values()].some((c) => c.wallet === ag!.wallet)
+      || [...this.pgCoins.values()].some((c) => c.wallet === ag!.wallet)) return;
+    const t = await this.blockTime(l.blockNumber!);
+    this.pgCoins.set(token, { token, agent: ag.id, wallet: ag.wallet, creator, ledger: lc(a.ledger), hook: lc(a.hook), launchedAt: t, byAgent, tx: l.transactionHash ?? undefined });
+    this.noteActivity({ kind: "coin", id: ag.id, time: t, tx: l.transactionHash ?? null, symbol: await this.symbolOf(token) });
+    this.log(`Agent #${ag.id} coin on Programmable: ${token} (${byAgent ? "launched by the agent wallet" : "launched by its holder"})`);
+  }
+
   private async symbolOf(token: Address) {
     let sym = this.symbols.get(token);
     if (sym === undefined) {
@@ -939,6 +977,15 @@ export class Engine {
         price: pts.length ? pts[pts.length - 1].p : null, chart: pts.filter((_, i) => i % step === 0 || i === pts.length - 1),
       });
     }
+    for (const c of this.pgCoins.values()) {
+      // Creator fees are paid in $TRENCHERS through the coin's ledger (collected or not).
+      const credited = await this.pub.readContract({ address: c.ledger, abi: FOUNDATION_LEDGER_ABI, functionName: "creatorCredited" }).catch(() => 0n) as bigint;
+      out.push({
+        agent: c.agent, wallet: c.wallet, coin: c.token, curve: c.hook, symbol: await this.symbolOf(c.token), launchedAt: c.launchedAt,
+        feesEth: 0, feesExact: false, volumeEth: 0, trades: 0, graduated: true, price: null, chart: [],
+        venue: "programmable" as const, creator: c.creator, ledger: c.ledger, byAgent: c.byAgent, feesTrenchers: Number(formatEther(credited)),
+      } as (typeof out)[number]);
+    }
     return { updatedAt: this.now(), coins: out.sort((a, b) => a.agent - b.agent) };
   }
 
@@ -959,7 +1006,7 @@ export class Engine {
         id: ag.id, wallet: ag.wallet, owner: ag.owner, live: this.tradable(ag), blocked: this.blockedOf(ag),
         spentToday: Number(formatEther(ag.spentDay === BigInt(Math.floor(this.now() / 86400)) ? ag.spentToday : 0n)), dailyCap: Number(formatEther(ag.dailyCap)),
         target: ag.rule?.trigger === "token" && ag.rule.token ? await this.tokenMeta(ag.rule.token as Address).then((m) => (m ? { token: m.token, symbol: m.symbol, logo: m.logo, mode: ag.rule!.tokenMode ?? "once", status: this.planStatus(ag) } : { token: lc(ag.rule!.token!), symbol: null, logo: null, mode: ag.rule!.tokenMode ?? "once", status: null })).catch(() => null) : null,
-        coin: ag.coin && !/^0x0+$/.test(ag.coin) ? ag.coin : ([...this.agentCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? null), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
+        coin: ag.coin && !/^0x0+$/.test(ag.coin) ? ag.coin : ([...this.agentCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? [...this.pgCoins.values()].find((c) => c.wallet === ag.wallet)?.token ?? null), rule: ag.ruleText, ruleVersion: ag.ruleVersion, understood: ag.understood ?? [], ruleWarning: ag.ruleWarning ?? null,
         nav, cash: Number(formatEther(ag.balance)), openPositions: positions.length, positions, pnlEth, pnlPct: base > 0 ? (pnlEth / base) * 100 : 0,
         trades: week.length, wins: sells.filter((x) => x.pnlPct! > 0).length, closed: sells.length,
         biggest: best ? { symbol: best.symbol ?? best.token.slice(2, 8), pct: best.pnlPct! } : null,

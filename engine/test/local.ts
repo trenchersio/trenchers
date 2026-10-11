@@ -69,6 +69,8 @@ async function main() {
   await call(splitter, "RevenueSplitter", "proposeDestination", [3, fund]);
   await call(nft, "TrenchersNFT", "setMintOpen", [true]);
   const dist = await deploy("AgentFeeDistributor", [deployer.address, registry, nft, 600n]);
+  const trenchersTok = await deploy("MockERC20");
+  const pgFactory = await deploy("MockFoundationFactory");
   await call(dist, "AgentFeeDistributor", "setAccount", [impl, zeroHash]);
   console.log("deployed");
 
@@ -94,7 +96,7 @@ async function main() {
   Object.assign(process.env, {
     TELEGRAM_API: "http://127.0.0.1:8977", TELEGRAM_BOT_TOKEN: "test", TELEGRAM_CHAT: "@trencherstest",
     RPC_URL: RPC, CHAIN_ID: "31337", ENGINE_KEY, NFT_ADDRESS: nft, FUND_ADDRESS: fund, ADAPTER_ADDRESS: adapter,
-    PONS_FACTORY: pons, DIST_ADDRESS: dist, START_BLOCK: (block0 + 1n).toString(), SNIPE_WAIT_SEC: "3", POLL_MS: "500",
+    PONS_FACTORY: pons, DIST_ADDRESS: dist, PROGRAMMABLE_FACTORY: pgFactory, TRENCHERS_TOKEN: trenchersTok, START_BLOCK: (block0 + 1n).toString(), SNIPE_WAIT_SEC: "3", POLL_MS: "500",
   });
   const { Engine } = await import("../src/engine");
   const logs: string[] = [];
@@ -252,6 +254,20 @@ async function main() {
   await sleep(4000);
   const row7b = ((await engine.arena()).agents as { id: number; blocked: { code: string } | null }[]).find((r) => r.id === 7);
   check(row7b?.blocked?.code === "unsupported", `specific token: a coin that isn't on Pons shows as can't trade (${row7b?.blocked?.code})`);
+
+  // Programmable: an agent coin paired with $TRENCHERS, launched by the Trencher's holder with its collection page as website.
+  const pgLaunch = (site: string, quote: Address, from = alice) => call(pgFactory, "MockFoundationFactory", "launchWithEthRoute", [{
+    metadata: { name: "Trencher 6", symbol: "T6PG", description: "", imageURI: "https://www.trenchers.io/meta/img/awake/6.png", website: site, socialData: "0x" },
+    quote, quoteDecimals: 18, initialTick: 0, creatorFeeBps: 500, additionalQuoteAmount: 0n, initialBuyQuoteAmount: parseEther("0.001"), initialBuyMinimumTokenAmount: 1n,
+    deadline: 2n ** 40n, tokenSalt: zeroHash, hookSalt: zeroHash, modules: [] }, "0x01"], parseEther("0.001"), from);
+  await pgLaunch("https://www.trenchers.io/collection#6", trenchersTok, dev);         // not the holder of #6: ignored
+  await pgLaunch("https://www.trenchers.io/collection#6", pons);                       // not paired with $TRENCHERS: ignored
+  await pgLaunch("https://www.trenchers.io/collection#6", trenchersTok);               // the holder: #6's coin
+  await sleep(4000);
+  const pg = ((await engine.coins()).coins as { agent: number; venue?: string; byAgent?: boolean }[]).filter((c) => c.venue === "programmable");
+  check(pg.length === 1 && pg[0].agent === 6 && pg[0].byAgent === false, `Programmable: the holder's $TRENCHERS-paired launch is #6's coin, others ignored (${JSON.stringify(pg)})`);
+  const row6 = ((await engine.arena()).agents as { id: number; coin: string | null }[]).find((r) => r.id === 6);
+  check(!!row6?.coin, `Programmable: the Arena shows #6's coin (${row6?.coin})`);
 
   // $TRENCHERS fee share: the engine enrols awake agents, closes each week and pays every agent its share.
   const rpc = (method: string, params: unknown[] = []) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });

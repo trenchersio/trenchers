@@ -30,6 +30,9 @@ export const ENV = {
   FUND: addr("FUND_ADDRESS"),
   ADAPTER: addr("ADAPTER_ADDRESS"),
   PONS_FACTORY: opt("PONS_FACTORY", "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e") as Address,
+  /** Programmable's Module Mode launch factory (agent coins paired with $TRENCHERS) and $TRENCHERS itself. */
+  PROGRAMMABLE_FACTORY: opt("PROGRAMMABLE_FACTORY", "0x18cab14c69d0fe6df4a96256318b51c51c98da3f").toLowerCase() as Address,
+  TRENCHERS_TOKEN: opt("TRENCHERS_TOKEN", "0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a").toLowerCase() as Address,
   /** First block to read history from (the deployment block); 0 reads everything. */
   START_BLOCK: BigInt(/^\d+$/.test(opt("START_BLOCK", "0")) ? opt("START_BLOCK", "0") : "0"),
   /** Max blocks per log query, for RPCs that cap ranges. */

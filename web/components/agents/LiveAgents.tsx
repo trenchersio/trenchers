@@ -11,6 +11,7 @@ import { Fold } from "@/components/Fold";
 import { SectionNav } from "@/components/SectionNav";
 import { cardFromLive, tradeCard } from "@/components/arena/LiveArena";
 import { explain, goToSection } from "@/lib/agent-status";
+import { parseAbi as parseAbiV } from "viem";
 import { ABI, DEPLOYMENT, cachedOwned, ownedTrenchers, reader, reason, sendCall, sendEth } from "@/lib/chain";
 import { ENGINE_URL, OPENSEA_URL, ROUTES, chain, openseaItem } from "@/lib/constants";
 import { createPortal } from "react-dom";
@@ -51,6 +52,7 @@ const NAV = [
 ];
 const EXPLORER = chain.blockExplorers?.default.url ?? "";
 /** Agent wallet versions the profile offers holders (checked by the engine's /verify): wallet version 3 on mainnet. */
+const VERSION_ABI = parseAbiV(["function VERSION() view returns (uint256)"]);
 const OFFERED_VERSIONS = ["0xb2f69a48b4e314e0f21ceeb0e8287a4cfe738a80", ...(process.env.NEXT_PUBLIC_OFFERED_VERSIONS ?? "").toLowerCase().split(",").filter(Boolean)];
 const fmt = (v?: bigint, d = 5) => (v === undefined ? "…" : Number(formatEther(v)).toFixed(d).replace(/\.?0+$/, "") || "0");
 const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -251,7 +253,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   const currentRule: CustomRule | null = a.ruleText ? parse(a.ruleText).rule : null;
   // The wallet version is read fresh from the chain for this Trencher (with retries), so a copy saved in the browser
   // before a new version was offered, or a failed read, never hides the upgrade.
-  const [vs, setVs] = useState<Pick<Agent, "version" | "original" | "offered" | "offers"> | null>(null);
+  const [vs, setVs] = useState<(Pick<Agent, "version" | "original" | "offered" | "offers"> & { offeredN: number; mineN: number }) | null>(null);
   useEffect(() => {
     if (!a.wallet || a.deployed === false || busy) return;
     let alive = true, tries = 0;
@@ -259,7 +261,12 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
       const c = reader(), w = { address: a.wallet!, abi: ABI.agent } as const;
       Promise.all([c.readContract({ ...w, functionName: "agentLogic" }), c.readContract({ ...w, functionName: "ORIGINAL_VERSION" }),
         c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogic" }), c.readContract({ address: d.config, abi: ABI.config, functionName: "accountLogicVersions" })])
-        .then(([version, original, offered, offers]) => { if (alive) setVs({ version, original, offered, offers: Number(offers) }); })
+        .then(async ([version, original, offered, offers]) => {
+          // Version numbers of the offered code and this wallet's code (the original reports none: 1).
+          const vOf = (x: Address) => c.readContract({ address: x, abi: VERSION_ABI, functionName: "VERSION" }).then(Number).catch(() => 1);
+          const [offeredN, mineN] = await Promise.all([vOf(offered), vOf(a.wallet!)]);
+          if (alive) setVs({ version, original, offered, offers: Number(offers), offeredN, mineN });
+        })
         .catch(() => { if (alive && ++tries < 5) setTimeout(read, 1500 * tries); });
     };
     read();
@@ -267,7 +274,10 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   }, [a.wallet, a.deployed, a.version, busy, d.config]);
   const v = { ...a, ...(vs ?? {}) };
   // Only the current wallet version 3 is offered to holders; earlier versions stay hidden even while they are the live offer.
-  const upgrade = !!v.offers && v.offers > 1 && !!v.offered && OFFERED_VERSIONS.includes(v.offered.toLowerCase()) && v.version?.toLowerCase() !== v.offered.toLowerCase();
+  // Offered versions from 3 up (version 2 never is), and only when it's newer than what this wallet runs.
+  const offeredN = vs?.offeredN ?? 0;
+  const upgrade = !!v.offers && v.offers > 1 && !!v.offered && (offeredN >= 3 || OFFERED_VERSIONS.includes(v.offered.toLowerCase()))
+    && v.version?.toLowerCase() !== v.offered.toLowerCase() && offeredN > (vs?.mineN ?? 0);
   const onCustom = !!v.version && !!v.original && v.version.toLowerCase() !== v.original.toLowerCase();
   const now = Date.now() / 1000;
 
@@ -382,8 +392,9 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
       {a.deployed && (<>
         {upgrade && (
           <section className="panel-card tn-upgrade-like">
-            <h3>A new version of the agent wallet is available</h3>
-            <p>The new version lets your agent launch its own coin with the launch fee paid from its starter balance, collect its coin&apos;s creator fees at any time, and keeps your own deposits withdrawable even after trading losses (only the starter stays locked). It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
+            <h3>Agent wallet version {offeredN || "3"} is available</h3>
+            {offeredN >= 4 && <p><b>New in version 4:</b> your agent can launch its own coin on Programmable, paired with $TRENCHERS, with any of Programmable&apos;s modules. The agent wallet itself is the coin&apos;s creator; its creator fees ($TRENCHERS) are collected through the agent and sent to you any time.</p>}
+            <p>{offeredN >= 4 ? "Like version 3, it" : "The new version"} lets your agent launch its own coin with the launch fee paid from its starter balance, collect its coin&apos;s creator fees at any time, and keeps your own deposits withdrawable even after trading losses (only the starter stays locked). It was announced 48 hours in advance, and your wallet doesn&apos;t change unless you choose to. Switching keeps the same address, balance, rules and track record, and you can switch back any time.</p>
             <div className="actions">
               <TextButton onClick={() => setVersion(v.offered!, `Switching #${a.id} to the new agent wallet version`)} disabled={busy}>Switch to the new version</TextButton>
               <TextButton href={`${EXPLORER}/address/${v.offered}#code`} external>View the new code</TextButton>
