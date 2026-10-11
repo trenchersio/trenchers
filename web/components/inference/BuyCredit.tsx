@@ -223,7 +223,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
 
         <div className="ibuy-burnline">
           <span className="ibuy-flame" aria-hidden="true" />
-          <span>{tokensIn !== null && tokensIn > 0n ? <><b>{fmt(Number(formatUnits(tokensIn, decimals)), 0)} $TRENCHERS</b> burned</> : <>Every $TRENCHERS paid in is <b>burned</b></>}</span>
+          <span>{tokensIn !== null && tokensIn > 0n ? <><b>{fmt(Number(formatUnits(tokensIn, decimals)), 0)} $TRENCHERS</b> burned</> : <>Whatever you pay in gets <b>burned</b></>}</span>
         </div>
 
         {unavailable === "eth" ? (
@@ -253,10 +253,10 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
         </span>
 
         <p className="ibuy-foot">
-          {pay === "token" && "Sent straight to the desk. The credit lands on the wallet it came from."}
-          {pay === "eth" && "One transaction: ETH buys $TRENCHERS through the pool and it goes straight to the desk. The credit lands on the wallet that signed."}
-          {pay === "p2p" && "Fills the cheapest $TRENCHERS asks on the P2P book at the holders' own prices, with the desk as the recipient."}
-          {" "}Credit is in dollars and never expires.
+          {pay === "token" && "One transfer to the desk contract. Whichever wallet sends it gets the credit."}
+          {pay === "eth" && "Your ETH buys $TRENCHERS on the way in and the desk burns it, all in a single transaction signed by you."}
+          {pay === "p2p" && "Takes the lowest asks on the P2P book and routes the tokens straight to the desk instead of your wallet."}
+          {" "}Your balance is in dollars and does not expire.
         </p>
       </div>
     </div>

@@ -47,7 +47,7 @@ export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference") => vo
           <button type="button" className="door door-i" onClick={() => enter("inference")} disabled={!ready} tabIndex={ready ? 0 : -1}>
             <span className="door-k mono"><i className="door-dot" />02 · Trenchers<em>New</em></span>
             <b>Inference Markets</b>
-            <span className="door-p">Every frontier model through one key, paid in $TRENCHERS. Every token spent is burned.</span>
+            <span className="door-p">Burn $TRENCHERS, run any model. Claude, GPT, Gemini, Grok and more behind one address.</span>
             <span className="door-go mono">Enter the markets <span aria-hidden="true">→</span></span>
           </button>
         </div>
