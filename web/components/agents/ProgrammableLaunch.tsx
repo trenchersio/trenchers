@@ -4,7 +4,7 @@ import { formatEther, getAddress, parseEther, type Address, type Hex } from "vie
 import { reader, sendCall } from "@/lib/chain";
 import {
   AGENT_V4_ABI, FOUNDATION_FACTORY_ABI, TRENCHERS_TOKEN, bpsToPercent, encodeFundingPath, encodeLaunch, mineHookSalt,
-  percentToBps, programmableCoinUrl, randomSalt, startTick,
+  percentToBps, programmableCoinUrl, randomSalt, startTick, TRENCHERS_PONS_URL,
   type ComposeResult, type LaunchParams, type ModuleField, type ProgrammableCatalog, type ProgrammableModule,
 } from "@/lib/programmable";
 
@@ -140,7 +140,7 @@ export function ProgrammableLaunch({ id, wallet, me, busy, form, valid, agentFac
       <div className="pg-pair">
         <div className="pg-pair-l">
           <span className="pg-pair-tag mono">Pair</span>
-          <b>$TRENCHERS</b>
+          <a className="pg-pair-link" href={TRENCHERS_PONS_URL} target="_blank" rel="noreferrer" title="$TRENCHERS on Pons">$TRENCHERS ↗</a>
           <span className="muted-note">Every Programmable agent coin trades against $TRENCHERS instead of ETH, so buying it with ETH buys $TRENCHERS first.</span>
         </div>
         <span className="pg-lock mono" title="The pair is fixed for Trenchers agent coins">Locked</span>

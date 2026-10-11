@@ -7,7 +7,7 @@ import { useCoins, ethFmt } from "@/components/coins/coins";
 import { CoinChartButton } from "@/components/coins/CoinChart";
 import { useCoinInfo } from "@/components/coins/chainCoin";
 import { ProgrammableLaunch } from "./ProgrammableLaunch";
-import { AGENT_V4_ABI, FOUNDATION_LEDGER_ABI, programmableCoinUrl } from "@/lib/programmable";
+import { AGENT_V4_ABI, FOUNDATION_LEDGER_ABI, TRENCHERS_PONS_URL, programmableCoinUrl } from "@/lib/programmable";
 
 /**
  * "Its own coin": with agent wallet version 2 the agent wallet itself calls the Pons launch factory, so Pons records
@@ -173,7 +173,7 @@ export function CoinLaunch({ id, wallet, me, bal, busy, run }: Props) {
           <div className="coin-own-id">
             <b className="mono coin-own-sym">${shown.symbol}</b>
             {shown.name && <span className="coin-own-name">{shown.name}</span>}
-            <span className="pg-badge mono">Programmable · /$TRENCHERS</span>
+            <span className="pg-badge mono">Programmable · <a href={TRENCHERS_PONS_URL} target="_blank" rel="noreferrer">/$TRENCHERS</a></span>
           </div>
           {st?.ledger ? (
             <p className="mono agent-coin-fees">{`${tk(st.feesPending + st.feesReady)} $TRENCHERS creator fees to collect`}</p>

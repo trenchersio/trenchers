@@ -2392,3 +2392,7 @@ img.tk-logo { flex: none; }
   .pg-mod-cat { display: none; }
   .pg-mod-row { grid-template-columns: auto 1fr; }
 }
+.pg-pair-l .pg-pair-link { font: 700 16px var(--mono); color: var(--green); text-decoration: none; }
+.pg-pair-l .pg-pair-link:hover { text-decoration: underline; }
+.pg-badge a { color: inherit; text-decoration: none; }
+.pg-badge a:hover { text-decoration: underline; }

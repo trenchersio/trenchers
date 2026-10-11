@@ -13,6 +13,8 @@ import { encodeAbiParameters, encodeFunctionData, getAddress, getCreate2Address,
 
 /** $TRENCHERS: the only pair a Trenchers agent coin on Programmable can have. */
 export const TRENCHERS_TOKEN = getAddress("0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a");
+/** $TRENCHERS on Pons, where it trades. */
+export const TRENCHERS_PONS_URL = `https://ponsfamily.com/launchpad/${TRENCHERS_TOKEN.toLowerCase()}`;
 export const PROGRAMMABLE_SITE = "https://programmable.market";
 export const programmableCoinUrl = (token: string) => `${PROGRAMMABLE_SITE}/token/${getAddress(token)}`;
 export const FOUNDATION_SUPPLY = 1_000_000_000n * 10n ** 18n;

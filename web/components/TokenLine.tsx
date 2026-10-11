@@ -9,7 +9,7 @@ export function TokenLine() {
   const copy = async () => { try { await navigator.clipboard.writeText(TRENCHERS_TOKEN); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* no clipboard */ } };
   return (
     <p className="token-line mono">
-      <span>$TRENCHERS</span>
+      <a href={TRENCHERS_PONS} target="_blank" rel="noreferrer" title="$TRENCHERS on Pons">$TRENCHERS</a>
       <button type="button" onClick={copy} title="Copy contract address">CA {TRENCHERS_TOKEN.slice(0, 6)}…{TRENCHERS_TOKEN.slice(-4)} <i>{copied ? "copied" : "copy"}</i></button>
       <a href={TRENCHERS_PONS} target="_blank" rel="noreferrer">Pons ↗</a>
       <a href={gmgnToken(TRENCHERS_TOKEN)} target="_blank" rel="noreferrer">Chart ↗</a>
