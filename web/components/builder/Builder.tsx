@@ -2,7 +2,7 @@
 // Trenchers V4 Builder: launch a Uniswap v4 hook coin on Robinhood Chain with its own rules, fees and mechanics.
 import { useEffect, useState, type ReactNode } from "react";
 import { GITHUB_URL, ROUTES, SOCIALS } from "@/lib/constants";
-import { MODULES, PLATFORM_FEE_BPS, type ModuleDef } from "@/lib/v4builder";
+import { MODULES, PLATFORM_FEE_BPS, type BuilderCoin, type ModuleDef } from "@/lib/v4builder";
 import { TokenLine } from "@/components/TokenLine";
 import { useBuilder } from "./useBuilder";
 import { Studio } from "./Studio";
@@ -78,7 +78,15 @@ export function Builder() {
     window.addEventListener("popstate", read);
     return () => window.removeEventListener("popstate", read);
   }, []);
-  const coin = coinAddr ? d.coins?.find((c) => c.token.toLowerCase() === coinAddr) ?? null : null;
+  // The list carries a short price line per coin; the coin page loads the coin's full history (and coins past the list).
+  const [full, setFull] = useState<BuilderCoin | null>(null);
+  useEffect(() => {
+    if (!coinAddr) { setFull(null); return; }
+    let live = true;
+    fetch(`/api/builder/coin?token=${coinAddr}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((c) => { if (live && c?.token) setFull(c); }).catch(() => {});
+    return () => { live = false; };
+  }, [coinAddr, d.coins]);
+  const coin = coinAddr ? full ?? d.coins?.find((c) => c.token.toLowerCase() === coinAddr) ?? null : null;
 
   const total = (d.coins ?? []).length;
   const volEth = (d.coins ?? []).filter((c) => c.quote.toLowerCase() === "0x0bd7d308f8e1639fab988df18a8011f41eacad73").reduce((s, c) => s + BigInt(c.volumeQuote), 0n);
@@ -89,7 +97,7 @@ export function Builder() {
       {d.mock && <div className="vb-mockflag mono">Local preview · sample data</div>}
 
       {coinAddr ? (
-        coin ? <CoinView coin={coin} mock={d.mock} /> : (
+        coin ? <CoinView coin={coin} mock={d.mock} config={d.config} /> : (
           <div className="vb-cv"><a className="vb-back mono" href="?">← all coins</a>
             <div className="vb-none"><b>{d.coins === null ? "Loading the coin…" : "This coin isn't in the builder's list yet."}</b><span>{d.coins === null ? "" : "New launches appear within a minute. Check the address, or go back to all coins."}</span></div>
           </div>

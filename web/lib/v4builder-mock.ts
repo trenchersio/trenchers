@@ -54,6 +54,7 @@ export function mockCoins(): BuilderCoin[] {
   });
 }
 
-export function mockBuilder(p: string) {
-  return p === "config" ? mockConfig() : { coins: mockCoins(), updatedAt: now };
+export function mockBuilder(p: string, token = "") {
+  if (p === "coin") return mockCoins().find((c) => c.token.toLowerCase() === token.toLowerCase()) ?? null;
+  return p === "config" ? mockConfig() : { coins: mockCoins(), total: SAMPLES.length, updatedAt: now };
 }

@@ -73,6 +73,7 @@ export function Studio({ config, coins, onLaunched }: { config: BuilderConfig | 
     if (!name.trim()) return "Give your coin a name.";
     if (name.trim().length > 32) return "Keep the name to 32 characters.";
     if (!/^[A-Za-z0-9]{1,10}$/.test(symbol.trim())) return "The ticker is 1 to 10 letters or numbers.";
+    if (/^trenchers$/i.test(symbol.trim())) return "That ticker belongs to $TRENCHERS. Pick your own.";
     if (image.trim() && !/^(https|ipfs):\/\/\S+$/.test(image.trim())) return "The image link has to start with https:// or ipfs://";
     if (image.trim().length > 2048) return "The image link is too long.";
     if (website.trim() && !/^https:\/\/\S+$/.test(website.trim())) return "The website has to start with https://";

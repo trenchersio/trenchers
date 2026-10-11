@@ -2,7 +2,8 @@
  * The V4 Builder's wallet actions: launch a coin, buy and sell it with ETH, claim fees and run module actions.
  * Every call is simulated before the wallet opens, so a launch or trade that would fail is explained first.
  */
-import { getAddress, maxUint160, maxUint256, type Address, type Hex, type PublicClient } from "viem";
+import { getAddress, hexToBytes, keccak256, maxUint160, maxUint256, parseAbi, type Address, type Hex, type PublicClient } from "viem";
+import artifacts from "@/lib/v4builder/artifacts.json";
 import { reader, reason as baseReason, sendCall } from "@/lib/chain";
 import {
   ERC20_ABI, FACTORY_ABI, HOOK_ABI, INFRA, LEDGER_ABI, MODULES, PERMIT2_ABI, PLATFORM_FEE_BPS, ROUTER_ABI, TRENCHERS,
@@ -68,11 +69,67 @@ export const units = (v: string, d = 18) => {
   return BigInt(w || "0") * 10n ** BigInt(d) + BigInt((f + "0".repeat(d)).slice(0, d) || "0");
 };
 
+// ------------------------------------------------------------------ is this really our deployment?
+
+type Art = { codeHash: string | null; maskedHash: string | null; immutables: [number, number][] | null };
+const FACTORY_VIEWS = parseAbi([
+  "function poolManager() view returns (address)", "function positionManager() view returns (address)", "function universalRouter() view returns (address)",
+  "function permit2() view returns (address)", "function hookDeployer() view returns (address)",
+]);
+const MODULE_ART: Record<ModuleKey, keyof typeof artifacts> = Object.fromEntries(MODULES.map((m) => [m.key, m.artifact])) as never;
+const verified = new Set<string>();
+
+/** The site's addresses come from the engine. Before any money moves, the browser checks for itself that the factory,
+ *  the hook deployer and each module factory it is about to use run exactly the code in this repository, wired to
+ *  Robinhood Chain's official Uniswap v4 contracts. A tampered config fails here, before the wallet opens. */
+export async function verifyDeployment(pub: PublicClient, cfg: BuilderConfig, moduleKeys: ModuleKey[] = []) {
+  const key = `${cfg.factory}:${cfg.hookDeployer}:${moduleKeys.map((k) => cfg.modules[k]).join(",")}`;
+  if (verified.has(key)) return;
+  const bad = (what: string) => { throw new Error(`Safety check failed: the ${what} isn't the Trenchers V4 Builder contract. Nothing was sent. Please tell the team.`); };
+  const code = async (a: Address) => { const c = await pub.getCode({ address: a }); if (!c || c === "0x") bad("contract at " + a); return c!; };
+  const exact = async (a: Address, art: keyof typeof artifacts, what: string) => { if (keccak256(await code(a)) !== (artifacts[art] as Art).codeHash) bad(what); };
+  await exact(cfg.hookDeployer!, "FoundationHookDeployerV2", "hook deployer");
+  const fart = artifacts.FoundationFactoryV3Native as unknown as Art;
+  const fc = await code(cfg.factory!);
+  const bytes = hexToBytes(fc);
+  for (const [st, ln] of fart.immutables ?? []) bytes.fill(0, st, st + ln);
+  if (keccak256(bytes) !== fart.maskedHash) bad("launch factory");
+  const [m, p, r, p2, d] = await Promise.all(["poolManager", "positionManager", "universalRouter", "permit2", "hookDeployer"].map((fn) =>
+    pub.readContract({ address: cfg.factory!, abi: FACTORY_VIEWS, functionName: fn as never }) as Promise<Address>));
+  if (m.toLowerCase() !== INFRA.manager.toLowerCase() || r.toLowerCase() !== INFRA.router.toLowerCase() || p2.toLowerCase() !== INFRA.permit2.toLowerCase()
+    || d.toLowerCase() !== cfg.hookDeployer!.toLowerCase() || !p) bad("launch factory's wiring");
+  for (const k of moduleKeys) await exact(cfg.modules[k]!, MODULE_ART[k], `${moduleDef(k).name} factory`);
+  verified.add(key);
+}
+
+/** A coin from the list is only traded after the factory confirms it launched it with this hook and ledger, and the
+ *  hook's pool is the coin against WETH or $TRENCHERS. */
+async function verifyCoin(pub: PublicClient, cfg: BuilderConfig, c: CoinRef, key: PoolKey) {
+  await verifyDeployment(pub, cfg);
+  const l = await pub.readContract({ address: cfg.factory!, abi: FACTORY_ABI, functionName: "launchOf", args: [c.token] }) as { hook: Address; ledger: Address };
+  const q = c.quote.toLowerCase();
+  const pair = [key.currency0.toLowerCase(), key.currency1.toLowerCase()].sort().join();
+  if (l.hook.toLowerCase() !== c.hook.toLowerCase() || l.ledger.toLowerCase() !== c.ledger.toLowerCase() || key.hooks.toLowerCase() !== c.hook.toLowerCase()
+    || (q !== INFRA.weth.toLowerCase() && q !== TRENCHERS.toLowerCase()) || pair !== [c.token.toLowerCase(), q].sort().join()) {
+    throw new Error("Safety check failed: this coin wasn't launched by the Trenchers V4 Builder as listed. Nothing was sent.");
+  }
+}
+
 /** ETH needed for an exact amount of $TRENCHERS through its Pons pool, with headroom (unspent ETH is refunded). */
 async function ethForTrenchers(pub: PublicClient, key: PoolKey, amount: bigint) {
-  const per = price1Per0(await sqrtPriceOf(pub, key)); // TRENCHERS per ETH, 1e18 scaled
+  const [sqrtP, L] = await Promise.all([sqrtPriceOf(pub, key), liquidityOf(pub, key)]);
+  if (sqrtP === 0n || L === 0n) throw new Error("$TRENCHERS has no price on its pool yet.");
+  // ETH is currency0: an exact amount of currency1 out moves the price down to `next`.
+  const Q = 1n << 96n;
+  const drop = (amount * Q) / L;
+  if (drop >= sqrtP) throw new Error("That's more $TRENCHERS than its pool can sell in one go. Try a smaller first buy.");
+  const next = sqrtP - drop;
+  const ethIn = (L * Q * (sqrtP - next)) / sqrtP / next + 1n;
+  const per = price1Per0(sqrtP);
   if (per === 0n) throw new Error("$TRENCHERS has no price on its pool yet.");
-  return ((amount * E18) / per) * 125n / 100n + 1n;
+  // Pool fee and the Pons hook's tax on top, then 3% for the price moving before the launch lands. Unspent ETH comes back.
+  const feePips = BigInt(key.fee) + 10_000n; // the pool's fee plus up to 1% hook tax
+  return (ethIn * (1_000_000n + feePips)) / 1_000_000n * 103n / 100n + 1n;
 }
 
 /** The coin's on-chain picture when the launcher gives none: a small badge (gradient and ticker) as an SVG data URI.
@@ -92,6 +149,7 @@ export async function prepareLaunch(cfg: BuilderConfig, creator: Address, f: Lau
   const quote = f.pair === "eth" ? INFRA.weth : TRENCHERS;
 
   onStep("probe");
+  await verifyDeployment(pub, cfg, f.modules.map((m) => m.key));
   const modules: Selection[] = [];
   for (const m of f.modules) {
     const def = moduleDef(m.key);
@@ -130,7 +188,7 @@ export async function prepareLaunch(cfg: BuilderConfig, creator: Address, f: Lau
   const { result } = await pub.simulateContract({ address: cfg.factory, abi: FACTORY_ABI, functionName: "launchWithEthRoute", args: [p, path], value, account: creator });
   const got = (result as { initialBuyTokenAmount: bigint }).initialBuyTokenAmount;
   p.initialBuyMinimumTokenAmount = (got * 97n) / 100n;
-  return { params: p, path, value, token, hook, firstBuyTokens: got };
+  return { params: p, path, value, token, hook, firstBuyTokens: got, maxEth: value };
 }
 
 export async function sendLaunch(cfg: BuilderConfig, creator: Address, prep: Awaited<ReturnType<typeof prepareLaunch>>, onStep: (s: LaunchStep) => void) {
@@ -147,9 +205,10 @@ export async function coinKey(pub: PublicClient, hook: Address): Promise<PoolKey
 }
 
 /** Estimated output and the router call for a buy (ETH in) or a sell (coin in), with the minimum set by slippage. */
-export async function quoteTrade(c: CoinRef, side: "buy" | "sell", amountIn: bigint, slippagePct: number) {
+export async function quoteTrade(c: CoinRef, side: "buy" | "sell", amountIn: bigint, slippagePct: number, cfg?: BuilderConfig) {
   const pub = reader();
   const key = await coinKey(pub, c.hook);
+  if (cfg) await verifyCoin(pub, cfg, c, key);
   const [sqrtP, L] = await Promise.all([sqrtPriceOf(pub, key), liquidityOf(pub, key)]);
   const tokenIs0 = BigInt(c.token) < BigInt(c.quote);
   const isTrenchers = c.quote.toLowerCase() === TRENCHERS.toLowerCase();
@@ -173,8 +232,9 @@ export async function quoteTrade(c: CoinRef, side: "buy" | "sell", amountIn: big
   return { out, minOut, call };
 }
 
-export async function trade(from: Address, c: CoinRef, side: "buy" | "sell", amountIn: bigint, slippagePct: number, onPhase: (p: "approve" | "sign" | "chain") => void) {
+export async function trade(cfg: BuilderConfig, from: Address, c: CoinRef, side: "buy" | "sell", amountIn: bigint, slippagePct: number, shownMin: bigint, onPhase: (p: "approve" | "sign" | "chain") => void) {
   const pub = reader();
+  await verifyCoin(pub, cfg, c, await coinKey(pub, c.hook));
   if (side === "sell") {
     // Sells pull the coin through Permit2: a one-time approval to Permit2, then a Permit2 allowance for the router.
     const a = await pub.readContract({ address: c.token, abi: ERC20_ABI, functionName: "allowance", args: [from, INFRA.permit2] }) as bigint;
@@ -185,7 +245,10 @@ export async function trade(from: Address, c: CoinRef, side: "buy" | "sell", amo
       await sendCall(from, { address: INFRA.permit2, abi: PERMIT2_ABI, functionName: "approve", args: [c.token, INFRA.router, maxUint160, Math.floor(Date.now() / 1000) + 30 * 86400] });
     }
   }
-  const { call } = await quoteTrade(c, side, amountIn, slippagePct);
+  const q = await quoteTrade(c, side, amountIn, slippagePct);
+  // Never accept less than the minimum the page showed: if the price moved against the trade since, stop instead.
+  if (q.minOut < shownMin) throw new Error("The price moved since your quote. Check the new amounts and try again.");
+  const call = q.call;
   return sendCall(from, { address: INFRA.router, abi: ROUTER_ABI, functionName: "execute", args: [call.commands, call.inputs, BigInt(Math.floor(Date.now() / 1000) + 600)], value: call.value }, (p) => onPhase(p));
 }
 
@@ -200,11 +263,16 @@ export async function claimable(c: CoinRef) {
   return credited - claimed;
 }
 
-export const claimCreator = (from: Address, c: CoinRef, onPhase: (p: "sign" | "chain") => void) =>
-  sendCall(from, { address: c.ledger, abi: LEDGER_ABI, functionName: "claimCreator" }, onPhase);
+export async function claimCreator(cfg: BuilderConfig, from: Address, c: CoinRef, onPhase: (p: "sign" | "chain") => void) {
+  const pub = reader();
+  await verifyCoin(pub, cfg, c, await coinKey(pub, c.hook));
+  return sendCall(from, { address: c.ledger, abi: LEDGER_ABI, functionName: "claimCreator" }, onPhase);
+}
 
 /** Run a fee engine (buyback, dip buyback, LP rewards, full-range LP) or pay out a games module's rewards. */
-export function moduleAction(from: Address, c: CoinRef, index: number, key: ModuleKey, onPhase: (p: "sign" | "chain") => void) {
+export async function moduleAction(cfg: BuilderConfig, from: Address, c: CoinRef, index: number, key: ModuleKey, onPhase: (p: "sign" | "chain") => void) {
+  const pub = reader();
+  await verifyCoin(pub, cfg, c, await coinKey(pub, c.hook));
   const data = moduleDef(key).group === "Fee engines" ? MODULE_ACTION.execute : payAction([from]);
   return sendCall(from, { address: c.hook, abi: HOOK_ABI, functionName: "executeModuleAction", args: [BigInt(index), data] }, onPhase);
 }

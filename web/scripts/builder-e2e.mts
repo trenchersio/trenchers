@@ -128,7 +128,7 @@ try {
 
   // ---------------------------------------------------------------- a buy from another wallet, as the coin page sends it
   const ethIn = parseEther("0.3");
-  const qb = await act.quoteTrade(coin, "buy", ethIn, 5);
+  const qb = await act.quoteTrade(coin, "buy", ethIn, 5, cfg);
   ok(qb.out > 0n && qb.minOut < qb.out, `buy quote: about ${formatEther(qb.out)} TIDE, at least ${formatEther(qb.minOut)}`);
   const exec = (c: { commands: Hex; inputs: Hex[] }) => (lib as typeof lib).encodeExecute(c as never, BigInt(Math.floor(Date.now() / 1000) + 600));
   await send(twal, router, exec(qb.call), qb.call.value);
@@ -141,7 +141,7 @@ try {
   await send(twal, prep.token, enc({ abi: APPROVE, functionName: "approve", args: [PERMIT2, 2n ** 256n - 1n] }));
   await send(twal, PERMIT2, enc({ abi: lib.PERMIT2_ABI, functionName: "approve", args: [prep.token, router, 2n ** 160n - 1n, Math.floor(Date.now() / 1000) + 86400] }));
   const sellAmt = tTide / 2n;
-  const qs = await act.quoteTrade(coin, "sell", sellAmt, 5);
+  const qs = await act.quoteTrade(coin, "sell", sellAmt, 5, cfg);
   const ethBefore = await pub.getBalance({ address: trader.address });
   const sr = await send(twal, router, exec(qs.call));
   const ethAfter = await pub.getBalance({ address: trader.address });
@@ -190,14 +190,30 @@ try {
   await send(twal, factory, enc({ abi: lib.FACTORY_ABI, functionName: "launchWithEthRoute", args: [prep2.params, prep2.path] }), prep2.value);
   ok((await pub.getCode({ address: prep2.token }))!.length > 2, "a reactive-pair coin linked to the first launched with no first buy");
 
+  // ---------------------------------------------------------------- what must be refused
+  const rogueFactory = await deploy("BuyCooldownFactoryV1.sol", "BuyCooldownFactoryV1", "0x", twal);
+  const rogueCfg = { ...(cfg as object), modules: { ...modules, buyCooldown: rogueFactory } } as never;
+  let refused = false;
+  try { await act.verifyDeployment(pub as never, { ...(cfg as object), factory: router } as never); } catch { refused = true; }
+  ok(refused, "the browser refuses a config whose factory isn't the builder's code");
+  // A launch made outside the site with a module factory we didn't deploy (same code, different address): the probe
+  // still works, the chain accepts it, and the index must leave it out.
+  Object.assign(lib.INFRA, {});
+  const prep3 = await act.prepareLaunch(rogueCfg, trader.address, { ...form, name: "Rogue", symbol: "ROGUE", firstBuyEth: "0", modules: [{ key: "buyCooldown", values: { seconds: "30" }, sharePct: 0 }] }, () => {}).catch((e) => { console.log("  note:", (e as Error).message); return null; });
+  if (prep3) await send(twal, factory, enc({ abi: lib.FACTORY_ABI, functionName: "launchWithEthRoute", args: [prep3.params, prep3.path] }), prep3.value);
+  ok(prep3 !== null, "a coin with a module factory that isn't ours still launches on-chain (outside the site's list)");
+  let fakeTrade = false;
+  try { await act.quoteTrade({ ...coin, hook: prep2.hook }, "buy", ethIn, 5, cfg); } catch { fakeTrade = true; }
+  ok(fakeTrade, "trading refuses a coin whose hook doesn't match what the factory launched");
+
   // ---------------------------------------------------------------- the engine reads it back
   const { BuilderIndex } = await import("../../engine/src/builder.ts");
-  const idx = new BuilderIndex({ V4_FACTORY: factory, V4_HOOK_DEPLOYER: hookDeployer, V4_MODULES: JSON.stringify(modules), V4_START_BLOCK: "0", RPC_URL: RPC, CHAIN_ID: "31337", V4_POOL_MANAGER: manager });
+  const idx = new BuilderIndex({ V4_FACTORY: factory, V4_HOOK_DEPLOYER: hookDeployer, V4_MODULES: JSON.stringify(modules), V4_START_BLOCK: "1", RPC_URL: RPC, CHAIN_ID: "31337", V4_POOL_MANAGER: manager, V4_WETH: weth });
   await idx.update();
   console.log("  index status", JSON.stringify(idx.status()));
   const view = idx.view();
   const c1 = view.coins.find((c) => c.token === prep.token.toLowerCase());
-  ok(view.coins.length === 2, `engine indexed ${view.coins.length} coins`);
+  ok(view.coins.length === 2 && !view.coins.some((c) => c.symbol === "ROGUE"), `engine lists ${view.coins.length} coins and leaves out the one with a foreign module (${idx.skipped} skipped)`);
   ok(c1?.name === "Tidewatch" && c1.symbol === "TIDE" && c1.website === "https://x.com/trenchersio", "metadata read from the coin");
   ok(c1?.modules.join(",") === "priceMoveGuard,launchWalletCap,buybackBurn,buyerRewards", `modules named: ${c1?.modules.join(", ")}`);
   ok(c1?.creatorBuyBps === 300 && c1.creatorSellBps === 400, "fees read from the hook");

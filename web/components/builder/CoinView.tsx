@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { formatEther, type Address } from "viem";
 import { useWallet } from "@/lib/wallet";
 import { EXPLORER, explorerAddress } from "@/lib/constants";
-import { ERC20_ABI, PLATFORM_FEE_BPS, bps, moduleDef, quoteSymbol, type BuilderCoin } from "@/lib/v4builder";
+import { ERC20_ABI, PLATFORM_FEE_BPS, bps, moduleDef, quoteSymbol, type BuilderCoin, type BuilderConfig } from "@/lib/v4builder";
 import { ACTIONABLE } from "@/lib/v4builder-actions";
 import { Avatar, Line, Marks, ago, num, q, shortAddr } from "./bits";
 
@@ -15,7 +15,7 @@ function Copy({ text }: { text: string }) {
   return <button type="button" className="vb-copy mono" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setOk(true); setTimeout(() => setOk(false), 1200); }).catch(() => {}); }}>{ok ? "copied" : "copy"}</button>;
 }
 
-export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
+export function CoinView({ coin, mock, config }: { coin: BuilderCoin; mock: boolean; config: BuilderConfig | null }) {
   const w = useWallet();
   const qs = quoteSymbol(coin.quote);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -65,7 +65,7 @@ export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
           setEst({ out, min: (out * BigInt(100 - slip)) / 100n });
           return;
         }
-        const r = await quoteTrade(ref, side, amt, slip);
+        const r = await quoteTrade(ref, side, amt, slip, config ?? undefined);
         setEst({ out: r.out, min: r.minOut });
       } catch (e) { setEstErr(reason(e)); }
     }, 350);
@@ -78,9 +78,10 @@ export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
     if (w.kind === "demo") { setMsg({ ok: false, text: "The demo wallet can look around but can't trade. Connect a browser wallet." }); return; }
     setMsg(null);
     if (mock) { setBusy("chain"); await new Promise((r) => setTimeout(r, 900)); setBusy(null); setMsg({ ok: true, text: side === "buy" ? "Bought (sample data)." : "Sold (sample data)." }); setAmount(""); return; }
+    if (!config?.ready || !est) return;
     const { trade, units, reason } = await import("@/lib/v4builder-actions");
     try {
-      const hash = await trade(w.address as Address, ref, side, units(amount), slip, setBusy);
+      const hash = await trade(config, w.address as Address, ref, side, units(amount), slip, est.min, setBusy);
       setMsg({ ok: true, text: side === "buy" ? `Bought $${coin.symbol}.` : `Sold $${coin.symbol}.`, hash });
       setAmount(""); setTick((n) => n + 1);
     } catch (e) { setMsg({ ok: false, text: reason(e) }); } finally { setBusy(null); }
@@ -91,10 +92,11 @@ export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
     if (w.kind === "demo") { setMsg({ ok: false, text: "Connect a browser wallet first." }); return; }
     setMsg(null);
     if (mock) { setBusy(`a${kind}`); await new Promise((r) => setTimeout(r, 800)); setBusy(null); setMsg({ ok: true, text: "Done (sample data)." }); return; }
+    if (!config?.ready) return;
     const a = await import("@/lib/v4builder-actions");
     try {
       setBusy(`a${kind}`);
-      const hash = kind === "claim" ? await a.claimCreator(w.address as Address, ref, () => {}) : await a.moduleAction(w.address as Address, ref, kind, coin.modules[kind], () => {});
+      const hash = kind === "claim" ? await a.claimCreator(config, w.address as Address, ref, () => {}) : await a.moduleAction(config, w.address as Address, ref, kind, coin.modules[kind], () => {});
       setMsg({ ok: true, text: kind === "claim" ? "Fees claimed to your wallet." : "Done.", hash }); setTick((n) => n + 1);
     } catch (e) { setMsg({ ok: false, text: a.reason(e) }); } finally { setBusy(null); }
   }
@@ -118,7 +120,7 @@ export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
             <i className={`vb-q vb-q-${qs === "ETH" ? "e" : "t"}`}>{qs === "ETH" ? "ETH pair" : "$TRENCHERS pair"}</i>
             <span>launched {ago(coin.launchedAt)}</span>
             <span>by <a href={explorerAddress(coin.creator)} target="_blank" rel="noreferrer">{shortAddr(coin.creator)}</a>{isCreator && " (you)"}</span>
-            {coin.website && <a href={coin.website} target="_blank" rel="noreferrer nofollow">website ↗</a>}
+            {/^https:\/\//.test(coin.website) && <a href={coin.website} target="_blank" rel="noreferrer nofollow ugc">{(() => { try { return new URL(coin.website).hostname.replace(/^www\./, ""); } catch { return "website"; } })()} ↗</a>}
           </p>
           {coin.description && <p className="vb-cv-desc">{coin.description}</p>}
         </div>
@@ -156,7 +158,7 @@ export function CoinView({ coin, mock }: { coin: BuilderCoin; mock: boolean }) {
             <div className="vb-slip"><span>slippage</span><span>{SLIPS.map((s) => <button key={s} type="button" className={slip === s ? "on" : ""} onClick={() => setSlip(s)}>{s}%</button>)}</span></div>
           </div>
           {estErr && <p className="vb-err">{estErr}</p>}
-          <button type="button" className={`vb-btn vb-btn-wide${side === "sell" ? " vb-btn-sell" : ""}`} disabled={!!busy || (!!w.address && (!amount || !(Number(amount) > 0)))} onClick={go}>{label}</button>
+          <button type="button" className={`vb-btn vb-btn-wide${side === "sell" ? " vb-btn-sell" : ""}`} disabled={!!busy || (!!w.address && (!amount || !(Number(amount) > 0) || (!mock && !est)))} onClick={go}>{label}</button>
           {msg && <p className={msg.ok ? "vb-ok" : "vb-err"}>{msg.text}{msg.hash && EXPLORER && <> <a href={`${EXPLORER}/tx/${msg.hash}`} target="_blank" rel="noreferrer">View ↗</a></>}</p>}
           <p className="vb-fine">{qs === "ETH" ? "ETH is wrapped and swapped in one transaction." : "Routed ETH → $TRENCHERS → this coin in one transaction."} {side === "sell" && "The first sell asks for two approvals."}</p>
         </section>
