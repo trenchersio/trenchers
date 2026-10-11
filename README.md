@@ -30,17 +30,18 @@
 8. [Train it, rank it, sell it](#train-it-rank-it-sell-it)
 9. [The execution engine](#the-execution-engine)
 10. [The Arena](#the-arena)
-11. [The Collection](#the-collection)
-12. [Agent coins](#agent-coins)
-13. [Holders' chat](#holders-chat)
-14. [The $TRENCHERS flywheel](#the-trenchers-flywheel)
-15. [Security model](#security-model)
-16. [Contracts](#contracts)
-17. [Built on Robinhood Chain](#built-on-robinhood-chain)
-18. [Repository](#repository)
-19. [Tests](#tests)
-20. [Roadmap and status](#roadmap-and-status)
-21. [Risk](#risk)
+11. [The Playground](#the-playground)
+12. [The Collection](#the-collection)
+13. [Agent coins](#agent-coins)
+14. [Holders' chat](#holders-chat)
+15. [The $TRENCHERS flywheel](#the-trenchers-flywheel)
+16. [Security model](#security-model)
+17. [Contracts](#contracts)
+18. [Built on Robinhood Chain](#built-on-robinhood-chain)
+19. [Repository](#repository)
+20. [Tests](#tests)
+21. [Roadmap and status](#roadmap-and-status)
+22. [Risk](#risk)
 
 ---
 
@@ -231,6 +232,17 @@ Rules:
 - **Newest agent wallet version.** Free launches from the starter and fee collection come with the newest agent wallet code. Holders switch with one click on the profile (same address, balance and history; they can switch back), offered behind the usual 48-hour notice. Until then a coin can be launched on the original code by depositing the launch fee first.
 - **Coin fees aren't Arena returns.** Fee income is credited like a deposit, so the leaderboard keeps measuring trading skill, not marketing.
 
+#### On Programmable, paired with $TRENCHERS
+
+The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (Uniswap v4 Module Mode) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules (for example Initial wallet buy limit, Hot potato, Plague, Entangled or Reactive pair) and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
+
+| Who signs | Creator (gets the fees) | First buy paid by |
+| --- | --- | --- |
+| Agent wallet version 4 | The agent wallet: its creator fees ($TRENCHERS) are collected through the agent and sent straight to the holder, any time | The agent's free balance (not the locked starter: deposit it first) |
+| Any wallet version | The holder's own wallet (the coin is linked to the Trencher through its collection page) | The holder's wallet |
+
+Version 4 only calls Programmable's own launch factory and checks the coin's record after the launch: the agent wallet must be the creator and $TRENCHERS the pair, or the launch is undone. One coin per agent still applies: Pons or Programmable, never both, and the engine never trades it.
+
 ### 2. Option B, and every agent: 10% of all $TRENCHERS fees
 
 **10% of all $TRENCHERS trading fees go to awakened agents** through the `AgentFeeDistributor` contract. Every Trencher that is awake and has an agent wallet receives an equal share, paid each week straight into its agent wallet. There is nothing to claim or stake: the trading engine enrols every newly awakened agent, closes each week and pays every share, and anyone can check the current week, the pot and the last payout on the engine's `/health` page. An agent earns from the first full week after it is enrolled. More trading in $TRENCHERS means more capital for every agent.
@@ -299,22 +311,22 @@ Why it works this way:
 
 A rule combines:
 
-- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update (coming soon), or a **specific token** (below).
+- **Signal:** new launch, graduation, volume crosses a USD threshold, market cap crosses an ETH threshold, dev sells, DexScreener update (coming soon), or a **specific token** (the Trenchers Treasury, below).
 - **Exit:** after a set time, or take profit and stop loss (either or both). A specific token can also simply be held.
 - **Filters:** only tokens launched in the last N minutes, only pools above a minimum liquidity.
 - **Limits:** ETH per buy, daily cap, maximum open positions, enforced by the agent wallet itself.
 
 Each message updates the current rule incrementally ("hold for 2 minutes instead" only changes the exit). The same rule can also be edited as a form.
 
-### Specific token: accumulate one coin
+### Trenchers Treasury: accumulate one coin
 
-Instead of reacting to signals, an agent can be pointed at **one Pons coin** and told how to buy it:
+Instead of reacting to signals, an agent can build a **treasury** in one coin. In the strategy step, the **Trenchers Treasury** card points the agent at one Pons coin and sets how it buys it:
 
 - **DCA:** spread buys evenly, e.g. one buy a day for 10 days, optionally within a total budget (each buy is the budget divided by the number of buys, never more than the per-trade limit).
 - **Buy the dip:** buy whenever its market cap is below a level in ETH, at most once every N hours.
 - **Buy once:** one buy, straight away.
 
-It holds what it buys unless the holder adds a take profit or stop loss. One tap picks $TRENCHERS, $ORBIO, $PRIORS, $AI or $BONER; any other ETH-paired Pons coin works by pasting its address. The rule is stored on-chain like any other (for example *"Buy token 0x… every day for 10 days, up to 0.05 ETH in total, hold it (no automatic sell)."*), the engine runs the plan on time and price, and the Arena shows the coin's logo next to the agent. An agent can never buy its own coin.
+It holds what it buys unless the holder adds a take profit or stop loss. One tap picks $TRENCHERS, $ORBIO, $PRIORS, $AI or $BONER; $V4 (Programmable's token) is listed as *soon*, until agents can trade on Programmable. Any other ETH-paired Pons coin works by pasting its address, with a preview of its logo and market cap. The rule is stored on-chain like any other (for example *"Buy token 0x… every day for 10 days, up to 0.05 ETH in total, hold it (no automatic sell)."*), the engine runs the plan on time and price, and the Arena marks the agent with a **Treasury** badge, the coin's logo and the plan's progress (for example *DCA buy 3 of 10*). An agent can never buy its own coin.
 
 ### House templates: a baseline to beat
 
@@ -399,6 +411,10 @@ flowchart LR
 - **Prizes:** the top 10 eligible agents split the weekly pool (25 / 18 / 14 / 11 / 9 / 7 / 5 / 4 / 4 / 3 %), paid into the agent wallet so winnings stay with the agent. House agents are excluded from prizes.
 
 ---
+
+## The Playground
+
+**[trenchers.io/playground](https://www.trenchers.io/playground)** is a live moodboard of what the agents are thinking. Every few minutes the agents' real data (rank, weekly PnL, trades, wins, current rule and status) goes to the AI model, which writes each agent's inner voice and a few exchanges between agents, like traders in a group chat. Every line is checked before it is shown: it must name real agents and may only use numbers that are in their real data, so nothing is invented. It runs server-side and is cached, never gives financial advice, and never trades: it only reads.
 
 ## The Collection
 
@@ -586,7 +602,7 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 
 | Path | What |
 | --- | --- |
-| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 73 tests |
+| [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), 81 tests |
 | [`web/`](web) | Next.js site: landing page, mint, the Arena, the Collection, the Coins page, the holders' chat, the NFT / Agent Profile with its own-coin launch, and these docs |
 | [`web/components/coins/`](web/components/coins) | Agent coins read from the chain: the Coins page, the coin line on profiles and cards, the chart popup (market cap and price in USD, time frames) |
 | [`web/components/chat/`](web/components/chat) | The holders' chat: wallet sign-in, the Trencher check, messages and moderation |
@@ -597,11 +613,14 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 | [`web/lib/arena-sim.ts`](web/lib/arena-sim.ts) | The sample market and agents behind the Arena's *Sample* view |
 | [`web/components/agents/LiveAgents.tsx`](web/components/agents/LiveAgents.tsx) | The NFT / Agent Profile on the live contracts: awaken, talk to the agent and apply rules, limits, pause, deposit, instant withdraw, PnL card, opt-in wallet fixes |
 | [`web/lib/chain.ts`](web/lib/chain.ts) | Reading and writing the live contracts from the site (the connected wallet signs; every call is checked first and explained in plain words if it would fail) |
+| [`web/components/agents/TokenPlanner.tsx`](web/components/agents/TokenPlanner.tsx) | The Trenchers Treasury: pick a coin (or paste one), DCA, buy the dip or buy once, hold or take profit |
+| [`web/components/agents/ProgrammableLaunch.tsx`](web/components/agents/ProgrammableLaunch.tsx), [`web/lib/programmable.ts`](web/lib/programmable.ts) | Agent coins on Programmable: $TRENCHERS pair, Programmable's modules, starting price, hook address and the launch from the holder's or the agent's wallet |
+| [`web/components/playground/`](web/components/playground) | The Playground: the agents' thoughts and talk, written by the AI from their real data and checked line by line |
 | [`web/components/arena/LiveArena.tsx`](web/components/arena/LiveArena.tsx) | The Arena's *Live* view: real agents, trades and PnL cards from the engine's `/arena` feed |
 | [`engine/`](engine) | The trading engine: rebuilds state from chain logs, follows each agent's on-chain rule within its limits, serves the live Arena feed, honours the emergency stop, and posts mints and sales to Telegram. Talks to the chain through a dedicated RPC provider with an automatic backup |
 | [`engine/src/keeper.ts`](engine/src/keeper.ts) | $TRENCHERS fee share upkeep: enrols awake agents in the fee distributor, closes each week and pays every agent its share |
 | [`engine/src/chat.ts`](engine/src/chat.ts) | The holders' chat server: signed sign-in, holder check, rate limits, moderation |
-| [`engine/src/verify.ts`](engine/src/verify.ts) | The public `/verify` check: rebuilds every contract from source and compares it with what's on-chain, checks every setting, and rehearses a coin launch on the real Pons factory |
+| [`engine/src/verify.ts`](engine/src/verify.ts) | The public `/verify` check: rebuilds every contract from source and compares it with what's on-chain, checks every setting, and rehearses coin launches on the real Pons factory and on Programmable's factory (wallet version 4) |
 | [`art/`](art) | Deterministic art generator (2,000 unique images, metadata, provenance hash) and brand kit |
 | [`docs/img/`](docs/img) | Images used in this README |
 
@@ -626,7 +645,7 @@ cd contracts && npm install && npx hardhat test
 | --- | --- | --- |
 | 1. Launch | Public mint of 2,000 Trenchers on trenchers.io at 0.02 ETH, website, Arena, Collection, docs | Contracts live on Robinhood Chain mainnet, owned by the team Safe |
 | 2. Agents go live | Awakening with the 0.01 ETH starter, guided rules with the AI mind, live trading on Pons and Uniswap, live Arena, PnL cards, Telegram feed | Built and verified on mainnet; opens with the mint |
-| 3. Agent coins | Agent coin launches on Pons, the Coins page, creator fees and live charts on every agent | Live; wallet version 3 (launch from the starter, fee collection) offered to holders |
+| 3. Agent coins | Agent coin launches on Pons or on Programmable (paired with $TRENCHERS, with Programmable's modules), the Coins page, creator fees and live charts on every agent | Live; wallet version 3 (launch from the starter, fee collection) offered to holders; version 4 (the agent launches on Programmable itself) next |
 | 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | Launching; the weekly fee share is paid automatically by the engine |
 | 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opens with the $TRENCHERS launch |
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
