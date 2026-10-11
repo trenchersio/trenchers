@@ -9,8 +9,10 @@ import {
 } from "viem";
 import { robinhood } from "viem/chains";
 import artifacts from "@/lib/mainnet/artifacts.json";
+import v4art from "@/lib/v4builder/artifacts.json";
 import { MAINNET_LAUNCH as L, MAINNET_ROLES as R } from "@/lib/mainnet/roles";
 import { walletProvider } from "@/lib/chain";
+import { keccak256 } from "viem";
 import { useWallet } from "@/lib/wallet";
 
 /**
@@ -29,6 +31,19 @@ const EXPLORER = "https://robin.etherscan.io";
 const STORE = "trenchers-mainnet-launch";
 /** The earlier coin launcher (Trenchers paid the fee; Pons recorded it as deployer). Superseded by agent wallet version 2. */
 const OLD_COIN_LAUNCHER = "0x244400ad17266e276b61c186f79bb0074b91ddf2" as Address;
+/** Robinhood Chain's official Uniswap v4 contracts, as pinned in v4builder/src/TrenchersInfraV1.sol. */
+const V4 = {
+  manager: "0x8366a39CC670B4001A1121B8F6A443A643e40951", managerHash: "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626",
+  positions: "0x58daec3116aae6D93017bAAea7749052E8a04fA7", positionsHash: "0xc873e135dc9aaec88489cfbad146b4cb49d6a32e0d80326377784b7ba17670b2",
+  router: "0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99", routerHash: "0xbe8e8191bb42d843c2e948a5a55772eaab864ce01e54dcd47c9d089170b302d5",
+  permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3", permit2Hash: "0x5208783f52488f7d3493e5e38311ab707c1d75457fe472a19b0b4d57d66a7fca",
+} as const;
+const V4_MODULES: [string, string][] = [
+  ["buyCooldown", "BuyCooldownFactoryV1"], ["buyWindow", "BuyWindowFactoryV1"], ["priceMoveGuard", "PriceMoveGuardFactoryV1"], ["growingBuyLimit", "GrowingBuyLimitFactoryV1"],
+  ["launchWalletCap", "LaunchWalletCapFactoryV1"], ["buybackBurn", "BuybackBurnFactoryV1"], ["dipBuyback", "DipBuybackFactoryV1"], ["lpRewards", "LPRewardsFactoryV1"],
+  ["fullRangeLp", "FullRangeLPFactoryV1"], ["buyerRewards", "BuyerRewardsFactoryV1"], ["nthBuyPot", "NthBuyPotFactoryV1"], ["kingOfTheHill", "KingOfTheHillFactoryV1"],
+  ["hotPotato", "HotPotatoFactoryV1"], ["plague", "PlagueFactoryV1"], ["reactivePair", "ReactivePairFactoryV1"], ["entangled", "EntangledFactoryV1"],
+];
 const SAFE_ABI = parseAbi(["function getThreshold() view returns (uint256)", "function getOwners() view returns (address[])"]);
 const OWNER_ABI = parseAbi(["function owner() view returns (address)"]);
 
@@ -69,6 +84,11 @@ export function MainnetLaunch() {
   const [infErr, setInfErr] = useState<string | null>(null);
   useEffect(() => { try { const v = localStorage.getItem("trenchers:inference"); if (v) setInf(JSON.parse(v)); } catch { /* */ } }, []);
   const saveInf = (v: typeof inf) => { setInf(v); try { localStorage.setItem("trenchers:inference", JSON.stringify(v)); } catch { /* */ } };
+  // Trenchers V4 Builder: hook deployer, launch factory and the 16 module factories (no owner anywhere).
+  const [vb, setVb] = useState<{ hookDeployer?: Address; factory?: Address; block?: string; modules?: Record<string, Address> }>({});
+  const [vbErr, setVbErr] = useState<string | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem("trenchers:v4builder"); if (v) setVb(JSON.parse(v)); } catch { /* */ } }, []);
+  const saveVb = (v: typeof vb) => { setVb(v); try { localStorage.setItem("trenchers:v4builder", JSON.stringify(v)); } catch { /* */ } };
   const [oldBal, setOldBal] = useState<bigint | null>(null);
   useEffect(() => {
     try { const v = localStorage.getItem("trenchers:walletV3b"); if (v) setWalletV2(v as Address); } catch { /* */ }
@@ -420,6 +440,63 @@ export function MainnetLaunch() {
           <pre className="mono launch-env">{[`ICM_DESK=${inf.desk}`, `ICM_ROUTER=${inf.router}`, `ICM_OTC=${inf.otc}`, `ICM_START_BLOCK=${inf.block}`, "ICM_FILE=/data/icm.log", "ICM_TOKENS_PER_USD=<whole $TRENCHERS per $1 of credit>", "ICM_MARGIN_BPS=<your margin in basis points, kept private>", "OPENROUTER_API_KEY=<your OpenRouter key>", "ICM_ADMIN_TOKEN=<a long random password>"].join("\n")}</pre>
           <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText([`ICM_DESK=${inf.desk}`, `ICM_ROUTER=${inf.router}`, `ICM_OTC=${inf.otc}`, `ICM_START_BLOCK=${inf.block}`, "ICM_FILE=/data/icm.log"].join("\n"))}>Copy the first five</button>
         </>)}
+      </section>
+      <section className="tn-card">
+        <h2>9 · Trenchers V4 Builder</h2>
+        <p>The launch system behind <span className="mono">/builder</span>: a <b>hook deployer</b>, the <b>launch factory</b> (pinned to Robinhood Chain&apos;s official Uniswap v4 contracts and WETH, checked by code hash) and <b>16 module factories</b>. None of them has an owner, so there is nothing to hand to the Safe. Any wallet can deploy them; the Deployer wallet is fine. The 0.3% fee on every trade is fixed in the code to the Trenchers buyback wallet.</p>
+        <ol className="launch-safe">
+          <li><b>1. Hook deployer</b>
+            {vb.hookDeployer ? <span className="mono"><a href={`${EXPLORER}/address/${vb.hookDeployer}`} target="_blank" rel="noreferrer">{vb.hookDeployer}</a></span>
+              : <TextButton onClick={async () => {
+                  setBusy(true); setVbErr(null);
+                  try {
+                    const block = (await pub().getBlockNumber()).toString();
+                    const r = await sendTx("V4 Builder hook deployer", (w, from) => w.deployContract({ abi: v4art.FoundationHookDeployerV2.abi as Abi, bytecode: v4art.FoundationHookDeployerV2.bytecode as `0x${string}`, account: from, chain }));
+                    saveVb({ ...vb, block, hookDeployer: r.contractAddress! });
+                  } catch (e) { setVbErr(errText(e)); }
+                  setBusy(false);
+                }} disabled={busy || !account || !chainOk}>Deploy hook deployer</TextButton>}
+          </li>
+          <li><b>2. Launch factory</b>
+            {vb.factory ? <span className="mono"><a href={`${EXPLORER}/address/${vb.factory}`} target="_blank" rel="noreferrer">{vb.factory}</a></span>
+              : <TextButton onClick={async () => {
+                  setBusy(true); setVbErr(null);
+                  try {
+                    const code = await pub().getCode({ address: vb.hookDeployer! });
+                    if (!code || code === "0x") throw new Error("The hook deployer isn't on-chain yet. Wait a few seconds and try again.");
+                    const hashes = [V4.managerHash, V4.positionsHash, V4.routerHash, V4.permit2Hash, keccak256(code)];
+                    const r = await sendTx("V4 Builder launch factory", (w, from) => w.deployContract({ abi: v4art.FoundationFactoryV3Native.abi as Abi, bytecode: v4art.FoundationFactoryV3Native.bytecode as `0x${string}`, args: [V4.manager, V4.positions, V4.router, V4.permit2, vb.hookDeployer, hashes], account: from, chain }));
+                    saveVb({ ...vb, factory: r.contractAddress! });
+                  } catch (e) { setVbErr(errText(e)); }
+                  setBusy(false);
+                }} disabled={busy || !account || !chainOk || !vb.hookDeployer}>Deploy launch factory</TextButton>}
+          </li>
+          <li><b>3. Module factories</b> <span className="mono">{Object.keys(vb.modules ?? {}).length}/{V4_MODULES.length}</span>
+            {Object.keys(vb.modules ?? {}).length < V4_MODULES.length && <TextButton onClick={async () => {
+                setBusy(true); setVbErr(null);
+                let cur = { ...vb, modules: { ...(vb.modules ?? {}) } };
+                try {
+                  for (const [key, name] of V4_MODULES) {
+                    if (cur.modules[key]) continue;
+                    const art = v4art[name as keyof typeof v4art] as { abi: unknown; bytecode: string };
+                    const r = await sendTx(`Module factory: ${key}`, (w, from) => w.deployContract({ abi: art.abi as Abi, bytecode: art.bytecode as `0x${string}`, account: from, chain }));
+                    cur = { ...cur, modules: { ...cur.modules, [key]: r.contractAddress! } };
+                    saveVb(cur);
+                  }
+                } catch (e) { setVbErr(errText(e)); }
+                setBusy(false);
+              }} disabled={busy || !account || !chainOk || !vb.factory}>{Object.keys(vb.modules ?? {}).length ? "Deploy the rest" : "Deploy all 16 (one confirmation each)"}</TextButton>}
+          </li>
+        </ol>
+        {vbErr && <p className="notice">{vbErr}</p>}
+        {vb.factory && vb.hookDeployer && Object.keys(vb.modules ?? {}).length === V4_MODULES.length && (() => {
+          const env = [`V4_FACTORY=${vb.factory}`, `V4_HOOK_DEPLOYER=${vb.hookDeployer}`, `V4_MODULES=${JSON.stringify(vb.modules)}`, `V4_START_BLOCK=${vb.block}`].join("\n");
+          return (<>
+            <p><b>Then</b> add these variables to the <b>Mainnet</b> service on Railway (Variables tab) and redeploy. The builder page opens for launches as soon as the engine reports them.</p>
+            <pre className="mono launch-env">{env}</pre>
+            <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(env)}>Copy all four</button>
+          </>);
+        })()}
       </section>
     </div>
   );

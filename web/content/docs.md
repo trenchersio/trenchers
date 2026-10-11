@@ -432,11 +432,11 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 ## Trenchers Inference Markets
 
-Trenchers has two halves. **Trenchers AI Agents** is the collection of 2,000 NFT trading agents described above.
+Trenchers has three parts. **Trenchers AI Agents** is the collection of 2,000 NFT trading agents described above.
 **Trenchers Inference Markets** is an inference desk: every frontier model family (Claude, GPT, Gemini, Grok,
 DeepSeek, Llama, Qwen, Kimi and more) through **one endpoint and one API key**, paid in **$TRENCHERS**. Every
-$TRENCHERS spent on it is **burned**. The site opens on a choice between the two, and a strip above every page
-switches between them.
+$TRENCHERS spent on it is **burned**. The third, the **Trenchers V4 Builder**, is described in the next section.
+The site opens on a choice between the three, and a strip above every page switches between them.
 
 **Three ways to pay.**
 
@@ -480,6 +480,56 @@ can return an expired order's escrow to its maker. Agent coins are marked as ver
 
 Credit is held by the desk's ledger, not by a contract, so only buy what you plan to use. The contracts are small,
 open source and reviewed before launch.
+
+## Trenchers V4 Builder
+
+The **V4 Builder** launches coins on Robinhood Chain that each run their own **Uniswap v4 hook**: a small contract
+the pool calls on every trade, carrying the rules the launcher picked. It is our own deployment of an open launch
+system, not an integration with someone else's: the contracts are adapted from Programmable's open-source Foundation
+system (MIT licence), pinned to Robinhood Chain's official Uniswap v4 contracts and deployed by Trenchers. The page
+is at [trenchers.io/builder](https://www.trenchers.io/builder).
+
+**One transaction.** Pressing launch creates, in a single transaction:
+
+1. the coin: a standard ERC-20 with a fixed supply of 1,000,000,000, no mint function and no owner;
+2. its hook, with the chosen modules and fees fixed in its constructor (no owner, no admin, nothing to change later);
+3. a v4 pool at the chosen starting value, holding the whole supply in a position owned by the dead address, so the
+   liquidity is locked forever;
+4. the creator's first buy, if any, before anyone else can trade.
+
+**Pairs.** A coin trades against **ETH** (WETH) or against **$TRENCHERS**. With a $TRENCHERS pair every buy of the
+coin is first a buy of $TRENCHERS, routed through $TRENCHERS's own pool; traders still pay and receive ETH.
+
+**Fees.** Every trade pays the creator's fee (0 to 10%, buys and sells set separately, in 1% steps) and a fixed
+**0.3% Trenchers fee**, both taken in the pair token. The 0.3% is written into the contracts as going to the
+Trenchers buyback wallet, which buys and burns $TRENCHERS; anyone can sweep it there. Creator fees are claimable by
+the creator at any time from the coin's page.
+
+**Modules** (up to eight per coin):
+
+| Group | Modules | What they do |
+|---|---|---|
+| Trading rules | Buy cooldown, Buy window, Price move guard, Growing buy limit, Launch wallet cap | Checked on every swap; a trade that breaks a rule fails |
+| Fee engines | Buyback and burn, Dip buyback, LP rewards, Full-range LP | Run on a share of the creator fee chosen at launch; anyone can trigger them when ready |
+| Games and rewards | Buyer rewards, Nth-buy pot, King of the hill, Hot potato, Plague | Cashback, pots and crowns paid from a share of the creator fee, or rules that turn trading into a game |
+| Linked pools | Reactive pair, Entangled | Tie the coin to another coin launched here with the same pair |
+
+**Everything happens in the browser.** Module code hashes are read from the chain by running each module factory
+inside a single read-only call, the coin's address is predicted, the hook address is mined so that Uniswap v4 sees
+the right permission bits, and the whole launch is dry-run before the wallet opens. Trades go through the official
+Universal Router (ETH in, ETH out; sells use Permit2). The engine indexes every launch and swap for the explore page,
+charts and stats; the chain is the source of truth.
+
+| Part | Where |
+|---|---|
+| The contracts, tests and deploy script | [`v4builder/`](https://github.com/trenchersio/trenchers/tree/main/v4builder): Foundry project, `forge test` against the real Universal Router |
+| The page | [`web/app/builder`](https://github.com/trenchersio/trenchers/tree/main/web/app/builder), [`web/components/builder`](https://github.com/trenchersio/trenchers/tree/main/web/components/builder) |
+| Launch, trade and claim logic | [`web/lib/v4builder.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/v4builder.ts), [`web/lib/v4builder-actions.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/v4builder-actions.ts) |
+| The index | [`engine/src/builder.ts`](https://github.com/trenchersio/trenchers/blob/main/engine/src/builder.ts) |
+| End-to-end test | [`web/scripts/builder-e2e.mts`](https://github.com/trenchersio/trenchers/blob/main/web/scripts/builder-e2e.mts): the site's own code against a local chain with Uniswap v4 |
+
+The launch contracts were reviewed before launch. Coins launched here are created by their launchers, not by
+Trenchers: anyone can launch anything, so check what you buy.
 
 ## Security model
 
@@ -589,6 +639,7 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 | Path | What |
 | --- | --- |
 | [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), `InferenceDesk`, `InferenceRouter` and `TrenchersOTC` (Trenchers Inference Markets: the burn-only desk, ETH in one step, the P2P market), 93 tests |
+| [`v4builder/`](https://github.com/trenchersio/trenchers/tree/main/v4builder) | Foundry project for the Trenchers V4 Builder: the Foundation launch system adapted from Programmable (MIT) for Robinhood Chain (launch factory, per-coin hooks, fee ledger, 16 module factories), the deploy script, and the full test suite run against the real Universal Router and v4 contracts |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site: landing page, mint, the Arena, the Collection, the Coins page, the holders' chat, the NFT / Agent Profile with its own-coin launch, and these docs |
 | [`web/components/coins/`](https://github.com/trenchersio/trenchers/tree/main/web/components/coins) | Agent coins read from the chain: the Coins page, the coin line on profiles and cards, the chart popup (market cap and price in USD, time frames) |
 | [`web/components/chat/`](https://github.com/trenchersio/trenchers/tree/main/web/components/chat) | The holders' chat: wallet sign-in, the Trencher check, messages and moderation |
@@ -622,6 +673,15 @@ recovery of every wei), the trading route against the real Pons V2 and Uniswap v
 cd contracts && npm install && npx hardhat test
 ```
 
+The V4 Builder has its own Foundry suite (every module, the fee split, locked liquidity, the exact Universal Router
+commands the site sends) and an end-to-end test that runs the site's launch, trade and claim code against a local
+chain with Uniswap v4 and reads it back through the engine's index:
+
+```bash
+cd v4builder && ./fetch-deps.sh && forge test
+cd web && npx tsx scripts/builder-e2e.mts
+```
+
 
 ## Roadmap and status
 
@@ -634,6 +694,7 @@ cd contracts && npm install && npx hardhat test
 | 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opens with the $TRENCHERS launch |
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
 | 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P market for $TRENCHERS and agent coins | Built and tested; contracts deploying |
+| 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Built and tested end to end; contracts deploying |
 
 
 ## Risk

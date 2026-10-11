@@ -49,7 +49,7 @@ async function send(w: typeof wal, to: Address, data: Hex, value = 0n) {
   return r;
 }
 
-const anvil = spawn("/root/.foundry/bin/anvil", ["--port", String(PORT), "--code-size-limit", "60000", "--silent", "--gas-limit", "60000000"], { stdio: "ignore" });
+const anvil = spawn("/root/.foundry/bin/anvil", ["--port", String(PORT), "--silent", "--gas-limit", "60000000"], { stdio: "ignore" });
 const stop = () => { try { anvil.kill(); } catch {} };
 process.on("exit", stop);
 
