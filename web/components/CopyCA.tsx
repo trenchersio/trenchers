@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { TRENCHERS_TOKEN } from "@/lib/constants";
+import { TRENCHERS_PONS, TRENCHERS_TOKEN } from "@/lib/constants";
 
-/** "$TRENCHERS" button: copies the contract address and shows a short "CA copied!" note. */
+/** "$TRENCHERS" link: opens $TRENCHERS on Pons and copies the contract address (with a short "CA copied!" note). */
 export function CopyCA({ className = "", label = "$TRENCHERS" }: { className?: string; label?: string }) {
   const [shown, setShown] = useState(false);
   if (!TRENCHERS_TOKEN) return null;
@@ -16,7 +16,8 @@ export function CopyCA({ className = "", label = "$TRENCHERS" }: { className?: s
   };
   return (
     <>
-      <button type="button" className={`tbtn coin-chart-btn ${className}`} onClick={copy} title={`Copy the $TRENCHERS contract address: ${TRENCHERS_TOKEN}`}>{label}</button>
+      <a className={`tbtn coin-chart-btn ${className}`} href={TRENCHERS_PONS} target="_blank" rel="noreferrer" onClick={() => { copy(); }}
+        title={`$TRENCHERS on Pons (the contract address is copied too): ${TRENCHERS_TOKEN}`}>{label}</a>
       {shown && <div className="ca-toast mono" role="status">CA copied! <span>{TRENCHERS_TOKEN.slice(0, 6)}…{TRENCHERS_TOKEN.slice(-4)}</span></div>}
     </>
   );
