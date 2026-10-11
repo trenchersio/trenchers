@@ -38,19 +38,44 @@ const FAQ = [
   { q: "Is it safe?", a: "Credit is held by the desk, not by a contract, so only buy what you plan to use. The router and P2P contracts are small, open source and reviewed before launch. Nothing here is financial advice." },
 ];
 
+/** Digits on their own tiles, like a departures board: a number you read, not a box with a number in it. */
+function Flaps({ value }: { value: string }) {
+  return <span className="iflap" aria-label={value}>{[...value].map((c, i) => <i key={i} className={/[0-9]/.test(c) ? "" : "sep"}>{c}</i>)}</span>;
+}
+
+/** The furnace: every day's burn as a column of pixels, the total underneath, and three counters beside it. */
 function Live({ stats }: { stats: Stats | null }) {
-  const days = (stats?.burnedByDay ?? []).map((d) => Number(BigInt(d) / 10n ** 18n));
+  const days = (stats?.burnedByDay ?? Array(14).fill("0")).map((d) => Number(BigInt(d) / 10n ** 18n));
   const peak = Math.max(1, ...days);
+  const ROWS = 9;
   return (
-    <section className="ilive" aria-label="The desk, live">
-      <div className="ilive-burn">
-        <span className="ilive-k mono"><span className="ibuy-flame" aria-hidden="true" />$TRENCHERS burned by inference</span>
-        <b className="mono">{stats ? tokens(stats.burnedTokens) : "–"}</b>
-        <div className="ilive-spark" aria-hidden="true">{days.map((d, i) => <i key={i} style={{ height: `${Math.max(6, (d / peak) * 100)}%`, ["--i" as string]: i }} />)}</div>
+    <section className="ifurnace" aria-label="The desk, live">
+      <div className="ifurn-main">
+        <div className="ifurn-read">
+          <span className="ifurn-k mono"><span className="ibuy-flame" aria-hidden="true" />burned by inference</span>
+          <b className="mono">{stats ? tokens(stats.burnedTokens) : "–"}</b>
+          <span className="ifurn-u mono">$TRENCHERS gone for good · last 14 days above</span>
+        </div>
+        <div className="ifurn-grid" aria-hidden="true">
+          {days.map((d, i) => {
+            const lit = Math.max(d > 0 ? 1 : 0, Math.round((d / peak) * ROWS));
+            return (
+              <span key={i} className="ifurn-col" style={{ ["--i" as string]: i }}>
+                {Array.from({ length: ROWS }, (_, r) => {
+                  const on = ROWS - r <= lit;
+                  const top = on && ROWS - r === lit;
+                  return <i key={r} className={top ? "top" : on ? "on" : ""} />;
+                })}
+              </span>
+            );
+          })}
+        </div>
       </div>
-      <div className="ilive-cell"><span className="mono">Calls served</span><b className="mono">{stats ? compact(stats.calls) : "–"}</b></div>
-      <div className="ilive-cell"><span className="mono">Wallets with credit</span><b className="mono">{stats ? compact(stats.accounts) : "–"}</b></div>
-      <div className="ilive-cell"><span className="mono">Models live</span><b className="mono">{stats ? stats.models : "–"}</b></div>
+      <ul className="ifurn-side">
+        <li><span>calls served</span><Flaps value={stats ? compact(stats.calls) : "--"} /></li>
+        <li><span>wallets with credit</span><Flaps value={stats ? compact(stats.accounts) : "--"} /></li>
+        <li><span>models live</span><Flaps value={stats ? String(stats.models) : "--"} /></li>
+      </ul>
     </section>
   );
 }
@@ -80,11 +105,14 @@ export function Inference() {
 
         </div>
         <div className="ihero-more">
-          <ul className="ifigs">
-            <li><b className="mono">{perUsd ? perUsd.toLocaleString("en-US") : "–"}</b><span>$TRENCHERS buys $1.00 of credit</span></li>
-            <li><b className="mono">$0</b><span>setup, subscription or monthly minimum</span></li>
-            <li className="hot"><b className="mono">100%</b><span>of the $TRENCHERS spent is burned</span></li>
-          </ul>
+          <div className="irate" aria-label="The rate">
+            <span className="irate-chip"><b className="mono">{perUsd ? perUsd.toLocaleString("en-US") : "–"}</b> $TRENCHERS</span>
+            <span className="irate-op mono">=</span>
+            <span className="irate-chip cr"><b className="mono">$1.00</b> of credit</span>
+            <span className="irate-op mono">→</span>
+            <span className="irate-chip hot"><span className="ibuy-flame" aria-hidden="true" /><b className="mono">100%</b> burned</span>
+            <span className="irate-note">No setup, no subscription, no monthly minimum.</span>
+          </div>
           <Endpoint endpoint={endpoint} prefix={prefix} />
         </div>
         <div className="ihero-aside">

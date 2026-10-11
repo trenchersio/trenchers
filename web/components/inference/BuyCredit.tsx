@@ -245,6 +245,13 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
             {EXPLORER && <a href={`${EXPLORER}/tx/${sent}`} target="_blank" rel="noreferrer">View transaction ↗</a>}</p>
         )}
 
+        <span className="ibuy-soon" tabIndex={0} aria-describedby="ibuy-soon-tip">
+          <button type="button" className="ibuy-trencher" disabled aria-disabled="true">
+            <img src="brand/mark.svg" alt="" width={14} height={14} />Send inference to a Trencher
+          </button>
+          <span className="ibuy-tip mono" id="ibuy-soon-tip" role="tooltip">Coming Soon</span>
+        </span>
+
         <p className="ibuy-foot">
           {pay === "token" && "Sent straight to the desk. The credit lands on the wallet it came from."}
           {pay === "eth" && "One transaction: ETH buys $TRENCHERS through the pool and it goes straight to the desk. The credit lands on the wallet that signed."}

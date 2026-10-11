@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const copyText = async (t: string) => {
   try { await navigator.clipboard.writeText(t); return true; } catch { return false; }
@@ -16,62 +16,81 @@ export function CopyBtn({ text, label = "Copy" }: { text: string; label?: string
 
 type Lang = "curl" | "python" | "node";
 
-/** The product, in one card: the base URL and the three lines that call it. */
+const ROTATE: [string, string, string][] = [
+  ["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "#E9A27A"],
+  ["openai/gpt-5", "GPT-5", "#7FE3C4"],
+  ["google/gemini-2.5-pro", "Gemini 2.5 Pro", "#7AA8FF"],
+  ["x-ai/grok-4", "Grok 4", "#E8ECE9"],
+  ["deepseek/deepseek-r1", "DeepSeek R1", "#6C8CFF"],
+  ["qwen/qwen3-coder", "Qwen3 Coder", "#B48CFF"],
+  ["moonshotai/kimi-k2", "Kimi K2", "#FF7AB6"],
+];
+
+/**
+ * The product, as a wiring diagram rather than a terminal: three plugs (where, which key, which model) feeding one
+ * desk that fans out to every model family. The code is one click away, copied rather than shown.
+ */
 export function Endpoint({ endpoint, prefix }: { endpoint: string; prefix: string }) {
-  const [lang, setLang] = useState<Lang>("curl");
+  const [i, setI] = useState(0);
+  const [copied, setCopied] = useState<Lang | null>(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setI((n) => (n + 1) % ROTATE.length), 2200);
+    return () => clearInterval(t);
+  }, []);
+  const [slug, name, color] = ROTATE[i];
   const key = `${prefix}_live_…`;
   const code: Record<Lang, string> = {
-    curl: `curl ${endpoint}/chat/completions \\
-  -H "Authorization: Bearer ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model": "anthropic/claude-sonnet-4.5",
-       "messages": [{"role": "user", "content": "gm"}]}'`,
-    python: `from openai import OpenAI
-
-client = OpenAI(base_url="${endpoint}", api_key="${key}")
-reply = client.chat.completions.create(
-    model="google/gemini-2.5-pro",
-    messages=[{"role": "user", "content": "gm"}],
-)`,
-    node: `import OpenAI from "openai";
-
-const client = new OpenAI({ baseURL: "${endpoint}", apiKey: "${key}" });
-const reply = await client.chat.completions.create({
-  model: "x-ai/grok-4",
-  messages: [{ role: "user", content: "gm" }],
-});`,
+    curl: `curl ${endpoint}/chat/completions \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model": "${slug}", "messages": [{"role": "user", "content": "gm"}]}'`,
+    python: `from openai import OpenAI\n\nclient = OpenAI(base_url="${endpoint}", api_key="${key}")\nreply = client.chat.completions.create(model="${slug}", messages=[{"role": "user", "content": "gm"}])`,
+    node: `import OpenAI from "openai";\n\nconst client = new OpenAI({ baseURL: "${endpoint}", apiKey: "${key}" });\nconst reply = await client.chat.completions.create({ model: "${slug}", messages: [{ role: "user", content: "gm" }] });`,
   };
+  const grab = async (l: Lang) => { if (await copyText(code[l])) { setCopied(l); setTimeout(() => setCopied(null), 1400); } };
+
   return (
-    <div className="iend">
-      <div className="ipanel-head">
-        <span className="ipanel-dot" /><span>Endpoint</span>
-        <span className="iend-tabs" role="tablist" aria-label="Example">
-          {(["curl", "python", "node"] as Lang[]).map((l) => (
-            <button key={l} type="button" role="tab" aria-selected={lang === l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l}</button>
+    <div className="iwire">
+      <div className="iwire-plugs">
+        <div className="iplug">
+          <span className="iplug-n mono">01</span>
+          <span className="iplug-k">Point it at</span>
+          <code className="iplug-v">{endpoint}</code>
+          <CopyBtn text={endpoint} />
+        </div>
+        <div className="iplug">
+          <span className="iplug-n mono">02</span>
+          <span className="iplug-k">Sign with</span>
+          <code className="iplug-v">{key}<em>your key</em></code>
+          <a className="icopy iplug-go" href="#account">Get one</a>
+        </div>
+        <div className="iplug iplug-model" style={{ ["--mc" as string]: color }}>
+          <span className="iplug-n mono">03</span>
+          <span className="iplug-k">Ask for</span>
+          <code className="iplug-v" key={slug}><i />{name}<em>{slug}</em></code>
+        </div>
+      </div>
+
+      <div className="iwire-map" aria-hidden="true">
+        <svg viewBox="0 0 220 180" preserveAspectRatio="none">
+          {[12, 38, 64, 90, 116, 142, 168].map((y, k) => (
+            <path key={k} d={`M70 90 C 120 90, 130 ${y}, 200 ${y}`} className={k === i ? "on" : ""} />
           ))}
-        </span>
+          <path d="M0 90 L70 90" className="in" />
+        </svg>
+        <span className="iwire-core"><img src="brand/mark.svg" alt="" width={34} height={34} /></span>
+        <ul className="iwire-fam">
+          {ROTATE.map(([s2, n2, c2], k) => (
+            <li key={s2} className={k === i ? "on" : ""} style={{ ["--mc" as string]: c2 }}>{n2.split(" ")[0]}</li>
+          ))}
+        </ul>
       </div>
-      <div className="iend-url">
-        <span className="iend-method mono">BASE</span>
-        <code>{endpoint}</code>
-        <CopyBtn text={endpoint} />
-      </div>
-      <pre className="iend-code"><code>{highlight(code[lang])}</code></pre>
-      <div className="iend-foot mono">
-        <span>Works with any OpenAI-compatible client</span>
-        <span>Streaming · tools · JSON mode</span>
+
+      <div className="iwire-foot">
+        <span className="mono">Copy a ready request</span>
+        {(["curl", "python", "node"] as Lang[]).map((l) => (
+          <button key={l} type="button" className={`iwire-snip${copied === l ? " ok" : ""}`} onClick={() => grab(l)}>{copied === l ? "Copied" : l}</button>
+        ))}
+        <span className="iwire-compat mono">OpenAI-compatible · streaming</span>
       </div>
     </div>
   );
-}
-
-/** Just enough colour to read: strings, keywords and the key. */
-function highlight(src: string) {
-  const parts = src.split(/("[^"]*"|'[^']*'|\b(?:from|import|const|await|new)\b)/g);
-  return parts.map((p, i) => {
-    if (!p) return null;
-    if (/^["']/.test(p)) return <span key={i} className={p.includes("_live_") ? "hk" : "hs"}>{p}</span>;
-    if (/^(from|import|const|await|new)$/.test(p)) return <span key={i} className="hw">{p}</span>;
-    return <span key={i}>{p}</span>;
-  });
 }
