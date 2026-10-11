@@ -76,6 +76,19 @@ contract LocalUniversalRouter is V4Router {
     receive() external payable { }
 }
 
+struct RouterParametersLocal {
+    address permit2;
+    address weth9;
+    address v2Factory;
+    address v3Factory;
+    bytes32 pairInitCodeHash;
+    bytes32 poolInitCodeHash;
+    address v4PoolManager;
+    address v3NFTPositionManager;
+    address v4PositionManager;
+    address spokePool;
+}
+
 /// @notice What TrenchersInfraV1 reads on a local chain. Immutables, so it survives being etched.
 contract LocalInfraRegistry {
     address public immutable manager;
@@ -108,7 +121,17 @@ abstract contract LocalInfraBase is Test {
                 IPoolManager(MANAGER), IAllowanceTransfer(PERMIT2), 300_000, IPositionDescriptor(address(0)), IWETH9(WETH)
             )
         );
-        ROUTER = address(new LocalUniversalRouter(IPoolManager(MANAGER), IAllowanceTransfer(PERMIT2)));
+        // The real Universal Router (the pinned source, built by fetch-deps.sh), not a stand-in.
+        RouterParametersLocal memory rp = RouterParametersLocal(
+            PERMIT2, WETH, address(0), address(0), bytes32(0), bytes32(0), MANAGER, address(0), POSM, address(0)
+        );
+        bytes memory code = abi.encodePacked(
+            vm.getCode("lib/universal-router/out/UniversalRouter.sol/UniversalRouter.json"), abi.encode(rp)
+        );
+        address ur;
+        assembly ("memory-safe") { ur := create(0, add(code, 32), mload(code)) }
+        require(ur != address(0), "router deploy failed");
+        ROUTER = ur;
         LocalInfraRegistry reg = new LocalInfraRegistry(MANAGER, POSM, ROUTER, PERMIT2, WETH);
         vm.etch(TrenchersInfraV1.LOCAL_REGISTRY, address(reg).code);
     }

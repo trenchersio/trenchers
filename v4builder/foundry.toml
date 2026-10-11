@@ -11,6 +11,7 @@ optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
 auto_detect_remappings = false
+fs_permissions = [{ access = "read", path = "./lib/universal-router/out" }]
 
 [profile.default.fuzz]
 runs = 512
