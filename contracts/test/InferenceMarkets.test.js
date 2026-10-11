@@ -22,9 +22,9 @@ describe("Inference Markets: InferenceRouter", () => {
 
   it("turns ETH into $TRENCHERS at the desk in one transaction and names the buyer", async () => {
     const { alice, desk, token, router } = await setup();
-    const out = await router.connect(alice).buyCredit.staticCall(0, { value: E("0.05") });
+    const out = await router.connect(alice).buyCredit.staticCall(0, ethers.ZeroAddress, { value: E("0.05") });
     expect(out).to.be.gt(0n);
-    await expect(router.connect(alice).buyCredit(out - 1n, { value: E("0.05") }))
+    await expect(router.connect(alice).buyCredit(out - 1n, ethers.ZeroAddress, { value: E("0.05") }))
       .to.emit(router, "CreditBought").withArgs(alice.address, E("0.05"), out);
     expect(await token.balanceOf(desk.address)).to.equal(out);
     expect(await token.balanceOf(await router.getAddress())).to.equal(0n);
@@ -36,16 +36,21 @@ describe("Inference Markets: InferenceRouter", () => {
     const { alice, desk, launch, adapter } = await setup();
     const small = await launch("SMALL", E("0.02"));
     const router = await (await ethers.getContractFactory("InferenceRouter")).deploy(await adapter.getAddress(), await small.getAddress(), desk.address);
-    await expect(router.connect(alice).buyCredit(0, { value: E("0.05") })).to.changeEtherBalance(alice, -E("0.02"));
+    await expect(router.connect(alice).buyCredit(0, ethers.ZeroAddress, { value: E("0.05") })).to.changeEtherBalance(alice, -E("0.02"));
     expect(await small.balanceOf(desk.address)).to.be.gt(0n);
     expect(await ethers.provider.getBalance(await router.getAddress())).to.equal(0n);
   });
 
+  it("credits a named beneficiary when one is given", async () => {
+    const { alice, stranger, router } = await setup();
+    await expect(router.connect(alice).buyCredit(0, stranger.address, { value: E("0.01") })).to.emit(router, "CreditBought").withArgs(stranger.address, E("0.01"), (v) => v > 0n);
+  });
+
   it("reverts below the minimum, on zero ETH, and refuses stray ETH", async () => {
     const { alice, router } = await setup();
-    const out = await router.connect(alice).buyCredit.staticCall(0, { value: E("0.05") });
-    await expect(router.connect(alice).buyCredit(out + 1n, { value: E("0.05") })).to.be.reverted;
-    await expect(router.connect(alice).buyCredit(0)).to.be.revertedWithCustomError(router, "ZeroAmount");
+    const out = await router.connect(alice).buyCredit.staticCall(0, ethers.ZeroAddress, { value: E("0.05") });
+    await expect(router.connect(alice).buyCredit(out + 1n, ethers.ZeroAddress, { value: E("0.05") })).to.be.reverted;
+    await expect(router.connect(alice).buyCredit(0, ethers.ZeroAddress)).to.be.revertedWithCustomError(router, "ZeroAmount");
     await expect(alice.sendTransaction({ to: await router.getAddress(), value: 1n })).to.be.revertedWithCustomError(router, "NotAdapter");
   });
 });

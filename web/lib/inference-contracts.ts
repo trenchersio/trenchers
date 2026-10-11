@@ -3,7 +3,7 @@ import { parseAbi } from "viem";
 /** InferenceRouter: ETH in, $TRENCHERS bought through the Trenchers Pons adapter, delivered to the desk, in one
  *  transaction. The desk credits the buyer named in CreditBought. */
 export const ROUTER_ABI = parseAbi([
-  "function buyCredit(uint256 minTokensOut) payable returns (uint256 tokensOut)",
+  "function buyCredit(uint256 minTokensOut, address beneficiary) payable returns (uint256 tokensOut)",
   "function desk() view returns (address)",
   "event CreditBought(address indexed buyer, uint256 ethIn, uint256 tokensOut)",
 ]);

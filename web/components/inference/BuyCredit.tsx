@@ -94,7 +94,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
           return;
         }
         const { reader } = await import("@/lib/chain");
-        const { result } = await reader().simulateContract({ address: router, abi: ROUTER_ABI, functionName: "buyCredit", args: [0n], value: parseEther(clean(amount)), account: (w.address ?? "0x000000000000000000000000000000000000dEaD") as Address });
+        const { result } = await reader().simulateContract({ address: router, abi: ROUTER_ABI, functionName: "buyCredit", args: [0n, "0x0000000000000000000000000000000000000000"], value: parseEther(clean(amount)), account: (w.address ?? "0x000000000000000000000000000000000000dEaD") as Address });
         if (alive) setQuote(result as bigint);
       } catch { if (alive) setQuote(null); }
       finally { if (alive) setQuoting(false); }
@@ -150,7 +150,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
         hash = await sendCall(from, { address: token!, abi: ERC20_MIN_ABI, functionName: "transfer", args: [desk!, spend!] }, setBusy);
       } else if (pay === "eth") {
         const min = (quote! * (10_000n - SLIPPAGE_BPS)) / 10_000n;
-        hash = await sendCall(from, { address: router!, abi: ROUTER_ABI, functionName: "buyCredit", args: [min], value: spend! }, setBusy);
+        hash = await sendCall(from, { address: router!, abi: ROUTER_ABI, functionName: "buyCredit", args: [min, "0x0000000000000000000000000000000000000000"], value: spend! }, setBusy);
       } else {
         const legs = p2p!.legs;
         hash = await sendCall(from, { address: otc!, abi: OTC_ABI, functionName: "buy", args: [legs.map((l) => BigInt(l.order.id)), legs.map((l) => l.amount), desk!], value: p2p!.eth }, setBusy);

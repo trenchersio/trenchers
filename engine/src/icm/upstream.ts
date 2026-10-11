@@ -95,6 +95,13 @@ export function costToMicroUsd(value: unknown): bigint | null {
   return null;
 }
 
+/** A usage block without the provider's own cost: that is what the house paid, and it is the house's business. */
+export function redactCost(usage: unknown): Record<string, unknown> {
+  const u = { ...obj(usage) };
+  delete u.cost; delete u.cost_details; delete u.is_byok; delete u.upstream_inference_cost;
+  return u;
+}
+
 const asInt = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : 0);
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {});
 
@@ -219,37 +226,54 @@ export class OpenRouterUpstream implements Upstream {
     let finished = false;
     const finish = () => { if (!finished) { finished = true; settle(seen ?? empty); } };
 
-    // Relay every byte unchanged and read a copy for the usage frame. `tee` would buffer one side against the
-    // other and delay the customer's tokens behind our accounting, so this passes through and parses as it goes.
+    // Relay every frame, reading the usage frame as it goes. The provider's own cost is what the house paid, so it
+    // is taken out of the frame before the caller sees it (the caller's cost is on /v1/usage and the account).
+    // Frames are forwarded as soon as they are complete, so tokens are never held behind the accounting.
     const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
     let tail = "";
-    const scan = (chunk: Uint8Array) => {
+    const scan = (chunk: Uint8Array): string => {
       tail += decoder.decode(chunk, { stream: true });
       // SSE frames are separated by a blank line; whatever follows the last one belongs to the next chunk.
       const frames = tail.split("\n\n");
       tail = frames.pop() ?? "";
+      let out = "";
       for (const frame of frames) {
-        for (const line of frame.split("\n")) {
-          if (!line.startsWith("data:")) continue;
+        const lines = frame.split("\n").map((line) => {
+          if (!line.startsWith("data:")) return line;
           const data = line.slice(5).trim();
-          if (!data || data === "[DONE]") continue;
+          if (!data || data === "[DONE]") return line;
           try {
             const parsed = obj(JSON.parse(data));
             // The usage frame is last and authoritative; earlier frames are read only for the generation id.
-            if (parsed.usage) seen = readUsage(parsed);
-            else if (typeof parsed.id === "string") seen = seen ? { ...seen, id: seen.id ?? parsed.id } : { ...empty, id: parsed.id };
+            if (parsed.usage) {
+              seen = readUsage(parsed);
+              return `data: ${JSON.stringify({ ...parsed, usage: redactCost(parsed.usage) })}`;
+            }
+            if (typeof parsed.id === "string") seen = seen ? { ...seen, id: seen.id ?? parsed.id } : { ...empty, id: parsed.id };
           } catch { /* a frame we cannot parse is not a billing event */ }
-        }
+          return line;
+        });
+        out += `${lines.join("\n")}\n\n`;
       }
+      return out;
     };
 
     const reader = res.body.getReader();
     const stream = new ReadableStream<Uint8Array>({
       async pull(controller) {
         try {
-          const { done, value } = await reader.read();
-          if (done) { finish(); controller.close(); return; }
-          if (value) { scan(value); controller.enqueue(value); }
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) {
+              const rest = tail + decoder.decode();
+              tail = "";
+              if (rest) controller.enqueue(encoder.encode(rest));
+              finish(); controller.close(); return;
+            }
+            const text = value ? scan(value) : "";
+            if (text) { controller.enqueue(encoder.encode(text)); return; }
+          }
         } catch (e) {
           finish();
           controller.error(e);

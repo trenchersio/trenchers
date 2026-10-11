@@ -57,6 +57,10 @@ export function inferenceSettings(env: Record<string, string | undefined> = proc
     /** Where the ledger lives. Must be on a persistent volume, or every balance is lost on the next deploy. */
     file: clean(env.ICM_FILE) || null,
     adminToken: clean(env.ICM_ADMIN_TOKEN) || null,
+    /** The site people sign in on; wallets compare it with the page asking for the signature. */
+    signinDomain: clean(env.ICM_SIGNIN_DOMAIN) || "www.trenchers.io",
+    /** Pays the gas for InferenceDesk.burn(). Defaults to the engine's key; a separate one keeps its nonces apart. */
+    burnKey: clean(env.ICM_BURN_KEY) || null,
     publicUrl: (clean(env.ICM_PUBLIC_URL) || "https://mainnet-production-c38a.up.railway.app").replace(/\/$/, ""),
     environment: clean(env.ICM_ENVIRONMENT) === "test" ? "test" as const : "live" as const,
     allowModels: list(env.ICM_ALLOW_MODELS),
@@ -162,24 +166,33 @@ export class DeskPayments implements PaymentSource {
     private readonly range: number,
   ) {}
 
-  private async buyerFor(from: Address, tx: Hex): Promise<string> {
+  /**
+   * The buyer behind a transfer from the router or the P2P contract: the event that contract emitted for this very
+   * transfer, which is the first log from the same contract after the Transfer's own log index (both contracts emit
+   * it straight after moving the tokens, inside a non-reentrant call). Never "any matching event in the
+   * transaction": a bundle can carry several people's purchases, and each must be credited to its own buyer.
+   */
+  private async buyerFor(from: Address, tx: Hex, logIndex: number, amount: bigint): Promise<string> {
     const f = from.toLowerCase();
     const isRouter = this.router && f === this.router.toLowerCase();
     const isOtc = this.otc && f === this.otc.toLowerCase();
     if (!isRouter && !isOtc) return f;
     const r = await this.pub.getTransactionReceipt({ hash: tx });
-    for (const l of r.logs) {
-      if (l.address.toLowerCase() !== f) continue;
+    const next = r.logs.filter((l) => l.address.toLowerCase() === f && Number(l.logIndex) > logIndex).sort((a, b) => Number(a.logIndex) - Number(b.logIndex))[0];
+    if (next) {
       try {
         if (isRouter) {
-          const e = decodeEventLog({ abi: [CREDIT_BOUGHT], data: l.data, topics: l.topics });
-          return (e.args as { buyer: string }).buyer.toLowerCase();
+          const e = decodeEventLog({ abi: [CREDIT_BOUGHT], data: next.data, topics: next.topics });
+          const a = e.args as { buyer: string; tokensOut: bigint };
+          if (a.tokensOut === amount) return a.buyer.toLowerCase();
+        } else {
+          const e = decodeEventLog({ abi: OTC_EVENTS, data: next.data, topics: next.topics });
+          const a = e.args as { taker: string; recipient: string; tokenAmount: bigint };
+          if (e.eventName === "Filled" && a.recipient.toLowerCase() === this.desk.toLowerCase() && a.tokenAmount === amount) return a.taker.toLowerCase();
         }
-        const e = decodeEventLog({ abi: OTC_EVENTS, data: l.data, topics: l.topics });
-        if (e.eventName === "Filled" && (e.args as { recipient: string }).recipient.toLowerCase() === this.desk.toLowerCase()) return (e.args as { taker: string }).taker.toLowerCase();
-      } catch { /* another event */ }
+      } catch { /* not the event that belongs to this transfer */ }
     }
-    // The contract said nothing about a buyer: credit the transaction's signer rather than an address nobody can sign for.
+    // No event belongs to this transfer: credit the transaction's signer rather than a contract nobody can sign for.
     return r.from.toLowerCase();
   }
 
@@ -195,7 +208,7 @@ export class DeskPayments implements PaymentSource {
       const a = l.args as { from: Address; to: Address; value: bigint };
       payments.push({
         ref: `${l.transactionHash}:${l.logIndex}`,
-        from: await this.buyerFor(a.from, l.transactionHash as Hex),
+        from: await this.buyerFor(a.from, l.transactionHash as Hex, Number(l.logIndex), a.value),
         to: a.to.toLowerCase(),
         tokenUnits: a.value,
         at: new Date().toISOString(),
@@ -232,7 +245,9 @@ class OtcIndex {
   constructor(private readonly pub: PublicClient, private readonly otc: Address, start: number, private readonly range: number,
     private readonly desk: string | null, private readonly verify: (token: string) => { verified: boolean; agent: number | null }) { this.cursor = start - 1; }
 
-  private async symbol(t: string) {
+  private async symbol(t: string, verified: boolean) {
+    // Unverified tokens cost an RPC call each, so only the first few hundred are named; the rest read "?".
+    if (!verified && !this.symbols.has(t) && this.symbols.size > 300) return "?";
     if (!this.symbols.has(t)) this.symbols.set(t, String(await this.pub.readContract({ address: t as Address, abi: ERC20, functionName: "symbol" }).catch(() => "?")).slice(0, 16));
     return this.symbols.get(t)!;
   }
@@ -250,10 +265,12 @@ class OtcIndex {
         const a = l.args as Record<string, unknown>;
         if (l.eventName === "Placed") {
           const token = String(a.token).toLowerCase();
+          // Dust orders (under 0.0001 ETH) are not shown: they are free to place and would bury the book.
+          if (BigInt(a.ethAmount as bigint) < 10n ** 14n) continue;
           const v = this.verify(token);
           const expiry = Number(a.expiry);
           this.orders.set(Number(a.id), {
-            id: Number(a.id), side: a.isAsk ? "ask" : "bid", token, symbol: await this.symbol(token), verified: v.verified, agent: v.agent,
+            id: Number(a.id), side: a.isAsk ? "ask" : "bid", token, symbol: await this.symbol(token, v.verified), verified: v.verified, agent: v.agent,
             maker: String(a.maker).toLowerCase(), tokenTotal: String(a.tokenAmount), tokenLeft: String(a.tokenAmount),
             ethTotal: String(a.ethAmount), ethLeft: String(a.ethAmount), createdAt: at, expiresAt: expiry ? new Date(expiry * 1000).toISOString() : null,
             taker: /^0x0{40}$/.test(String(a.taker)) ? null : String(a.taker).toLowerCase(),
@@ -266,9 +283,9 @@ class OtcIndex {
           this.fills.unshift({ id: `${l.transactionHash}:${l.logIndex}`, side: o.side === "ask" ? "buy" : "sell", symbol: o.symbol, token: o.token,
             tokenAmount: String(a.tokenAmount), ethAmount: String(a.ethAmount), at, toDesk: !!this.desk && String(a.recipient).toLowerCase() === this.desk });
           if (this.fills.length > 200) this.fills.length = 200;
+          if (BigInt(o.tokenLeft) === 0n) this.orders.delete(o.id);
         } else if (l.eventName === "Cancelled") {
-          const o = this.orders.get(Number(a.id));
-          if (o) { o.tokenLeft = "0"; o.ethLeft = "0"; }
+          this.orders.delete(Number(a.id));
         }
       }
       this.cursor = to;
@@ -277,8 +294,11 @@ class OtcIndex {
 
   view() {
     const now = Date.now();
+    for (const [id, o] of this.orders) if (o.expiresAt && Date.parse(o.expiresAt) <= now) this.orders.delete(id);
+    // $TRENCHERS and agent coins first, then everything else, at most 400 orders.
+    const open = [...this.orders.values()].filter((o) => BigInt(o.tokenLeft) > 0n);
     return {
-      orders: [...this.orders.values()].filter((o) => BigInt(o.tokenLeft) > 0n && (!o.expiresAt || Date.parse(o.expiresAt) > now)),
+      orders: [...open.filter((o) => o.verified), ...open.filter((o) => !o.verified)].slice(0, 400),
       fills: this.fills.slice(0, 50),
     };
   }
@@ -287,6 +307,9 @@ class OtcIndex {
 // ------------------------------------------------------------------------------------------------ the desk
 
 const SHARED_BURN = /^0x0{39}[01]$|^0x0{36}dead$/i;
+const NONCE_TTL = 5 * 60_000;
+const MAX_NONCES = 20_000;
+const MAX_KEYS = 25;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 export class InferenceDesk {
@@ -300,7 +323,8 @@ export class InferenceDesk {
   readonly fault: string | null;
   readonly problems: string[] = [];
   private readonly surface: (req: IcmRequest) => Promise<IcmResponse>;
-  private readonly nonces = new Map<string, { nonce: string; at: number }>();
+  private readonly nonces = new Map<string, { address: string; message: string; at: number }>();
+  private readonly hits = new Map<string, { n: number; at: number }>();
   private readonly pub: PublicClient | null;
   private readonly wallet: WalletClient | null;
   private readonly otc: OtcIndex | null;
@@ -357,7 +381,8 @@ export class InferenceDesk {
     const chain = defineChain({ id: s.chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [urls(s.rpc)[0] ?? s.rpc] } } });
     this.pub = s.rpc ? createPublicClient({ chain, transport: transport(urls(s.rpc)) }) as PublicClient : null;
     let wallet: WalletClient | null = null;
-    if (s.engineKey && this.pub) { try { const k = (s.engineKey.startsWith("0x") ? s.engineKey : `0x${s.engineKey}`) as Hex; wallet = createWalletClient({ account: privateKeyToAccount(k), chain, transport: transport(urls(s.rpc)) }); } catch { wallet = null; } }
+    const bk = s.burnKey ?? s.engineKey;
+    if (bk && this.pub) { try { const k = (bk.startsWith("0x") ? bk : `0x${bk}`) as Hex; wallet = createWalletClient({ account: privateKeyToAccount(k), chain, transport: transport(urls(s.rpc)) }); } catch { wallet = null; } }
     this.wallet = wallet;
 
     const watchable = !this.fault && s.marginBps >= 0 && (s.file || store) && s.desk && isAddr(s.desk) && !SHARED_BURN.test(s.desk) && s.tokensPerUsd && this.pub;
@@ -391,7 +416,11 @@ export class InferenceDesk {
         this.pub.readContract({ address: getAddress(this.s.token), abi: ERC20, functionName: "balanceOf", args: [desk] }) as Promise<bigint>,
       ]);
       this.burned = { total, pending, at: Date.now() };
-      if (pending === 0n || !this.wallet) return;
+      // Burn once a dollar's worth has gathered, or whatever is there once a day, so a stream of dust cannot make
+      // the keeper spend gas every ten minutes.
+      const dollar = BigInt(this.config.token.tokensPerUsd.split(".")[0] || "0") * 10n ** BigInt(this.config.token.decimals);
+      const due = pending >= dollar || (pending > 0n && Date.now() - this.lastBurn.at > 86_400_000);
+      if (!due || !this.wallet) return;
       const unmarked = this.store.filter<{ id: string; burnTx: string | null; source: string } & Row>("icm_deposits", (d) => d.source === "chain" && !d.burnTx);
       const hash = await this.wallet.writeContract({ address: desk, abi: DESK_ABI, functionName: "burn", chain: this.wallet.chain, account: this.wallet.account! });
       const r = await this.pub.waitForTransactionReceipt({ hash });
@@ -408,26 +437,54 @@ export class InferenceDesk {
 
   // -------------------------------------------------------------- owner proof
 
-  message(address: string, nonce: string) {
-    return ["Trenchers Inference Markets", "", "Sign in to manage your inference keys.", "This is not a transaction. It moves nothing and costs no gas.", "", `Wallet: ${address.toLowerCase()}`, `Nonce: ${nonce}`].join("\n");
+  /** The sign-in text, in the standard Sign-In with Ethereum form (EIP-4361), so a wallet can warn when the site
+   *  asking for it is not trenchers.io. It names the site, the chain, a one-time nonce and a five-minute expiry. */
+  message(address: string, nonce: string, issued: number) {
+    const domain = this.s.signinDomain;
+    return [
+      `${domain} wants you to sign in with your Ethereum account:`,
+      getAddress(address),
+      "",
+      "Sign in to Trenchers Inference Markets to manage your inference keys. This is not a transaction: it moves nothing and costs no gas.",
+      "",
+      `URI: https://${domain}/inference`,
+      "Version: 1",
+      `Chain ID: ${this.s.chainId}`,
+      `Nonce: ${nonce}`,
+      `Issued At: ${new Date(issued).toISOString()}`,
+      `Expiration Time: ${new Date(issued + NONCE_TTL).toISOString()}`,
+    ].join("\n");
   }
+  /** A fresh one-time message. Several can be pending for one wallet, so nobody can cancel another wallet's
+   *  sign-in by asking for a nonce in its name; the oldest are dropped first when the table is full. */
   nonce(address: string) {
     const a = this.addr(address);
     const now = Date.now();
-    if (this.nonces.size > 10_000) for (const [k, v] of this.nonces) if (now - v.at > 5 * 60_000) this.nonces.delete(k);
+    const mine = [...this.nonces.entries()].filter(([, v]) => v.address === a);
+    for (const [k] of mine.slice(0, Math.max(0, mine.length - 4))) this.nonces.delete(k);
+    while (this.nonces.size >= MAX_NONCES) this.nonces.delete(this.nonces.keys().next().value!);
     const nonce = randomBytes(16).toString("hex");
-    this.nonces.set(a, { nonce, at: now });
-    return { nonce, message: this.message(a, nonce) };
+    const message = this.message(a, nonce, now);
+    this.nonces.set(nonce, { address: a, message, at: now });
+    return { nonce, message };
   }
+  /** Checks the signature against this wallet's pending messages; the one it matches is spent. A wrong signature
+   *  spends nothing. Smart-contract wallets (ERC-1271) are checked on-chain. */
   async verify(address: string, signature: string) {
     const a = this.addr(address);
-    const pending = this.nonces.get(a);
-    if (!pending || Date.now() - pending.at > 5 * 60_000) throw new IcmError("Ask for a fresh sign-in message first.", { code: "invalid_request", status: 400 });
-    this.nonces.delete(a);
-    let ok = false;
-    try { ok = await verifyMessage({ address: getAddress(a), message: this.message(a, pending.nonce), signature: signature as Hex }); } catch { ok = false; }
-    if (!ok) throw new IcmError("That signature does not match this wallet.", { code: "forbidden", status: 401 });
-    return a;
+    const now = Date.now();
+    const pending = [...this.nonces.entries()].filter(([, v]) => v.address === a && now - v.at <= NONCE_TTL);
+    if (!pending.length) throw new IcmError("Ask for a fresh sign-in message first.", { code: "invalid_request", status: 400 });
+    for (const [k, v] of pending) {
+      let ok = false;
+      try {
+        ok = this.pub
+          ? await this.pub.verifyMessage({ address: getAddress(a), message: v.message, signature: signature as Hex })
+          : await verifyMessage({ address: getAddress(a), message: v.message, signature: signature as Hex });
+      } catch { ok = false; }
+      if (ok) { this.nonces.delete(k); return a; }
+    }
+    throw new IcmError("That signature does not match this wallet.", { code: "forbidden", status: 401 });
   }
   private addr(address: string) {
     if (!isAddr(address ?? "")) throw new IcmError("The wallet must be 0x and 40 hex characters.", { code: "invalid_request", status: 400 });
@@ -486,7 +543,9 @@ export class InferenceDesk {
   // -------------------------------------------------------------- http
 
   /** Serves everything under /icm. Returns false for any other path. */
-  async handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
+  async handle(req: IncomingMessage, res: ServerResponse, rawPath: string): Promise<boolean> {
+    // One spelling of every path before any comparison: "/icm/v1/models/" and "/icm//v1/models" are "/icm/v1/models".
+    const path = rawPath.replace(/\/{2,}/g, "/").replace(/\/+$/, "") || "/";
     if (path !== "/icm" && !path.startsWith("/icm/")) return false;
     const method = (req.method ?? "GET").toUpperCase();
     const send = (status: number, json: unknown, headers: Record<string, string> = {}) => {
@@ -496,6 +555,15 @@ export class InferenceDesk {
     if (method === "OPTIONS") {
       res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "GET, POST, OPTIONS" });
       res.end(); return true;
+    }
+    // Writes from one address are limited (sign-in, keys, completions): 60 a minute, then a polite 429.
+    if (method === "POST") {
+      const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "?").split(",")[0].trim();
+      const now = Date.now();
+      const h = this.hits.get(ip);
+      if (!h || now - h.at > 60_000) { this.hits.delete(ip); this.hits.set(ip, { n: 1, at: now }); }
+      else if (++h.n > 60) { send(429, { error: { message: "Too many requests from this address. Try again in a minute.", code: "rate_limited" } }, { "retry-after": "60" }); return true; }
+      while (this.hits.size > 50_000) this.hits.delete(this.hits.keys().next().value!);
     }
     let body: unknown;
     if (method === "POST") {
@@ -517,7 +585,9 @@ export class InferenceDesk {
       if (method === "POST" && path === "/icm/nonce") { send(200, this.nonce(String(b.address ?? ""))); return true; }
       if (method === "POST" && path === "/icm/account") {
         const owner = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
-        const a = this.ledger.account(owner);
+        // Reading an account never creates one: a wallet that has not paid has nothing on file.
+        const a = this.ledger.accountFor(owner);
+        if (!a) { send(200, { account: { id: "", owner, balanceMicroUsd: "0", heldMicroUsd: "0", depositedMicroUsd: "0", spentMicroUsd: "0", suspended: false }, keys: [], deposits: [], charges: [] }); return true; }
         send(200, {
           account: { id: a.id, owner: a.owner, balanceMicroUsd: a.balanceMicroUsd, heldMicroUsd: a.heldMicroUsd, depositedMicroUsd: a.depositedMicroUsd, spentMicroUsd: a.spentMicroUsd, suspended: a.suspended },
           keys: this.ledger.keysOf(a.id).map((k) => ({ id: k.id, display: k.display, label: k.label, disabled: k.disabled, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, spentMicroUsd: k.spentMicroUsd, spendLimitMicroUsd: k.spendLimitMicroUsd, models: k.models })),
@@ -528,7 +598,9 @@ export class InferenceDesk {
       }
       if (method === "POST" && path === "/icm/keys") {
         const owner = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
-        const a = this.ledger.account(owner);
+        const a = this.ledger.accountFor(owner);
+        if (!a || BigInt(a.depositedMicroUsd) <= 0n) throw new IcmError("Buy some credit first: keys are made for wallets that have paid the desk.", { code: "invalid_request", status: 400 });
+        if (this.ledger.keysOf(a.id).filter((k) => !k.disabled).length >= MAX_KEYS) throw new IcmError(`A wallet can hold ${MAX_KEYS} active keys. Revoke one to make another.`, { code: "invalid_request", status: 400 });
         const issued = this.ledger.issueKey({
           accountId: a.id,
           label: typeof b.label === "string" ? b.label.slice(0, 80) : undefined,

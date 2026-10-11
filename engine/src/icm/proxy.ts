@@ -22,6 +22,7 @@ import type { ApiKey, Account, Charge } from "./types.ts";
 import type { Ledger } from "./ledger.ts";
 import type { IcmConfig } from "./config.ts";
 import type { Upstream, UpstreamModel } from "./upstream.ts";
+import { redactCost } from "./upstream.ts";
 import { modelAllowed } from "./config.ts";
 import { E, IcmError, asIcmError } from "./errors.ts";
 import { formatUsd } from "./money.ts";
@@ -150,7 +151,7 @@ export class Proxy {
       headers: this.costHeaders(settled, account),
       // the provider's own body, with its cost replaced by ours: a caller reading `usage.cost` must see what
       // they were charged, not what we paid.
-      json: { ...answer, usage: { ...(answer.usage as object ?? {}), cost: Number(formatUsd(BigInt(settled.retailMicroUsd))) } },
+      json: { ...answer, usage: { ...redactCost(answer.usage), cost: Number(formatUsd(BigInt(settled.retailMicroUsd))) } },
     };
   }
 

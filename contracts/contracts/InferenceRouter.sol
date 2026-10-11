@@ -40,7 +40,8 @@ contract InferenceRouter is ReentrancyGuard {
     /// @notice Buys $TRENCHERS with all the ETH sent and delivers it to the desk. Unspent ETH (a curve that
     ///         sells out mid-buy refunds the rest) goes back to the caller.
     /// @param minTokensOut the fewest tokens to accept; the whole call reverts below it.
-    function buyCredit(uint256 minTokensOut) external payable nonReentrant returns (uint256 tokensOut) {
+    /// @param beneficiary the wallet the desk credits (zero: the caller). Lets a smart wallet buy for its owner.
+    function buyCredit(uint256 minTokensOut, address beneficiary) external payable nonReentrant returns (uint256 tokensOut) {
         if (msg.value == 0) revert ZeroAmount();
         uint256 ethBefore = address(this).balance - msg.value;
         uint256 before = token.balanceOf(address(this));
@@ -53,7 +54,7 @@ contract InferenceRouter is ReentrancyGuard {
             (bool ok, ) = msg.sender.call{value: refund}("");
             if (!ok) revert RefundFailed();
         }
-        emit CreditBought(msg.sender, msg.value - refund, tokensOut);
+        emit CreditBought(beneficiary == address(0) ? msg.sender : beneficiary, msg.value - refund, tokensOut);
     }
 
     /// @dev Only the adapter sends ETH here (a partial-fill refund, forwarded in the same call).

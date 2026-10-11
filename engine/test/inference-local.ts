@@ -67,7 +67,7 @@ async function main() {
   const direct = aliceBal / 4n;
   await call(token, "MockPonsToken", "transfer", [desk, direct], 0n, alice);
   // 2. bob pays in ETH through the router
-  const rb = await call(router, "InferenceRouter", "buyCredit", [0n], parseEther("0.05"), bob);
+  const rb = await call(router, "InferenceRouter", "buyCredit", [0n, "0x0000000000000000000000000000000000000000"], parseEther("0.05"), bob);
   const bought = (parseEventLogs({ abi: artifact("InferenceRouter").abi, logs: rb.logs, eventName: "CreditBought" })[0] as unknown as { args: { tokensOut: bigint } }).args.tokensOut;
   // 3. carol lists an ask; bob fills part of it straight into credit
   const carolBal = await read<bigint>(token, "MockPonsToken", "balanceOf", [carol.address]);
@@ -76,6 +76,12 @@ async function main() {
   const part = carolBal / 8n;
   const owe = await read<bigint>(otc, "TrenchersOTC", "quote", [1n, part]);
   await call(otc, "TrenchersOTC", "buy", [[1n], [part], desk], owe, bob);
+  // 4. one transaction carrying two people's purchases (a bundle): each must be credited to its own buyer
+  const bundler = await deploy("MockBundler");
+  const rr = await call(bundler, "MockBundler", "twoBuys", [router, carol.address, parseEther("0.001"), alice.address], parseEther("0.03"));
+  const two = parseEventLogs({ abi: artifact("InferenceRouter").abi, logs: rr.logs, eventName: "CreditBought" }) as unknown as { args: { buyer: Address; tokensOut: bigint } }[];
+  const carolBundle = two.find((x) => x.args.buyer.toLowerCase() === carol.address.toLowerCase())!.args.tokensOut;
+  const aliceBundle = two.find((x) => x.args.buyer.toLowerCase() === alice.address.toLowerCase())!.args.tokensOut;
   await mine(10);
 
   const dir = mkdtempSync(join(tmpdir(), "icm-"));
@@ -86,10 +92,11 @@ async function main() {
   await d.poll();
   const credit = (who: string) => BigInt(d.ledger.accountFor(who.toLowerCase())?.depositedMicroUsd ?? "0");
   const usdFor = (units: bigint) => (units * 1_000_000n) / (1000n * E18);
-  check(credit(alice.address) === usdFor(direct), `alice's direct payment credited to alice ($${Number(credit(alice.address)) / 1e6})`);
+  check(credit(alice.address) === usdFor(direct) + usdFor(aliceBundle), `alice credited for her direct payment and her part of the bundle ($${Number(credit(alice.address)) / 1e6})`);
+  check(credit(carol.address) === usdFor(carolBundle), "carol credited for exactly her part of the bundle, not alice's");
   check(credit(bob.address) === usdFor(bought) + usdFor(part), `bob credited for the router buy and the P2P fill, not the router or the OTC contract`);
   check(!d.ledger.accountFor(router.toLowerCase()) && !d.ledger.accountFor(otc.toLowerCase()), "no account was opened for the router or the OTC contract");
-  check(credit(carol.address) === 0n, "carol, the seller, was not credited");
+  check(credit(carol.address) === usdFor(carolBundle), "carol, the seller on the P2P book, was not credited for the fill");
   await d.poll();
   check(BigInt(d.ledger.accountFor(bob.address.toLowerCase())!.depositedMicroUsd) === usdFor(bought) + usdFor(part), "replay is idempotent");
 
@@ -111,7 +118,7 @@ async function main() {
   // durability: a new desk over the same file sees the same balances
   d = new InferenceDesk(settings, () => ({ verified: false, agent: null }));
   check(credit(bob.address) === usdFor(bought) + usdFor(part), "balances survive a restart (file store)");
-  check(new FileStore(file).count("icm_deposits") === 3, "three deposits on disk");
+  check(new FileStore(file).count("icm_deposits") === 5, "five deposits on disk");
 
   // HTTP: rate card, models without prices, sign-in, keys
   const srv = createServer(async (req, res) => { if (!(await d.handle(req, res, (req.url ?? "/").split("?")[0]))) { res.statusCode = 404; res.end("{}"); } });
@@ -124,11 +131,19 @@ async function main() {
   check(!/margin/i.test(text), "/icm never mentions the margin");
   check(!/margin/i.test(JSON.stringify((await j("/icm/v1/rate")).json)), "/v1/rate never mentions the margin");
   const { message } = (await j("/icm/nonce", { address: bob.address })).json as { message: string };
+  check(message.startsWith("www.trenchers.io wants you to sign in") && message.includes("Chain ID: 31337"), "the sign-in message is in the Sign-In with Ethereum form");
+  await j("/icm/nonce", { address: bob.address }); // somebody else asking for a nonce in bob's name cancels nothing
+  const bad = await j("/icm/account", { address: bob.address, signature: `0x${"11".repeat(65)}` });
+  check(bad.status === 401, "a wrong signature is refused");
   const signature = await wal(bob).signMessage({ message, account: bob });
   const acct = await j("/icm/account", { address: bob.address, signature });
   check(acct.status === 200 && (acct.json.account as { owner: string }).owner === bob.address.toLowerCase(), "a signed message opens bob's account");
+  const slash = await fetch(`${base}/icm/v1/models/`).then((x) => x.text());
+  check(!/pricing|prompt|completion/.test(slash), "the model list carries no prices, however the path is spelled");
+  const stranger = await j("/icm/nonce", { address: "0x000000000000000000000000000000000000beef" });
+  check(stranger.status === 200, "any wallet can ask to sign in");
   const replay = await j("/icm/account", { address: bob.address, signature });
-  check(replay.status === 400, "the same signature cannot be used twice");
+  check(replay.status === 401 || replay.status === 400, "the same signature cannot be used twice");
   const n2 = (await j("/icm/nonce", { address: bob.address })).json as { message: string };
   const minted = await j("/icm/keys", { address: bob.address, signature: await wal(bob).signMessage({ message: n2.message, account: bob }), label: "bot", spendLimitUsd: "2" });
   const secret = String(minted.json.secret ?? "");

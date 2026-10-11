@@ -31,3 +31,14 @@ contract MockReentrantMaker {
         otc.buy{value: msg.value}(ids, amts, address(this));
     }
 }
+
+interface IRouterBuy { function buyCredit(uint256 minTokensOut, address beneficiary) external payable returns (uint256); }
+
+/// @dev Two people's purchases in one transaction, like a 4337 bundle or a multicall relayer.
+contract MockBundler {
+    function twoBuys(IRouterBuy router, address first, uint256 firstEth, address second) external payable {
+        router.buyCredit{value: firstEth}(0, first);
+        router.buyCredit{value: msg.value - firstEth}(0, second);
+    }
+    receive() external payable {}
+}
