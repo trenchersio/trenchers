@@ -7,6 +7,8 @@ import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
 import { Providers } from "./providers";
 import { StartAtTop } from "@/components/StartAtTop";
+import { HeaderFit } from "@/components/HeaderFit";
+import { HashScroll } from "@/components/HashScroll";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.trenchers.io"),
@@ -21,6 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <StartAtTop />
+        <HeaderFit />
+        <HashScroll />
         <Providers>{children}</Providers>
       </body>
     </html>

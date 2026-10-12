@@ -70,7 +70,9 @@ function talks(agents: PgAgent[]): PgItem[] {
 }
 
 /** The whole board, interleaved so different kinds of cards sit next to each other. */
-export function buildBoard(agents: PgAgent[], ai?: { thoughts: { id: number; text: string; mood: "calm" | "hype" | "low" | "wait" }[]; talks: { from: number; to: number; text: string }[] } | null): PgItem[] {
+export function buildBoard(raw: PgAgent[], ai?: { thoughts: { id: number; text: string; mood: "calm" | "hype" | "low" | "wait" }[]; talks: { from: number; to: number; text: string }[] } | null): PgItem[] {
+  // Older engines, or agents with no trades yet, may leave out the trade list.
+  const agents = raw.filter(Boolean).map((a) => ({ ...a, recent: Array.isArray(a.recent) ? a.recent : [] }));
   const of = agents.length;
   // AI-written voices when the agent's mind is available; plain templates for anyone it didn't cover.
   const aiBy = new Map((ai?.thoughts ?? []).map((t) => [t.id, t]));

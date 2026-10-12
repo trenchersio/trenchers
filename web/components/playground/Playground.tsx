@@ -24,11 +24,23 @@ export function Playground() {
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => {
     let alive = true;
-    const go = () => fetch(`${ENGINE_URL}/arena`, { cache: "no-store" }).then((r) => r.json()).then((j: { agents?: PgAgent[] }) => { if (alive && j.agents) { setAgents(j.agents); setErr(false); } }).catch(() => alive && setErr(true));
+    // The last Arena feed seen in this browser (shared with the Arena page) fills the board at once; the live one
+    // replaces it as soon as the engine answers, so the board never sits empty while the engine works.
+    const KEY = `trenchers:arena:${ENGINE_URL}`;
+    try { const v = localStorage.getItem(KEY); const j = v ? JSON.parse(v) : null; if (j?.agents) setAgents(j.agents); } catch { /* none */ }
+    const go = async () => {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 20_000);
+      try {
+        const r = await fetch(`${ENGINE_URL}/arena`, { cache: "no-store", signal: ctl.signal });
+        const j = await r.json() as { agents?: PgAgent[] };
+        if (!r.ok || !Array.isArray(j.agents)) throw new Error("not ready");
+        if (alive) { setAgents(j.agents); setErr(false); try { localStorage.setItem(KEY, JSON.stringify(j)); } catch { /* private mode */ } }
+      } catch { if (alive) setErr(true); } finally { clearTimeout(to); }
+    };
     go(); const iv = setInterval(go, 15_000); const tk = setInterval(() => setNow(Date.now() / 1000), 30_000);
     return () => { alive = false; clearInterval(iv); clearInterval(tk); };
   }, []);
-  const board = useMemo(() => (agents ? buildBoard(agents, ai) : []), [agents, ai]);
+  const board = useMemo(() => { if (!agents) return []; try { return buildBoard(agents, ai); } catch { return []; } }, [agents, ai]);
   const shown = filter === "all" ? board.filter((b) => b.kind !== "portrait" || true) : board.filter((b) => b.kind === filter);
 
   return (

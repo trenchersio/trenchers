@@ -7,7 +7,7 @@ import { formatEther, parseEther, parseUnits, type Address } from "viem";
 import { useWallet, short } from "@/lib/wallet";
 import { compact, type Rate } from "@/lib/inference";
 import { ERC20_MIN_ABI, OTC_ABI, ethFor, priceOf, type Fill, type Order } from "@/lib/inference-contracts";
-import { EXPLORER } from "@/lib/constants";
+import { EXPLORER, TRENCHERS_TOKEN } from "@/lib/constants";
 import { route } from "./BuyCredit";
 
 type Tab = "buy" | "sell" | "make";
@@ -28,7 +28,9 @@ const clean = (v: string) => v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"
 
 export function P2P({ rate, orders, fills, onChange }: { rate: Rate | null; orders: Order[] | null; fills: Fill[]; onChange: () => void }) {
   const w = useWallet();
-  const trenchers = (rate?.deposit.token ?? "").toLowerCase();
+  // The token address comes from the engine when its payment watcher runs, and from the site's own setting otherwise,
+  // so the marketplace never mistakes $TRENCHERS for an unknown token while the engine is starting up.
+  const trenchers = (rate?.deposit?.token || TRENCHERS_TOKEN || "").toLowerCase();
   const otc = (rate?.otc ?? null) as Address | null;
   const desk = (rate?.deposit.address ?? null) as Address | null;
 
@@ -247,7 +249,7 @@ export function P2P({ rate, orders, fills, onChange }: { rate: Rate | null; orde
             <button type="button" className="ibtn ibtn-wide" onClick={act} disabled={goOff}>{goLabel}</button>
             {err && <p className="ibuy-err">{err}</p>}
             {done && <p className="ibuy-ok">Done. {EXPLORER && <a href={`${EXPLORER}/tx/${done}`} target="_blank" rel="noreferrer">View transaction ↗</a>}</p>}
-            {!market?.verified && <p className="ibuy-err">This token is not $TRENCHERS or an agent coin. Check its address before you trade it.</p>}
+            {!market && <p className="inf-fine">Loading the $TRENCHERS market…</p>}
             <p className="inf-fine">Orders are escrowed by the P2P contract until filled, cancelled or expired. Cancel any time and the escrow comes straight back. Click a row in the book to fill that order.</p>
           </div>
         </aside>

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useChatUnread } from "@/lib/chat-unread";
 
@@ -20,6 +20,15 @@ export function NavDropdown({ label, items, active = false }: { label: string; i
     window.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", close); window.removeEventListener("keydown", esc); };
   }, [open]);
+  // Keep the panel on screen: near the right edge it lines up with the button's right side instead of its centre.
+  const panel = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = panel.current; if (!open || !el) return;
+    el.style.left = ""; el.style.right = ""; el.style.transform = "";
+    const r = el.getBoundingClientRect(), pad = 12;
+    if (r.right > window.innerWidth - pad) { el.style.left = "auto"; el.style.right = "0"; el.style.transform = "none"; }
+    else if (r.left < pad) { el.style.left = "0"; el.style.transform = "none"; }
+  }, [open]);
   const enter = () => { if (timer.current) clearTimeout(timer.current); if (!open) hovered.current = Date.now(); setOpen(true); };
   const leave = () => { timer.current = setTimeout(() => setOpen(false), 160); };
   return (
@@ -28,7 +37,7 @@ export function NavDropdown({ label, items, active = false }: { label: string; i
         {label}{chatUnread && <span className="nd-dot" aria-label="new messages" />}<span className="nd-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="nd-panel" role="menu">
+        <div className="nd-panel" role="menu" ref={panel}>
           {items.map((it) => it.disabled ? (
             <span key={it.label} role="menuitem" aria-disabled="true" className="nd-disabled">
               <span className="nd-label">{it.label}</span>

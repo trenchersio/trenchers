@@ -699,26 +699,29 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 
 /* ---------------------------------------------------------------- mobile menu */
 .mm { display: none; }
+/* The links fold into [Menu] on small screens, and on any screen where they would not fit (HeaderFit adds .bar-fold). */
+.bar-fold > nav { display: none !important; }
+.bar-fold .mm { display: block; }
+.mm-panel { position: fixed; left: 0; right: 0; top: 58px; bottom: 0; z-index: 40; background: var(--black); border-top: 1px solid var(--line); padding: 8px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 24px; overflow-y: auto; animation: mm-in .2s ease; }
+.mm-panel nav { display: flex; flex-direction: column; align-items: stretch; width: 100%; gap: 0; }
+.mm-panel nav a { display: flex; justify-content: space-between; align-items: center; padding: 18px 4px; border-bottom: 1px solid var(--line); color: var(--fog); text-decoration: none; font-size: 18px; }
+.mm-panel nav a span:last-child { color: var(--quiet); }
+.mm-panel nav a.on, .mm-panel nav a.on span:last-child { color: var(--green); }
+.mm-row { display: flex; gap: 24px; flex-wrap: wrap; }
+.mm-switch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-top: 8px; }
+.mm-switch a { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; padding: 9px 2px; border-radius: 7px; color: var(--quiet); text-decoration: none; font: 500 11.5px/1 var(--mono); --tone: var(--green); }
+.mm-make { margin: 10px 0 -2px; color: #5E6762; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+.mm-switch a i { font-style: normal; font-size: 9.5px; color: #5E6762; }
+.mm-switch a.on { background: #151A18; color: var(--tone); box-shadow: inset 0 0 0 1px var(--tone); }
+.mm-switch a.on i { color: var(--tone); }
+.mm-wallet { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--panel); margin-top: auto; }
+.mm-addr { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+html.menu-open, html.menu-open body { overflow: hidden; }
 @media (max-width: 900px) {
-  .bar nav { display: none; }
+  .bar > nav { display: none; }
   .mm { display: block; }
   .bar { padding-top: 16px; padding-bottom: 16px; }
   .lockup { height: 18px; }
-  .mm-panel { position: fixed; left: 0; right: 0; top: 58px; bottom: 0; z-index: 40; background: var(--black); border-top: 1px solid var(--line); padding: 8px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 24px; overflow-y: auto; animation: mm-in .2s ease; }
-  .mm-panel nav { display: flex; flex-direction: column; align-items: stretch; width: 100%; gap: 0; }
-  .mm-panel nav a { display: flex; justify-content: space-between; align-items: center; padding: 18px 4px; border-bottom: 1px solid var(--line); color: var(--fog); text-decoration: none; font-size: 18px; }
-  .mm-panel nav a span:last-child { color: var(--quiet); }
-  .mm-panel nav a.on, .mm-panel nav a.on span:last-child { color: var(--green); }
-  .mm-row { display: flex; gap: 24px; flex-wrap: wrap; }
-  .mm-switch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-top: 8px; }
-  .mm-switch a { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; padding: 9px 2px; border-radius: 7px; color: var(--quiet); text-decoration: none; font: 500 11.5px/1 var(--mono); --tone: var(--green); }
-  .mm-make { margin: 10px 0 -2px; color: #5E6762; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
-  .mm-switch a i { font-style: normal; font-size: 9.5px; color: #5E6762; }
-  .mm-switch a.on { background: #151A18; color: var(--tone); box-shadow: inset 0 0 0 1px var(--tone); }
-  .mm-switch a.on i { color: var(--tone); }
-  .mm-wallet { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--panel); margin-top: auto; }
-  .mm-addr { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
-  html.menu-open, html.menu-open body { overflow: hidden; }
 }
 @keyframes mm-in { from { opacity: 0; transform: translateY(-6px); } }
 
@@ -966,6 +969,11 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 
 /* ---------------------------------------------------------------- header dropdowns */
 .bar nav { gap: 22px; }
+.bar > nav { flex: none; white-space: nowrap; }
+@media (max-width: 1320px) { .bar nav { gap: 16px; } }
+.addr-btn { gap: 6px; }
+.addr-link { display: block; margin: 6px 0 10px; color: var(--fog); text-decoration: none; font: 500 13px var(--mono); }
+.addr-link:hover { color: var(--green); }
 .nav-sep { width: 1px; height: 16px; background: var(--line); }
 .nd { position: relative; }
 .nd-btn { display: inline-flex; align-items: center; gap: 0; }

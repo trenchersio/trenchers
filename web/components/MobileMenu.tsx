@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CopyCA } from "@/components/CopyCA";
 import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 import { useChatUnread } from "@/lib/chat-unread";
@@ -11,6 +11,8 @@ type Page = PageKey;
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
   const [open, setOpen] = useState(false);
+  const [top, setTop] = useState<number | undefined>(undefined);
+  const btn = useRef<HTMLButtonElement>(null);
   const w = useWallet();
   const chatUnread = useChatUnread(CHAT_OPEN);
   useEffect(() => {
@@ -42,11 +44,16 @@ export function MobileMenu({ page }: { page: Page }) {
   ];
   return (
     <div className="mm">
-      <button type="button" className={`tbtn${open ? " tbtn-on" : ""}`} aria-expanded={open} aria-controls="mobile-menu" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`tbtn${open ? " tbtn-on" : ""}`} aria-expanded={open} aria-controls="mobile-menu" ref={btn} onClick={() => {
+        // The panel opens just under the top bar, so the [Close] button stays visible above it.
+        const bar = btn.current?.closest("header");
+        setTop(bar ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) : undefined);
+        setOpen((o) => !o);
+      }}>
         {open ? "Close" : "Menu"}{!open && chatUnread && <span className="nd-dot" aria-label="new messages" />}
       </button>
       {open && (
-        <div id="mobile-menu" className="mm-panel">
+        <div id="mobile-menu" className="mm-panel" style={top !== undefined ? { top } : undefined}>
           <p className="mm-make mono">Make your Trencher</p>
           <div className="mm-switch" role="group" aria-label="Make your Trencher">
             {STEPS.map((x) => (

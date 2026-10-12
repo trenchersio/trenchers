@@ -92,7 +92,7 @@
 @media (prefers-reduced-motion: reduce) { .vb-wire { animation: none; } .vb-pulse { display: none; } }
 
 /* ---------------------------------------------------------------- sections */
-.vb-sec { padding: 56px 0 8px; scroll-margin-top: 80px; }
+.vb-sec { padding: 56px 0 8px; scroll-margin-top: 12px; }
 .vb-sec-head { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "eye eye" "title lede"; gap: 0 56px; align-items: end; margin-bottom: 24px; padding-top: 26px; border-top: 1px dashed rgba(110,200,255,.25); }
 .vb-sec-head .vb-eyebrow { grid-area: eye; margin-bottom: 12px; }
 .vb-sec-head h2 { grid-area: title; margin: 0; font-size: clamp(28px, 3vw, 42px); letter-spacing: -.03em; line-height: 1.05; }

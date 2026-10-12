@@ -27,6 +27,10 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
     { label: "FAQ", href: `${home}#faq` },
     { label: "Docs", href: ROUTES.docs, hint: "The full technical write-up" },
   ];
+  const collection: NavItem[] = [
+    { label: "Browse all 2,000", href: ROUTES.collection, hint: "Every Trencher, its wallet and its record" },
+    ...HUB.external.map((x) => ({ label: x.label, href: x.href, hint: "Buy or sell a Trencher", external: true })),
+  ];
   const community: NavItem[] = [
     { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN, unread: "chat" },
     ...(TELEGRAM_FEED ? [{ label: "Live feed", href: TELEGRAM_FEED, hint: "Every mint, awakening and sale, on Telegram", external: true }] : []),
@@ -46,12 +50,16 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
         <nav>
           {/* Mint is always the first button */}
           <a href={ROUTES.mint} className={`nav-mint${page === "mint" ? " on" : ""}`} aria-current={page === "mint" ? "page" : undefined}>Mint</a>
-          {(st ? st.pages : HUB.pages).filter((p) => p.key !== "mint").map((p) => (
-            <a key={p.key} href={p.href} title={p.hint}
-              className={p.key === "mint" ? `nav-mint${page === p.key ? " on" : ""}` : `tbtn${page === p.key ? " tbtn-on" : ""}`}
+          {st ? st.pages.map((p) => (
+            <a key={p.key} href={p.href} title={p.hint} className={`tbtn${page === p.key ? " tbtn-on" : ""}`}
               aria-current={page === p.key ? "page" : undefined}>{p.label}</a>
-          ))}
-          {st ? null : HUB.external.map((x) => <a key={x.href} href={x.href} target="_blank" rel="noreferrer" className="tbtn">{x.label} ↗</a>)}
+          )) : (
+            <>
+              <NavDropdown label="Collection" items={collection} active={page === "collection"} />
+              <a href={ROUTES.agents} title="Your Trencher's control room" className={`tbtn${page === "agents" ? " tbtn-on" : ""}`}
+                aria-current={page === "agents" ? "page" : undefined}>My Trencher</a>
+            </>
+          )}
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
           <NavDropdown label="Community" items={community} />
           <CopyCA />
