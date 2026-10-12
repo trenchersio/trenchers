@@ -41,15 +41,13 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   ];
   return (
     <>
-      <SectionSwitch on={where} wide={wide} />
+      <SectionSwitch on={where} wide={wide} mintOn={page === "mint"} />
       <header className={`bar${wide ? " bar-wide" : ""}`}>
         <a href={page === "home" ? "#top" : ROUTES.home} aria-label="Trenchers home" className="inf-brand">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
           {st && <span className={`inf-brand-tag step-tag tone-${st.tone} mono`}>Make it<br />{st.name.toLowerCase()}</span>}
         </a>
         <nav>
-          {/* Mint is always the first button */}
-          <a href={ROUTES.mint} className={`nav-mint${page === "mint" ? " on" : ""}`} aria-current={page === "mint" ? "page" : undefined}>Mint</a>
           {st ? st.pages.map((p) => (
             <a key={p.key} href={p.href} title={p.hint} className={`tbtn${page === p.key ? " tbtn-on" : ""}`}
               aria-current={page === p.key ? "page" : undefined}>{p.label}</a>

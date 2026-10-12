@@ -3,11 +3,12 @@ import { STEPS, type Where } from "@/lib/steps";
 
 export type Section = Where;
 
-/** The strip above every header: the Trencher (home) first, then the four things you make it do. */
-export function SectionSwitch({ on, wide = false }: { on: Where; wide?: boolean }) {
+/** The strip above every header: the Trencher (home) first, then the four things you make it do, then Mint. */
+export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where; wide?: boolean; mintOn?: boolean }) {
   return (
     <div className={`secsw${wide ? " secsw-wide" : ""}`}>
-      <nav className="secsw-in" aria-label="The Trenchers path">
+      <div className="secsw-in">
+      <nav className="secsw-path" aria-label="The Trenchers path">
         <a href={ROUTES.home} className={`secsw-hub${on === "hub" ? " on" : ""}`} aria-current={on === "hub" ? "page" : undefined}>
           <span className="secsw-core" aria-hidden="true" />Trenchers
         </a>
@@ -17,8 +18,11 @@ export function SectionSwitch({ on, wide = false }: { on: Where; wide?: boolean 
             <i className="secsw-n" aria-hidden="true">{s.n}</i>{s.name.toLowerCase()}
           </a>
         ))}
-        <span className="secsw-note">Robinhood Chain · powered by $TRENCHERS</span>
       </nav>
+      {/* Mint lives here, in the same spot on every page */}
+      <a href={ROUTES.mint} className={`secsw-mint mono${mintOn ? " on" : ""}`} aria-current={mintOn ? "page" : undefined}>Mint</a>
+      <span className="secsw-note">Robinhood Chain · powered by $TRENCHERS</span>
+      </div>
     </div>
   );
 }

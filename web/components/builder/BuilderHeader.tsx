@@ -18,7 +18,6 @@ export function BuilderHeader() {
           <span className="inf-brand-tag vb-brand-tag mono">Make it<br />launch</span>
         </a>
         <nav>
-          <a href={ROUTES.mint} className="nav-mint">Mint</a>
           <a href="?#launch" className="nav-mint vb-cta">Launch a coin</a>
           <a href="?#explore" className="tbtn">Explore</a>
           <a href="?#modules" className="tbtn">Modules</a>
