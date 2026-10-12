@@ -6,6 +6,7 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
 import { Providers } from "./providers";
+import { StartAtTop } from "@/components/StartAtTop";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.trenchers.io"),
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <StartAtTop />
         <Providers>{children}</Providers>
       </body>
     </html>
