@@ -65,7 +65,11 @@ async function main() {
   await call(L.ponsFactory, "MockPonsFactory", "graduateAll", [pool]);
 
   let fails = 0;
-  const good = await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } });
+  // Two checks rehearse against live mainnet contracts (Pons's real launch format, Programmable's factory). A local
+  // node has neither, so those two are expected to fail here and only here.
+  const MAINNET_ONLY = /live Pons factory refused both launch formats|v4 rehearsal/;
+  const localOnly = (r: Record<string, unknown>) => { const p = (r.problems as string[]).filter((x) => !MAINNET_ONLY.test(x)); return { ...r, problems: p, ok: p.length === 0 } as Record<string, unknown> & { problems: string[]; ok: boolean }; };
+  const good = localOnly(await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } }));
   console.log(JSON.stringify({ code: good.code, rehearsal: good.rehearsal, problems: good.problems }, null, 2));
   if (!good.ok) { fails++; console.log("✗ expected every check to pass"); } else console.log("✓ correct deployment: every check passes");
   // after the Safe opens awakening (and a house agent wallet exists and holds ETH), it still passes
@@ -74,7 +78,7 @@ async function main() {
   await call(L.registry, "MockERC6551Registry", "createAccount", [impl, zeroHash, 4663n, nft, 1n]);
   const house = (await pub.readContract({ address: fund, abi: art("AgentStarterFund").abi, functionName: "agentWallet", args: [1n] })) as Address;
   await pub.waitForTransactionReceipt({ hash: await wal.sendTransaction({ to: house, value: parseEther("0.02") }) });
-  const opened = await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } });
+  const opened = localOnly(await verifyDeployment(RPC, d, R, L, { coins: { curve, pool } }));
   if (!opened.ok) { fails++; console.log("✗ after opening awakening:", opened.problems); } else console.log("✓ after the Safe opens awakening: every check still passes");
   const bad = await verifyDeployment(RPC, d, { ...R, engine: guardian.address === R.engine ? safe.address : deployer.address }, L, { coins: { curve, pool } });
   if (bad.ok) { fails++; console.log("✗ a wrong engine wallet was not caught"); } else console.log(`✓ wrong setting caught: ${(bad.problems as string[])[0]}`);

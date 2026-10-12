@@ -172,7 +172,11 @@ export async function verifyDeployment(rpc: string, d: Deployment = MAINNET_DEPL
 
   // Which launch format does the live Pons factory accept? Then a full rehearsal: house agent #1's wallet on version 3
   // launches with that format (one eth_call, nothing sent; settings and the wallet's version set by state overrides).
-  const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]);
+  // Before the Safe opens awakening the fund won't name agent wallets; the ERC-6551 registry still knows the address.
+  const wallet1 = await read<Address>(d.fund, "AgentStarterFund", "agentWallet", [1n]).catch(() => c.readContract({
+    address: L.registry, abi: parseAbi(["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"]),
+    functionName: "account", args: [d.impl, zeroHash, BigInt(d.chainId), d.nft, 1n],
+  }) as Promise<Address>);
   const holder1 = await read<Address>(d.nft, "TrenchersNFT", "ownerOf", [1n]);
   const SOC = "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }";
   const BASE = "string name; string symbol; string logo; string description; Socials socials; address creatorFeeRecipient; uint16 creatorTaxBps; bool buybackEnabled; bytes32 expectedEconomics";
