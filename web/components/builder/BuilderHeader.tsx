@@ -14,7 +14,7 @@ export function BuilderHeader() {
       <header className="bar bar-wide vb-bar">
         <a href="?" className="inf-brand" aria-label="Trenchers V4 Builder">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
-          <span className="inf-brand-tag vb-brand-tag mono">V4<br />Builder</span>
+          <span className="inf-brand-tag vb-brand-tag mono">Make it<br />launch</span>
         </a>
         <nav>
           <a href="?#launch" className="nav-mint vb-cta">Launch a coin</a>

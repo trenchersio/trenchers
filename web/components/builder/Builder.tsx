@@ -23,30 +23,34 @@ function Sec({ id, n, label, title, lede, children }: { id: string; n: string; l
   );
 }
 
-/** The hook, drawn as a circuit: a trade comes in, passes the rules, swaps in the pool, then the fee engines run. */
+/** One trade through a V4 Builder coin, stage by stage. A pulse walks down the stages on a loop, so the reader
+ *  sees the order: rules first, then the pool, then the mechanics, then the fees. */
 function Schematic() {
+  const STAGES: { k: string; t: string; tone: string; body: React.ReactNode }[] = [
+    { k: "in", t: "A buy comes in", tone: "fog", body: <span className="mono vb-pp-amt">0.50 ETH → $TIDE</span> },
+    { k: "rules", t: "Before the swap: your rules", tone: "ice", body: <span className="vb-pp-chips">{["Buy window", "Cooldown", "Wallet cap"].map((x) => <i key={x}><b aria-hidden="true">✓</b>{x}</i>)}</span> },
+    { k: "pool", t: "Uniswap v4 pool", tone: "fog", body: <span className="vb-pp-pool"><svg viewBox="0 0 120 28" aria-hidden="true"><path d="M2 24 L20 20 L34 22 L50 14 L66 16 L82 9 L98 11 L118 3" /></svg><em className="mono">liquidity locked forever</em></span> },
+    { k: "mech", t: "After the swap: mechanics", tone: "violet", body: <span className="vb-pp-chips">{["Cashback", "King of the hill", "Buyback"].map((x) => <i key={x}>{x}</i>)}</span> },
+    { k: "fees", t: "Fees split", tone: "green", body: (
+      <span className="vb-pp-fees">
+        <span className="vb-pp-bar" aria-hidden="true"><i className="c" /><i className="m" /><i className="t" /></span>
+        <span className="mono vb-pp-legend"><span><i className="c" />you 3%</span><span><i className="m" />modules</span><span><i className="t" />0.3% $TRENCHERS buyback</span></span>
+      </span>
+    ) },
+    { k: "out", t: "Coins out", tone: "fog", body: <span className="mono vb-pp-amt">1,240,000 $TIDE</span> },
+  ];
   return (
     <figure className="vb-schem" aria-label="How a trade moves through a V4 Builder coin">
       <Marks />
       <figcaption className="mono"><span>fig. 01</span><span>one trade, end to end</span></figcaption>
-      <svg viewBox="0 0 420 300" role="img" aria-hidden="true">
-        <defs>
-          <pattern id="vbg" width="14" height="14" patternUnits="userSpaceOnUse"><path d="M14 0H0V14" fill="none" stroke="rgba(110,200,255,.07)" strokeWidth="1" /></pattern>
-        </defs>
-        <rect x="0" y="0" width="420" height="300" fill="url(#vbg)" />
-        <path id="vbwire" className="vb-wire" d="M75 52 H290 V155 H95 V255 H325" />
-        <g className="vb-node"><rect x="20" y="32" width="110" height="40" rx="6" /><text x="75" y="57">trade in</text></g>
-        <g className="vb-node vb-node-r"><rect x="180" y="26" width="220" height="54" rx="6" /><text x="290" y="49">before swap</text><text x="290" y="67" className="sub">cooldown · window · caps</text></g>
-        <g className="vb-node vb-node-p"><rect x="200" y="130" width="180" height="52" rx="6" /><text x="290" y="152">v4 pool</text><text x="290" y="170" className="sub">locked liquidity</text></g>
-        <g className="vb-node vb-node-r"><rect x="20" y="130" width="150" height="52" rx="6" /><text x="95" y="152">after swap</text><text x="95" y="170" className="sub">games · rewards</text></g>
-        <g className="vb-node vb-node-f"><rect x="20" y="230" width="170" height="52" rx="6" /><text x="105" y="252">fees</text><text x="105" y="270" className="sub">you · modules · 0.3%</text></g>
-        <g className="vb-node"><rect x="250" y="234" width="150" height="44" rx="6" /><text x="325" y="261">coins out</text></g>
-        <circle r="4" className="vb-pulse"><animateMotion dur="5.5s" repeatCount="indefinite"><mpath href="#vbwire" /></animateMotion></circle>
-        <circle r="4" className="vb-pulse b"><animateMotion dur="5.5s" begin="2.75s" repeatCount="indefinite"><mpath href="#vbwire" /></animateMotion></circle>
-      </svg>
-      <ul className="vb-schem-key mono">
-        <li><i className="r" />your rules</li><li><i className="p" />uniswap v4</li><li><i className="f" />fee split</li>
-      </ul>
+      <ol className="vb-pp">
+        {STAGES.map((x, i) => (
+          <li key={x.k} className={`vb-pp-st t-${x.tone}`} style={{ ["--i" as string]: i }}>
+            <span className="vb-pp-n mono">{String(i + 1).padStart(2, "0")}</span>
+            <div className="vb-pp-b"><b>{x.t}</b>{x.body}</div>
+          </li>
+        ))}
+      </ol>
     </figure>
   );
 }

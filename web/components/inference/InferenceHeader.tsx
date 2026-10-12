@@ -14,7 +14,7 @@ export function InferenceHeader() {
       <header className="bar bar-wide inf-bar">
         <a href="#top" className="inf-brand" aria-label="Trenchers Inference Markets">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
-          <span className="inf-brand-tag mono">Inference<br />Markets</span>
+          <span className="inf-brand-tag mono">Make it<br />think</span>
         </a>
         <nav>
           <a href="#buy" className="nav-mint inf-cta">Buy credit</a>
