@@ -2523,7 +2523,8 @@ img.tk-logo { flex: none; }
 .eco-core-k { color: #6F7873; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
 .eco-core-t { font-size: 22px; letter-spacing: -.02em; }
 .eco-core-p { color: var(--quiet); font-size: 12.5px; line-height: 1.4; white-space: nowrap; }
-.eco-core-cta { display: flex; gap: 8px; margin-top: 4px; align-items: center; }
+.eco-core-cta { display: flex; gap: 8px; margin-top: 4px; align-items: center; position: relative; z-index: 2; }
+.eco-core::before { pointer-events: none; }
 .eco:not(.eco-compact) .eco-art { width: 92px; height: 92px; }
 .eco-core-go { color: var(--fog); font-size: 12px; }
 button.eco-core { cursor: pointer; }

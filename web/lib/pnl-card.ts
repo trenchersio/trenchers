@@ -124,7 +124,7 @@ export async function renderPnlCard(canvas: HTMLCanvasElement, d: PnlCardData, o
   // Footer.
   if (tr) { g.font = `500 16px ${MONO}`; g.fillStyle = C.quiet; g.fillText(`On-chain · tx ${tr.tx.slice(0, 10)}…${tr.tx.slice(-6)}`, 72, CARD_H - 30); }
   g.font = `500 18px ${MONO}`; g.fillStyle = C.quiet; g.textAlign = "right";
-  g.fillText("Self-funding trading agents with an identity", CARD_W - 64, CARD_H - 92);
+  g.fillText("One NFT Agent. Endless Possibilities.", CARD_W - 64, CARD_H - 92);
   g.fillStyle = C.green; g.font = `600 24px ${MONO}`; g.fillText("trenchers.io", CARD_W - 64, CARD_H - 56);
   g.textAlign = "left";
   return canvas;
