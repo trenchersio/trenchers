@@ -154,6 +154,37 @@ async function main() {
   check(chat.status === 503, "without a provider key, a call is refused with a reason and costs nothing");
   check(BigInt(d.ledger.accountFor(bob.address.toLowerCase())!.balanceMicroUsd) === usdFor(bought) + usdFor(part), "the refused call held nothing back");
   check(d.ledger.check().length === 0, "the ledger balances");
+
+  // Inference for a Trencher: anyone can send it credit, only its holder can make keys for it, and trencher-<id>
+  // answers only to those keys.
+  const T7 = "0x0000000000000000000000000000000000007777";
+  d.setTrenchers(async (id) => id === 7 ? { id, wallet: T7, holder: alice.address, persona: "You are Trencher #7." } : id === 8 ? null : null);
+  const sign = async (who: typeof bob) => { const m = (await j("/icm/nonce", { address: who.address })).json as { message: string }; return wal(who).signMessage({ message: m.message, account: who }); };
+  const before = BigInt(d.ledger.accountFor(bob.address.toLowerCase())!.balanceMicroUsd);
+  const gift = await j("/icm/gift", { address: bob.address, signature: await sign(bob), trencher: 7, amountUsd: "1" });
+  check(gift.status === 201, "bob sends $1 of inference to Trencher #7");
+  check(BigInt(d.ledger.accountFor(bob.address.toLowerCase())!.balanceMicroUsd) === before - 1_000_000n, "it comes out of bob's credit");
+  const pub7 = await j("/icm/trencher/7");
+  check(pub7.status === 200 && pub7.json.balanceMicroUsd === "1000000" && pub7.json.model === "trencher-7", "Trencher #7 shows its $1 and its model name");
+  check((await j("/icm/trencher/8")).status === 404, "a Trencher that isn't awake can't hold inference");
+  const nope = await j("/icm/account", { address: carol.address, signature: await sign(carol), trencher: 7 });
+  check(nope.status === 403, "only the holder can open a Trencher's account");
+  const as7 = await j("/icm/account", { address: alice.address, signature: await sign(alice), trencher: 7 });
+  check(as7.status === 200 && (as7.json.account as { owner: string }).owner === T7 && (as7.json.trencher as { id: number }).id === 7, "the holder opens Trencher #7's account");
+  const k7 = await j("/icm/keys", { address: alice.address, signature: await sign(alice), trencher: 7 });
+  const s7 = String(k7.json.secret ?? "");
+  check(k7.status === 201 && (k7.json.key as { label: string }).label === "Trencher #7", "the holder makes a key for Trencher #7");
+  const callAs = (secret: string, model: string) => fetch(`${base}/icm/v1/chat/completions`, { method: "POST", headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "user", content: "who are you" }] }) });
+  check((await callAs(secret, "trencher-7")).status === 403, "someone else's key can't speak as Trencher #7");
+  check((await callAs(s7, "trencher-8")).status === 404, "Trencher #7's key can't speak as another Trencher");
+  check((await callAs(s7, "trencher-7")).status === 503, "Trencher #7's key reaches the provider as trencher-7 (refused here only for want of a provider key)");
+  let holder7 = alice.address;
+  d.setTrenchers(async (id) => id === 7 ? { id, wallet: T7, holder: holder7, persona: "You are Trencher #7." } : null);
+  holder7 = carol.address; // alice sells Trencher #7 to carol
+  check((await callAs(s7, "trencher-7")).status === 403, "when the Trencher is sold, the old holder's keys stop working");
+  const c7 = await j("/icm/account", { address: carol.address, signature: await sign(carol), trencher: 7 });
+  check(c7.status === 200 && (c7.json.account as { balanceMicroUsd: string }).balanceMicroUsd === "1000000", "the new holder takes over its inference balance");
+  check(d.ledger.check().length === 0, "the ledger balances after gifts");
   srv.close();
 
   console.log(failures ? `\n${failures} check(s) failed` : "\nall inference checks passed");

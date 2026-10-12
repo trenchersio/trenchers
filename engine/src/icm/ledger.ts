@@ -3,7 +3,7 @@
  *
  * The invariant everything here protects:
  *
- *     balance + held  ==  deposited − settled
+ *     balance + held  ==  deposited + received − settled − sent
  *
  * Every method either keeps that true or throws. `check()` asserts it across the whole book, and the tests run it
  * after every operation, because an accounting bug that only shows up at scale is the worst kind.
@@ -16,7 +16,7 @@
  * Nothing in this file knows what a token is, what chain it is on, or who the provider is.
  */
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import type { Account, ApiKey, Charge, Deposit, DepositSource, HouseBook } from "./types.ts";
+import type { Account, ApiKey, Charge, Deposit, DepositSource, HouseBook, Transfer } from "./types.ts";
 import type { CollectionName, Store } from "./store.ts";
 import type { IcmConfig } from "./config.ts";
 import { E, IcmError } from "./errors.ts";
@@ -27,6 +27,7 @@ const ACCOUNTS: CollectionName = "icm_accounts";
 const KEYS: CollectionName = "icm_keys";
 const DEPOSITS: CollectionName = "icm_deposits";
 const CHARGES: CollectionName = "icm_charges";
+const TRANSFERS: CollectionName = "icm_transfers";
 
 const big = (s: string): bigint => BigInt(s);
 const str = (v: bigint): string => v.toString();
@@ -222,6 +223,44 @@ export class Ledger {
 
   depositsOf(accountId: string, limit = 50): Deposit[] {
     return this.store.filter<Deposit>(DEPOSITS, (d) => d.accountId === accountId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, limit);
+  }
+
+  // ---------------------------------------------------------------------------------------------- transfers
+
+  /**
+   * Move spendable credit from one account to another. Idempotent by `ref`. Only the sender's free balance moves:
+   * holds stay where they are. Nothing is created or destroyed, so the house book is unchanged.
+   */
+  transfer(o: { fromAccountId: string; toAccountId: string; amountMicroUsd: bigint; ref: string; note?: string }): Transfer {
+    const ref = o.ref.trim();
+    if (!ref) throw E.invalid("a transfer needs a ref");
+    const existing = this.store.find<Transfer>(TRANSFERS, (t) => t.ref === ref);
+    if (existing) return existing;
+    if (o.amountMicroUsd <= 0n) throw E.invalid("a transfer must be more than zero");
+    if (o.fromAccountId === o.toAccountId) throw E.invalid("an account cannot send credit to itself");
+    const from = this.accountById(o.fromAccountId);
+    const to = this.accountById(o.toAccountId);
+    if (from.suspended) throw E.suspended(from.suspendedReason ?? "no reason given");
+    if (big(from.balanceMicroUsd) < o.amountMicroUsd) {
+      throw new IcmError(`Not enough credit: $${formatUsd(big(from.balanceMicroUsd))} available.`, { code: "insufficient_balance", status: 402 });
+    }
+    const at = this.iso();
+    from.balanceMicroUsd = str(big(from.balanceMicroUsd) - o.amountMicroUsd);
+    from.sentMicroUsd = str(big(from.sentMicroUsd ?? "0") + o.amountMicroUsd);
+    from.updatedAt = at;
+    to.balanceMicroUsd = str(big(to.balanceMicroUsd) + o.amountMicroUsd);
+    to.receivedMicroUsd = str(big(to.receivedMicroUsd ?? "0") + o.amountMicroUsd);
+    to.updatedAt = at;
+    this.store.save(ACCOUNTS, from);
+    this.store.save(ACCOUNTS, to);
+    return this.store.save<Transfer>(TRANSFERS, {
+      id: this.randomId(), createdAt: at, fromAccountId: from.id, toAccountId: to.id, amountMicroUsd: str(o.amountMicroUsd), ref, note: o.note?.slice(0, 300) ?? null,
+    });
+  }
+
+  transfersOf(accountId: string, limit = 50): Transfer[] {
+    return this.store.filter<Transfer>(TRANSFERS, (t) => t.fromAccountId === accountId || t.toAccountId === accountId)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, limit);
   }
 
@@ -457,14 +496,15 @@ export class Ledger {
   }
 
   /**
-   * Assert the book adds up, for every account: `balance + held == deposited − spent`. Returns the accounts that
+   * Assert the book adds up, for every account: `balance + held == deposited + received − spent − sent`. Returns the accounts that
    * do not. Call it in tests after every operation and on a schedule in production; an empty array is the only
    * acceptable answer, and anything else means a hold leaked.
    */
   check(): { accountId: string; owner: string; balance: string; held: string; deposited: string; spent: string; driftMicroUsd: string }[] {
     const bad: { accountId: string; owner: string; balance: string; held: string; deposited: string; spent: string; driftMicroUsd: string }[] = [];
     for (const a of this.store.all<Account>(ACCOUNTS)) {
-      const drift = big(a.balanceMicroUsd) + big(a.heldMicroUsd) - (big(a.depositedMicroUsd) - big(a.spentMicroUsd));
+      const drift = big(a.balanceMicroUsd) + big(a.heldMicroUsd)
+        - (big(a.depositedMicroUsd) + big(a.receivedMicroUsd ?? "0") - big(a.spentMicroUsd) - big(a.sentMicroUsd ?? "0"));
       if (drift !== 0n) {
         bad.push({ accountId: a.id, owner: a.owner, balance: a.balanceMicroUsd, held: a.heldMicroUsd, deposited: a.depositedMicroUsd, spent: a.spentMicroUsd, driftMicroUsd: str(drift) });
       }

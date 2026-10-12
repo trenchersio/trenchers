@@ -13,7 +13,7 @@
  */
 import type { Account, ApiKey, Charge, Deposit } from "./types.ts";
 
-export const COLLECTIONS = ["icm_accounts", "icm_keys", "icm_deposits", "icm_charges"] as const;
+export const COLLECTIONS = ["icm_accounts", "icm_keys", "icm_deposits", "icm_charges", "icm_transfers"] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];
 
 export interface Row {

@@ -317,3 +317,43 @@ test("a long run of mixed activity leaves the book exactly balanced", () => {
   assert.ok(BigInt(book.grossMarginMicroUsd) > 0n, "the margin earned something");
   assert.equal(formatUsd(BigInt(book.revenueMicroUsd) - BigInt(book.upstreamCostMicroUsd)), formatUsd(BigInt(book.grossMarginMicroUsd)));
 });
+
+// ------------------------------------------------------------------------------------------------ transfers
+
+test("a transfer moves free credit to another account, once per ref, and the book still adds up", () => {
+  const { ledger, account } = funded("10");
+  const trencher = ledger.account("0x00000000000000000000000000000000000000aa");
+  const t = ledger.transfer({ fromAccountId: account.id, toAccountId: trencher.id, amountMicroUsd: parseUsd("4"), ref: "gift-1" });
+  assert.equal(balance(ledger, account.id), parseUsd("6"));
+  assert.equal(balance(ledger, trencher.id), parseUsd("4"));
+  const again = ledger.transfer({ fromAccountId: account.id, toAccountId: trencher.id, amountMicroUsd: parseUsd("4"), ref: "gift-1" });
+  assert.equal(again.id, t.id);
+  assert.equal(balance(ledger, account.id), parseUsd("6"));
+  assert.equal(ledger.transfersOf(trencher.id).length, 1);
+  assert.equal(ledger.check().length, 0);
+  // the house sold $10 of credit and still owes $10: a gift is not revenue and not new money
+  const book = ledger.book();
+  assert.equal(book.soldMicroUsd, parseUsd("10").toString());
+  assert.equal(book.outstandingMicroUsd, parseUsd("10").toString());
+  assert.equal(book.revenueMicroUsd, "0");
+});
+
+test("a transfer can't overdraw, can't be zero, can't go to itself, and never moves held credit", () => {
+  const { ledger, account, key } = funded("5");
+  const other = ledger.account("0xbb");
+  assert.throws(() => ledger.transfer({ fromAccountId: account.id, toAccountId: other.id, amountMicroUsd: parseUsd("6"), ref: "a" }), /Not enough credit/);
+  assert.throws(() => ledger.transfer({ fromAccountId: account.id, toAccountId: other.id, amountMicroUsd: 0n, ref: "b" }), /more than zero/);
+  assert.throws(() => ledger.transfer({ fromAccountId: account.id, toAccountId: account.id, amountMicroUsd: 1n, ref: "c" }), /itself/);
+  ledger.hold({ key, account: ledger.accountById(account.id), model: "m", amountMicroUsd: parseUsd("4") });
+  assert.throws(() => ledger.transfer({ fromAccountId: account.id, toAccountId: other.id, amountMicroUsd: parseUsd("2"), ref: "d" }), /Not enough credit/);
+  ledger.transfer({ fromAccountId: account.id, toAccountId: other.id, amountMicroUsd: parseUsd("1"), ref: "e" });
+  assert.equal(held(ledger, account.id), parseUsd("4"));
+  assert.equal(ledger.check().length, 0);
+});
+
+test("a suspended account can't send credit", () => {
+  const { ledger, account } = funded("5");
+  const other = ledger.account("0xcc");
+  ledger.suspend(account.id, "abuse");
+  assert.throws(() => ledger.transfer({ fromAccountId: account.id, toAccountId: other.id, amountMicroUsd: 1n, ref: "x" }), /suspended/);
+});

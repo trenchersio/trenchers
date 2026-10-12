@@ -245,12 +245,9 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
             {EXPLORER && <a href={`${EXPLORER}/tx/${sent}`} target="_blank" rel="noreferrer">View transaction ↗</a>}</p>
         )}
 
-        <span className="ibuy-soon" tabIndex={0} aria-describedby="ibuy-soon-tip">
-          <button type="button" className="ibuy-trencher" disabled aria-disabled="true">
-            <img src="brand/mark.svg" alt="" width={14} height={14} />Send inference to a Trencher
-          </button>
-          <span className="ibuy-tip mono" id="ibuy-soon-tip" role="tooltip">Coming Soon</span>
-        </span>
+        <a className="ibuy-trencher ibuy-trencher-on" href="#trencher">
+          <img src="brand/mark.svg" alt="" width={14} height={14} />Send inference to a Trencher
+        </a>
 
         <p className="ibuy-foot">
           {pay === "token" && "One transfer to the desk contract. Whichever wallet sends it gets the credit."}

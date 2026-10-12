@@ -144,6 +144,14 @@ export function mockInference(method: string, path: string, body: Record<string,
   if (p === "/icm/v1/models") return ok({ object: "list", data: MODELS.map(([id, name, c]) => ({ id, object: "model", name, context_length: c })) });
   if (p === "/icm/nonce") return ok({ nonce: hex(32), message: `Trenchers Inference Markets\n\nSign in to manage your inference keys.\n\nNonce: ${hex(16)}` });
   if (p === "/icm/account") return ok(account());
+  const tv = p.match(/^\/icm\/trencher\/(\d{1,4})$/);
+  if (tv) {
+    const id = Number(tv[1]);
+    if (id < 1 || id > 2000) return { status: 400, json: { error: { message: "A Trencher number is 1 to 2,000.", code: "invalid_request" } } };
+    if (id % 7 === 3) return { status: 404, json: { error: { message: `Trencher #${id} isn't awake yet: it has no agent wallet to hold inference.`, code: "not_found" } } };
+    return ok({ id, wallet: `0x${"7".repeat(36)}${String(id).padStart(4, "0")}`, holder: null, model: `trencher-${id}`, balanceMicroUsd: String((id % 13) * 1_250_000), spentMicroUsd: "420000", receivedMicroUsd: String((id % 13) * 1_250_000 + 420_000) });
+  }
+  if (p === "/icm/gift" && method === "POST") return { status: 201, json: { transfer: { id: hex(8), amountMicroUsd: String(Math.round(Number(body?.amountUsd ?? 0) * 1e6)), to: { id: body?.trencher, wallet: "0x" } }, balanceMicroUsd: "12000000" } };
   if (p === "/icm/keys" && method === "POST") return { status: 201, json: { secret: `trench_live_${hex(48)}`, key: { id: `key-${hex(4)}`, display: `trench_live_${hex(4)}…${hex(4)}`, label: (body?.label as string) ?? null, disabled: false, createdAt: new Date().toISOString(), lastUsedAt: null, spentMicroUsd: "0", spendLimitMicroUsd: body?.spendLimitUsd ? String(Math.round(Number(body.spendLimitUsd) * 1e6)) : null, models: [] } } };
   if (/^\/icm\/keys\/[^/]+\/revoke$/.test(p)) return ok({ revoked: p.split("/")[3] });
   if (p === "/icm/otc/orders") return ok({ orders: mockOrders(), fills: mockFills() });

@@ -5,7 +5,8 @@ import { Chat } from "./chat";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
 import { verifyDeployment } from "./verify";
-import { InferenceDesk } from "./inference";
+import { InferenceDesk, trencherPersona } from "./inference";
+import { FUND_ABI, NFT_OWNER_ABI } from "./abis";
 import { BuilderIndex } from "./builder";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
@@ -69,6 +70,17 @@ const inference = new InferenceDesk(undefined, (t) => {
   for (const c of engine?.agentCoins.values() ?? []) if (c.token.toLowerCase() === t) return { verified: true, agent: c.agent };
   for (const c of engine?.pgCoins.values() ?? []) if (c.token.toLowerCase() === t) return { verified: true, agent: c.agent };
   return { verified: false, agent: null };
+});
+// A Trencher on the desk: its agent wallet holds its inference, its holder manages it, and its rule is who it is.
+inference.setTrenchers(async (id) => {
+  if (!engine) return null;
+  const known = [...engine.agents.values()].find((a) => a.id === id);
+  const wallet = known?.wallet ?? await engine.pub.readContract({ address: ENV.FUND, abi: FUND_ABI, functionName: "agentWallet", args: [BigInt(id)] }) as `0x${string}`;
+  // Awake means the agent wallet exists on-chain (awakening deploys it).
+  if (!known) { const code = await engine.pub.getCode({ address: wallet }).catch(() => undefined); if (!code || code === "0x") return null; }
+  const holder = await engine.pub.readContract({ address: ENV.NFT, abi: NFT_OWNER_ABI, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => null) as string | null;
+  const coin = [...engine.agentCoins.values(), ...engine.pgCoins.values()].find((c) => c.agent === id);
+  return { id, wallet, holder, persona: trencherPersona({ id, wallet, rule: known?.ruleText ?? null, live: known?.live ?? false, coin: coin?.token ?? null }) };
 });
 const every = (ms: number, f: () => Promise<unknown> | unknown) => { const run = async () => { try { await f(); } catch (e) { console.warn(`[inference] ${(e as Error).message}`); } setTimeout(run, ms); }; setTimeout(run, 5_000); };
 every(30_000, () => inference.poll());

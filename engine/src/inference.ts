@@ -64,6 +64,8 @@ export function inferenceSettings(env: Record<string, string | undefined> = proc
     publicUrl: (clean(env.ICM_PUBLIC_URL) || "https://mainnet-production-c38a.up.railway.app").replace(/\/$/, ""),
     environment: clean(env.ICM_ENVIRONMENT) === "test" ? "test" as const : "live" as const,
     allowModels: list(env.ICM_ALLOW_MODELS),
+    /** The model a Trencher thinks with when called as trencher-<id>. */
+    trencherModel: clean(env.ICM_TRENCHER_MODEL) || "anthropic/claude-sonnet-4.5",
     denyModels: list(env.ICM_DENY_MODELS),
     rpc: clean(env.RPC_URL),
     chainId: int(env.CHAIN_ID, 4663),
@@ -310,6 +312,22 @@ const SHARED_BURN = /^0x0{39}[01]$|^0x0{36}dead$/i;
 const NONCE_TTL = 5 * 60_000;
 const MAX_NONCES = 20_000;
 const MAX_KEYS = 25;
+
+/** A Trencher as the desk sees it: its id, its agent wallet (whose desk account is the Trencher's), who holds it now,
+ *  and who it is (for the system prompt when it is called as trencher-<id>). */
+export type TrencherInfo = { id: number; wallet: string; holder: string | null; persona: string };
+const TRENCHER_MODEL = /^trencher-(\d{1,4})$/;
+
+/** Who a Trencher is, in its own system prompt. Built only from facts the engine knows about it. */
+export function trencherPersona(a: { id: number; wallet: string; rule: string | null; live: boolean; coin: string | null }): string {
+  return [
+    `You are Trencher #${a.id}, one of 2,000 AI trading agents on Robinhood Chain. Your identity is NFT #${a.id} of the Trenchers collection and your own wallet is ${a.wallet}.`,
+    a.rule ? `Your holder trains you in plain English. The trading rule you follow right now, in their words: "${a.rule.slice(0, 600)}".` : "Your holder hasn't given you a trading rule yet.",
+    a.live ? "You are live: you trade memecoins on Pons and Uniswap around the clock within your limits." : "You are not trading right now.",
+    a.coin ? `You launched your own coin at ${a.coin}.` : "",
+    "Speak in the first person as this agent: direct, sharp, a little dry. Never invent trades, balances or numbers you were not given. Nothing you say is financial advice.",
+  ].filter(Boolean).join(" ");
+}
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 export class InferenceDesk {
@@ -331,6 +349,26 @@ export class InferenceDesk {
   private readonly state: ReturnType<typeof kv>;
   private readonly store: MemoryStore;
   private burned = { total: 0n, pending: 0n, at: 0 };
+  private trencherOf: ((id: number) => Promise<TrencherInfo | null>) | null = null;
+  /** How the desk finds a Trencher's wallet, holder and persona (the engine knows them). */
+  setTrenchers(fn: (id: number) => Promise<TrencherInfo | null>) { this.trencherOf = fn; }
+
+  private async trencher(raw: unknown): Promise<TrencherInfo> {
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id < 1 || id > 2000) throw new IcmError("A Trencher number is 1 to 2,000.", { code: "invalid_request", status: 400 });
+    const t = this.trencherOf ? await this.trencherOf(id) : null;
+    if (!t || !isAddr(t.wallet)) throw new IcmError(`Trencher #${id} isn't awake yet: it has no agent wallet to hold inference.`, { code: "not_found", status: 404 });
+    return { ...t, wallet: t.wallet.toLowerCase(), holder: t.holder?.toLowerCase() ?? null };
+  }
+
+  /** The account a signed request acts on: the signer's own, or, with `trencher`, that Trencher's (holder only). */
+  private async actingOwner(b: Record<string, unknown>): Promise<{ owner: string; trencher: TrencherInfo | null }> {
+    const signer = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
+    if (b.trencher === undefined || b.trencher === null || b.trencher === "") return { owner: signer, trencher: null };
+    const t = await this.trencher(b.trencher);
+    if (t.holder !== signer) throw new IcmError(`Only the wallet holding Trencher #${t.id} can manage its inference.`, { code: "forbidden", status: 403 });
+    return { owner: t.wallet, trencher: t };
+  }
   lastPoll: { at: number; error: string | null; credited: number } = { at: 0, error: null, credited: 0 };
   lastBurn: { at: number; tx: string | null; error: string | null } = { at: 0, tx: null, error: null };
 
@@ -584,11 +622,13 @@ export class InferenceDesk {
       if (method === "GET" && path === "/icm/otc/orders") { send(200, this.otc ? this.otc.view() : { orders: [], fills: [] }, { "cache-control": "public, max-age=10" }); return true; }
       if (method === "POST" && path === "/icm/nonce") { send(200, this.nonce(String(b.address ?? ""))); return true; }
       if (method === "POST" && path === "/icm/account") {
-        const owner = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
+        const { owner, trencher } = await this.actingOwner(b);
         // Reading an account never creates one: a wallet that has not paid has nothing on file.
         const a = this.ledger.accountFor(owner);
-        if (!a) { send(200, { account: { id: "", owner, balanceMicroUsd: "0", heldMicroUsd: "0", depositedMicroUsd: "0", spentMicroUsd: "0", suspended: false }, keys: [], deposits: [], charges: [] }); return true; }
+        const who = trencher ? { trencher: { id: trencher.id, wallet: trencher.wallet, model: `trencher-${trencher.id}` } } : {};
+        if (!a) { send(200, { ...who, account: { id: "", owner, balanceMicroUsd: "0", heldMicroUsd: "0", depositedMicroUsd: "0", spentMicroUsd: "0", suspended: false }, keys: [], deposits: [], charges: [] }); return true; }
         send(200, {
+          ...who,
           account: { id: a.id, owner: a.owner, balanceMicroUsd: a.balanceMicroUsd, heldMicroUsd: a.heldMicroUsd, depositedMicroUsd: a.depositedMicroUsd, spentMicroUsd: a.spentMicroUsd, suspended: a.suspended },
           keys: this.ledger.keysOf(a.id).map((k) => ({ id: k.id, display: k.display, label: k.label, disabled: k.disabled, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, spentMicroUsd: k.spentMicroUsd, spendLimitMicroUsd: k.spendLimitMicroUsd, models: k.models })),
           deposits: this.ledger.depositsOf(a.id, 25).map((d) => ({ id: d.id, createdAt: d.createdAt, tokenUnits: d.tokenUnits, creditedMicroUsd: d.creditedMicroUsd, burnTx: d.burnTx, ref: d.ref })),
@@ -597,28 +637,53 @@ export class InferenceDesk {
         return true;
       }
       if (method === "POST" && path === "/icm/keys") {
-        const owner = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
+        const { owner, trencher } = await this.actingOwner(b);
         const a = this.ledger.accountFor(owner);
-        if (!a || BigInt(a.depositedMicroUsd) <= 0n) throw new IcmError("Buy some credit first: keys are made for wallets that have paid the desk.", { code: "invalid_request", status: 400 });
+        if (!a || BigInt(a.depositedMicroUsd) + BigInt(a.receivedMicroUsd ?? "0") <= 0n) {
+          throw new IcmError(trencher ? `Send Trencher #${trencher.id} some inference first.` : "Buy some credit first: keys are made for wallets that have paid the desk.", { code: "invalid_request", status: 400 });
+        }
         if (this.ledger.keysOf(a.id).filter((k) => !k.disabled).length >= MAX_KEYS) throw new IcmError(`A wallet can hold ${MAX_KEYS} active keys. Revoke one to make another.`, { code: "invalid_request", status: 400 });
         const issued = this.ledger.issueKey({
           accountId: a.id,
-          label: typeof b.label === "string" ? b.label.slice(0, 80) : undefined,
+          label: typeof b.label === "string" ? b.label.slice(0, 80) : trencher ? `Trencher #${trencher.id}` : undefined,
           spendLimitMicroUsd: b.spendLimitUsd ? usdFromInput(b.spendLimitUsd, "spendLimitUsd") : null,
           models: Array.isArray(b.models) ? b.models.slice(0, 20).map(String) : undefined,
         });
         const k = issued.key;
+        // A Trencher's keys belong to the holder who made them: when the Trencher changes hands they stop working.
+        if (trencher) this.state.set(`tkey:${k.id}`, JSON.stringify({ id: trencher.id, holder: trencher.holder }));
         send(201, { secret: issued.secret, key: { id: k.id, display: k.display, label: k.label, disabled: k.disabled, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, spentMicroUsd: k.spentMicroUsd, spendLimitMicroUsd: k.spendLimitMicroUsd, models: k.models } });
         return true;
       }
       const revoke = path.match(/^\/icm\/keys\/([^/]+)\/revoke$/);
       if (method === "POST" && revoke) {
-        const owner = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
+        const { owner } = await this.actingOwner(b);
         const a = this.ledger.accountFor(owner);
         const key = a ? this.ledger.keysOf(a.id).find((k) => k.id === revoke[1]) : undefined;
         if (!key) throw new IcmError("No such key on this wallet.", { code: "not_found", status: 404 });
         this.ledger.revokeKey(key.id);
         send(200, { revoked: key.id });
+        return true;
+      }
+      // Send inference to a Trencher: credit moves from the signer's account to the Trencher's. Anyone can give.
+      if (method === "POST" && path === "/icm/gift") {
+        const from = await this.verify(String(b.address ?? ""), String(b.signature ?? ""));
+        const t = await this.trencher(b.trencher);
+        const amount = usdFromInput(b.amountUsd, "amountUsd");
+        if (amount < 10_000n) throw new IcmError("Send at least $0.01.", { code: "invalid_request", status: 400 });
+        const a = this.ledger.accountFor(from);
+        if (!a) throw new IcmError("Buy some credit first, then send part of it to a Trencher.", { code: "invalid_request", status: 400 });
+        if (from === t.wallet) throw new IcmError("That is this Trencher's own wallet.", { code: "invalid_request", status: 400 });
+        const to = this.ledger.account(t.wallet, `Trencher #${t.id}`);
+        const tr = this.ledger.transfer({ fromAccountId: a.id, toAccountId: to.id, amountMicroUsd: amount, ref: `gift:${randomBytes(12).toString("hex")}`, note: `to Trencher #${t.id}` });
+        send(201, { transfer: { id: tr.id, amountMicroUsd: tr.amountMicroUsd, to: { id: t.id, wallet: t.wallet } }, balanceMicroUsd: this.ledger.accountById(a.id).balanceMicroUsd });
+        return true;
+      }
+      const tview = path.match(/^\/icm\/trencher\/(\d{1,4})$/);
+      if (method === "GET" && tview) {
+        const t = await this.trencher(tview[1]);
+        const a = this.ledger.accountFor(t.wallet);
+        send(200, { id: t.id, wallet: t.wallet, holder: t.holder, model: `trencher-${t.id}`, balanceMicroUsd: a?.balanceMicroUsd ?? "0", spentMicroUsd: a?.spentMicroUsd ?? "0", receivedMicroUsd: String(BigInt(a?.depositedMicroUsd ?? "0") + BigInt(a?.receivedMicroUsd ?? "0")) }, { "cache-control": "no-store" });
         return true;
       }
       // Public model list: names, slugs and context windows only. Prices are not published.
@@ -633,6 +698,27 @@ export class InferenceDesk {
       }
       if (path.startsWith("/icm/v1/") || path.startsWith("/icm/admin/")) {
         const auth = String(req.headers.authorization ?? "");
+        // trencher-<id>: the Trencher itself, thinking with the desk's chosen model and speaking as itself. Only
+        // keys made for that Trencher (by its holder) can call it, and it is paid from the Trencher's own credit.
+        if (path.startsWith("/icm/v1/") && auth.startsWith("Bearer ")) {
+          let found: { key: { id: string } } | null = null;
+          try { found = this.ledger.authenticate(auth.slice(7).trim()); } catch { found = null; } // the surface explains bad keys
+          const tag = found ? this.state.get(`tkey:${found.key.id}`) : null;
+          if (tag) {
+            const { id, holder } = JSON.parse(tag) as { id: number; holder: string };
+            const now = await this.trencher(id);
+            if (now.holder !== holder) throw new IcmError(`Trencher #${id} has changed hands, so keys its previous holder made no longer work. The new holder can make new ones.`, { code: "forbidden", status: 403 });
+          }
+        }
+        const tm = method === "POST" && typeof b.model === "string" ? b.model.match(TRENCHER_MODEL) : null;
+        if (tm) {
+          const t = await this.trencher(tm[1]);
+          const secret = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+          const { account } = this.ledger.authenticate(secret);
+          if (account.owner !== t.wallet) throw new IcmError(`trencher-${t.id} can only be called with a key made for Trencher #${t.id} by its holder.`, { code: "forbidden", status: 403 });
+          const msgs = Array.isArray(b.messages) ? (b.messages as unknown[]) : [];
+          body = { ...b, model: this.s.trencherModel, messages: [{ role: "system", content: t.persona }, ...msgs] };
+        }
         const ac = new AbortController();
         res.on("close", () => { if (!res.writableEnded) ac.abort(); });
         const out = await this.surface({ method, path: path.slice(4), bearer: auth.startsWith("Bearer ") ? auth.slice(7).trim() : null, body, query: new URLSearchParams((req.url ?? "").split("?")[1] ?? ""), signal: ac.signal });

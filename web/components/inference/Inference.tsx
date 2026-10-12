@@ -10,6 +10,7 @@ import { Endpoint } from "./Endpoint";
 import { Catalogue } from "./Catalogue";
 import { Account } from "./Account";
 import { P2P } from "./P2P";
+import { TrencherMind } from "./TrencherMind";
 
 function ISection({ id, n, label, title, lede, children, aside }: { id?: string; n: string; label: string; title: ReactNode; lede?: ReactNode; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -34,7 +35,7 @@ const FAQ = [
   { q: "Do I have to sign up?", a: "No. Whichever wallet paid holds the credit. To create keys, sign one message with that wallet. It is a signature, not a transaction: no gas and nothing moves." },
   { q: "Can I give a bot its own key?", a: "Yes, and you should. Each key can carry its own spending cap and be revoked without affecting the others. A key capped at $5 can never spend more than $5, however much the account holds." },
   { q: "What is the P2P book?", a: "An order book where holders trade $TRENCHERS and agent coins directly at prices they set, with the escrow held by a contract and no fee. A $TRENCHERS ask can be filled straight into inference credit." },
-  { q: "Will Trenchers agents be able to use this?", a: "That is the plan. Agent wallets already collect $TRENCHERS from the fee share; letting an agent pay for its own model calls is next on the roadmap." },
+  { q: "What does sending inference to a Trencher do?", a: "It gives the Trencher a balance of its own on the desk, held by its agent wallet. Its holder can then make keys for it and call it as its own model, trencher-<number>: it knows its identity, its wallet and the rule it was trained with, and answers as itself, paid from its own balance. The balance stays with the Trencher when it is sold; the old holder's keys stop working." },
   { q: "What are the risks?", a: "Credit lives on the desk's ledger, not in a contract, so only top up what you intend to use. The router and P2P contracts are small, open source and reviewed before launch. Nothing here is financial advice." },
 ];
 
@@ -94,14 +95,13 @@ export function Inference() {
       <section className="ihero">
         <div className="ihero-grid" aria-hidden="true" />
         <div className="ihero-pitch">
-          <p className="hero-chip mono"><span className="live-dot" />Trenchers Inference Markets<span className="hero-chip-sep">/</span>{n ? `${n} models` : "one key"}</p>
+          <p className="hero-chip mono"><span className="live-dot" />04 · Make it think<span className="hero-chip-sep">/</span>{n ? `${n} models` : "Inference Markets"}</p>
           <h1 className="ihero-title">
-            Burn <mark>$TRENCHERS</mark>.<br />Run any model.
+            Every model.<br />One <mark>$TRENCHERS</mark> balance.
           </h1>
           <p className="lede ihero-lede">
-            Turn $TRENCHERS into compute. Claude, GPT, Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and dozens more answer at a
-            single address. The tokens you bring are destroyed on arrival; what you get back is dollar credit your bots, agents and
-            apps can spend on whichever model fits the job.
+            Top up once and call Claude, GPT, Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and the rest from the same endpoint.
+            Whatever you pay in leaves the supply for good. Hand your bots a key each, or give your Trencher a mind of its own.
           </p>
 
         </div>
@@ -112,7 +112,7 @@ export function Inference() {
             <span className="irate-chip cr"><b className="mono">$1.00</b> of credit</span>
             <span className="irate-op mono">→</span>
             <span className="irate-chip hot"><span className="ibuy-flame" aria-hidden="true" /><b className="mono">100%</b> burned</span>
-            <span className="irate-note">Credit never expires. Nothing to subscribe to, nothing to cancel.</span>
+            <span className="irate-note">No expiry date, no monthly plan. Top up when you run low.</span>
           </div>
           <Endpoint endpoint={endpoint} prefix={prefix} />
         </div>
@@ -138,10 +138,10 @@ export function Inference() {
 
       <section className="iflow" aria-label="How it works">
         {[
-          ["01", "Bring fuel", "$TRENCHERS from your wallet, ETH through the router, or tokens bought from a holder.", ""],
-          ["02", "It burns", "The desk contract can only send what it receives to the dead address. Nobody keeps it.", "burn"],
-          ["03", "You hold credit", "A dollar balance appears on the wallet that paid, usually inside a minute.", ""],
-          ["04", "Your code asks", "Pick a model per request. Each call draws down only what it actually used.", "go"],
+          ["01", "Top up", "Pay in $TRENCHERS, in ETH through the router, or from a holder on the P2P book.", ""],
+          ["02", "Gone for good", "The desk contract has exactly one move: send what it holds to the dead address.", "burn"],
+          ["03", "A dollar balance", "Credited to the wallet that paid (or to a Trencher), normally within a minute.", ""],
+          ["04", "Call any model", "Name the model in each request. Only what the call really used is billed.", "go"],
         ].map(([k, t, p, c]) => (
           <div key={k} className={`iflow-step${c ? ` ${c}` : ""}`}>
             <span className="mono iflow-n">{k}</span>
@@ -152,29 +152,34 @@ export function Inference() {
       </section>
 
       <section className="ifacts">
-        <div className="ifact"><span className="mono">Exactly the model you named</span><p>Ask for Claude and Claude answers. Every response names the provider&apos;s own model id, so nothing cheaper can be slipped in behind your back.</p></div>
-        <div className="ifact"><span className="mono">Pay for tokens, not guesses</span><p>Each call reserves a ceiling, then settles to the provider&apos;s real token count. The unused reserve returns at once, and a call that fails costs nothing.</p></div>
-        <div className="ifact hot"><span className="mono">Supply only goes one way</span><p>The desk keeps none of the $TRENCHERS it takes in. Every purchase of compute is a permanent burn, so more usage means fewer tokens.</p></div>
-        <div className="ifact"><span className="mono">Keys you can fence in</span><p>One key per bot or agent, each with its own spend cap. Shut one down without touching the others.</p></div>
+        <div className="ifact"><span className="mono">No silent swaps</span><p>The model you name is the model that runs. Each response carries the provider&apos;s own model id, so you can check.</p></div>
+        <div className="ifact"><span className="mono">Billed on real usage</span><p>A call sets aside a ceiling, then settles on the provider&apos;s token count. The rest comes straight back, and failed calls are free.</p></div>
+        <div className="ifact hot"><span className="mono">Usage shrinks supply</span><p>None of the $TRENCHERS paid in is kept. The more the desk is used, the fewer tokens exist.</p></div>
+        <div className="ifact"><span className="mono">A key per job</span><p>Give every bot, agent or Trencher its own key and spending cap. Revoke one and the rest keep running.</p></div>
       </section>
 
-      <ISection id="models" n="01" label="Models" title="The model shelf"
-        lede={<>Everything the desk can route to right now. Swap models by changing one string in your request; your key and balance stay the same. {n ? <b className="mono">{n} live now.</b> : null}</>}>
+      <ISection id="trencher" n="01" label="Make your Trencher think" title={<>Give your Trencher <mark>a mind</mark></>}
+        lede="Send inference to any awake Trencher. It keeps its own balance, and its holder can call it as its own AI model, identified by its NFT and speaking as itself.">
+        <TrencherMind rate={d.rate} mock={d.mock} />
+      </ISection>
+
+      <ISection id="models" n="02" label="Models" title="What's on tap"
+        lede={<>Every model the desk routes to right now. Switch by changing one string in the request; the key and the balance stay the same. {n ? <b className="mono">{n} live now.</b> : null}</>}>
         <Catalogue models={d.models} failed={d.modelsFailed} />
       </ISection>
 
-      <ISection id="p2p" n="02" label="P2P market" title={<>Trade $TRENCHERS with holders, at your price</>}
-        lede="An on-chain order book for $TRENCHERS and agent coins. No curve, no slippage, no fee: list an ask or a bid, the contract holds the escrow, anyone fills it. Buy from holders straight into inference credit.">
+      <ISection id="p2p" n="03" label="P2P market" title="The holders' order book"
+        lede="Holders list $TRENCHERS and agent coins at their own price; the contract keeps the escrow until someone fills it. No curve, no slippage and no fee, and an ask can be filled straight into inference credit.">
         <P2P rate={d.rate} orders={d.orders} fills={d.fills} onChange={d.reloadOrders} />
       </ISection>
 
-      <ISection id="account" n="03" label="Your account" title="Your desk, your keys"
-        lede="No sign-up form: the wallet that paid is the account. A single signature unlocks the balance, the keys and a log of every request. Until then you are looking at a demo account.">
+      <ISection id="account" n="04" label="Your account" title="Balance and keys"
+        lede="There is nothing to sign up for: your wallet is the account. Sign one message to see the balance, make keys and read the log of every call. Until then this shows a demo account.">
         <Account prefix={prefix} />
       </ISection>
 
-      <ISection id="start" n="04" label="Get $TRENCHERS" title="Fuel up from anywhere"
-        lede="Holding ETH on another network? It is a couple of minutes from Robinhood Chain, and from there one transaction turns it into credit.">
+      <ISection id="start" n="05" label="Get $TRENCHERS" title="Getting onto Robinhood Chain"
+        lede="ETH on another network is a couple of minutes away from Robinhood Chain. From there, one transaction turns it into credit.">
         <div className="istart">
           <div className="iroutes">
             <a className="iroute" href={TRENCHERS_PONS || undefined} target="_blank" rel="noreferrer">
@@ -205,7 +210,7 @@ export function Inference() {
         </div>
       </ISection>
 
-      <ISection id="faq" n="05" label="FAQ" title="Good to know" lede={<>Anything else? Read the <a href={`${ROUTES.docs}#trenchers-inference-markets`}>docs</a> or ask us on <a href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>.</>}>
+      <ISection id="faq" n="06" label="FAQ" title="Questions" lede={<>Anything else? Read the <a href={`${ROUTES.docs}#trenchers-inference-markets`}>docs</a> or ask us on <a href={SOCIALS.x} target="_blank" rel="noreferrer">X</a>.</>}>
         <div className="faq2">
           {FAQ.map((f, i) => (
             <details key={f.q} open={i === 0}>

@@ -19,6 +19,9 @@ export interface Account {
   depositedMicroUsd: string;
   /** Retail value of every settled charge. */
   spentMicroUsd: string;
+  /** Credit moved to other accounts, and from them (absent on records written before transfers existed: zero). */
+  sentMicroUsd?: string;
+  receivedMicroUsd?: string;
   suspended: boolean;
   suspendedReason: string | null;
 }
@@ -138,4 +141,16 @@ export interface HouseBook {
   counts: { accounts: number; keys: number; deposits: number; charges: number; held: number; unknown: number };
   /** Charges that ended in an unknown state and still need a human. Each one is money that may or may not be owed. */
   unresolvedMicroUsd: string;
+}
+
+/** Credit moved from one account to another (a gift). Neither new money nor revenue: it only changes hands. */
+export interface Transfer {
+  id: string;
+  createdAt: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amountMicroUsd: string;
+  /** Idempotency key: the same ref moves credit once. */
+  ref: string;
+  note: string | null;
 }
