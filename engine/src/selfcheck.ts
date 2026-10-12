@@ -118,7 +118,8 @@ export async function liveCheck(rpc: string) {
   };
   try {
     launch.safeThreshold = Number(await c.readContract({ address: SAFE, abi: SAFE_ABI, functionName: "getThreshold" }));
-    launch.safeOwners = await c.readContract({ address: SAFE, abi: SAFE_ABI, functionName: "getOwners" });
+    // Only how many signers there are: the signer addresses are never published.
+    launch.safeSigners = ((await c.readContract({ address: SAFE, abi: SAFE_ABI, functionName: "getOwners" })) as readonly string[]).length;
   } catch { launch.safe = "not readable"; problems.push("team Safe not readable on mainnet"); }
   report.launch = launch;
   if (!launch.erc6551Registry) problems.push("no ERC-6551 registry on mainnet: agent wallets can't be created");

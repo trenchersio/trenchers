@@ -146,7 +146,7 @@ export function MainnetLaunch() {
       const out: Check[] = [];
       try {
         const [th, ow] = await Promise.all([c.readContract({ address: R.safe, abi: SAFE_ABI, functionName: "getThreshold" }), c.readContract({ address: R.safe, abi: SAFE_ABI, functionName: "getOwners" })]);
-        out.push({ label: "Team Safe exists on Robinhood Chain", ok: true, note: `${th} of ${ow.length} signatures: ${ow.map(short).join(", ")}` });
+        out.push({ label: "Team Safe exists on Robinhood Chain", ok: true, note: `${th} of ${ow.length} signatures` }); // signer addresses are never shown
       } catch { out.push({ label: "Team Safe exists on Robinhood Chain", ok: false, note: `No Safe found at ${R.safe}` }); }
       out.push({ label: "ERC-6551 registry (agent wallets)", ok: await code(L.registry) });
       out.push({ label: "Pons V2 launchpad", ok: await code(L.ponsFactory) });
