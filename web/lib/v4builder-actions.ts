@@ -22,7 +22,7 @@ const REASONS: Record<string, string> = {
   DeadlineExpired: "That took too long and the launch expired. Try again.",
   InvalidSettlement: "The launch didn't settle cleanly, so nothing happened. Try a smaller first buy.",
   InvalidInfrastructure: "The builder's contracts don't match Robinhood Chain's Uniswap v4 contracts. Nothing was sent.",
-  BuyerPaused: "This wallet holds the hot potato and can't sell yet.",
+  BuyerPaused: "This wallet is holding the bag and can't sell yet.",
   TokensRequired: "This coin only sells to wallets that already hold some of it.",
   BuyTooSoon: "This wallet has to wait a little longer before buying again (buy cooldown).",
   BuyLimitExceeded: "That buy is bigger than this coin allows right now. Try a smaller amount.",

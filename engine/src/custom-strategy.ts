@@ -1,6 +1,6 @@
 /**
  * Custom strategies: a buy signal with an optional threshold, an exit rule and optional filters.
- * Talking to the agent goes through its AI mind first (lib/agent-mind.ts, a model via Orbio), which
+ * Talking to the agent goes through its AI mind first (lib/agent-mind.ts, an AI model), which
  * proposes a rule in this exact schema; this deterministic reader is the fallback, and it is also how
  * the engine reads every rule back from the chain. The holder reviews and applies every rule; trading
  * itself is rule-based and capped by the wallet.

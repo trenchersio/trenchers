@@ -93,7 +93,7 @@ export function Studio({ config, coins, onLaunched }: { config: BuilderConfig | 
         if (f.max !== undefined && n > f.max) return `${def.name}: ${f.label.toLowerCase()} is at most ${f.max}.`;
       }
       if (def.group === "Fee engines" && Number(m.values.maximum) < Number(m.values.minimum)) return `${def.name}: the largest batch can't be smaller than the smallest.`;
-      if (m.key === "reactivePair" && !(Number(m.values.min) <= Number(m.values.base) && Number(m.values.base) <= Number(m.values.max))) return "Reactive pair: smallest cap ≤ cap now ≤ largest cap.";
+      if (m.key === "reactivePair" && !(Number(m.values.min) <= Number(m.values.base) && Number(m.values.base) <= Number(m.values.max))) return "Linked buy cap: smallest cap ≤ cap now ≤ largest cap.";
       if (m.key === "growingBuyLimit" && Number(m.values.final) < Number(m.values.initial)) return "Growing buy limit: the final cap can't be smaller than the cap at launch.";
     }
     return null;

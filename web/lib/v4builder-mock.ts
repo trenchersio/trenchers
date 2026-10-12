@@ -23,7 +23,7 @@ const SAMPLES: [string, string, string, "eth" | "trenchers", ModuleKey[], number
   ["Potato Club", "SPUD", "Catch the potato with a big buy and you can't sell for five minutes. Pass it on.", "eth", ["hotPotato"], 100, 100, 1.2e-9, -0.001],
   ["Every 25th", "NTH", "Every 25th qualifying buyer takes the pot that builds from fees.", "trenchers", ["nthBuyPot", "growingBuyLimit"], 400, 0, 9.1e-3, 0.003],
   ["Deep End", "DEEP", "Fees go into permanent full-range liquidity. The pool only gets deeper.", "eth", ["fullRangeLp", "launchWalletCap"], 300, 300, 4.0e-10, 0.0015],
-  ["Contagion", "PLAGUE", "You can only buy if you already hold some. Ask a holder to infect you.", "trenchers", ["plague"], 200, 200, 1.4e-2, -0.0005],
+  ["Inner Circle", "CIRCLE", "Only holders can buy. Ask a holder to send you some first.", "trenchers", ["plague"], 200, 200, 1.4e-2, -0.0005],
   ["Dip Catcher", "DIPS", "When price drops 10% under its average, fees buy the dip automatically.", "eth", ["dipBuyback", "buyerRewards"], 300, 600, 7.7e-10, 0.002],
 ];
 

@@ -2,7 +2,7 @@ import { describe, parse, validate, isAddress, DEFAULT_RULE, type CustomRule, ty
 import { TOKEN_PICKS } from "./token-picks";
 
 /**
- * The agent's mind: an AI model (through Orbio's inference gateway) reads what the holder says and
+ * The agent's mind: an AI model (through an OpenAI-compatible gateway) reads what the holder says and
  * turns it into an exact trading rule, explaining what it understood. It only proposes: the holder
  * applies the rule, the rule is stored on-chain as plain text, and the engine trades it within the
  * wallet's hard limits. The AI never touches funds.
@@ -18,7 +18,7 @@ async function pickModel(): Promise<string | null> {
   const ids = (j?.data ?? j?.models ?? []).map((m) => String(m.id ?? "")).filter(Boolean);
   return ids.find((i) => /claude/i.test(i) && /sonnet/i.test(i)) ?? ids.find((i) => /claude/i.test(i)) ?? ids[0] ?? null;
 }
-/** One chat completion through Orbio. If the configured model isn't found (404), switches to one the gateway lists and retries once. */
+/** One chat completion through the AI gateway. If the configured model isn't found (404), switches to one the gateway lists and retries once. */
 export async function orbioChat(body: Record<string, unknown>, timeoutMs: number): Promise<{ content: string; model: string }> {
   const call = (model: string) => fetch(`${ORBIO_BASE}/chat/completions`, {
     method: "POST", signal: AbortSignal.timeout(timeoutMs),
@@ -29,7 +29,7 @@ export async function orbioChat(body: Record<string, unknown>, timeoutMs: number
   if (r.status === 404 || r.status === 400) {
     const first = (await r.text()).slice(0, 300);
     const alt = await pickModel();
-    if (alt && alt !== orbioModel) { console.error(`orbio: model ${orbioModel} not available (${r.status}), switching to ${alt}`); orbioModel = alt; r = await call(alt); }
+    if (alt && alt !== orbioModel) { console.error(`ai: model ${orbioModel} not available (${r.status}), switching to ${alt}`); orbioModel = alt; r = await call(alt); }
     else throw new Error(`gateway answered ${r.status}: ${first}${alt === null ? " (and it lists no models at /models: check ORBIO_BASE_URL)" : ""}`);
   }
   if (!r.ok) throw new Error(`gateway answered ${r.status}: ${(await r.text()).slice(0, 300)}`);
@@ -59,7 +59,7 @@ The rule must fit this schema exactly (JSON):
   "everyHours": number | null,     // "dca": hours between buys (default 24, or 4 for plans under 2 days); "below": at least this many hours between buys (default 6)
   "budgetEth": number | null       // trigger "token", optional: total ETH to spend on the plan (the only place an ETH amount is allowed)
 }
-Specific token (trigger "token"): the holder names ONE coin to accumulate, e.g. "DCA into $ORBIO over 10 days" or "buy $AI when its market cap is under 20 ETH". It must be a Pons coin; use the address the holder gives, or one of these known coins: ${TOKEN_PICKS.filter((p) => !p.soon).map((p) => `$${p.symbol} ${p.address}`).join(", ")}. If they name a coin you don't have an address for, ask for its contract address. Default exit for a specific token is "hold". Filters (maxAgeMin, minLiquidityEth) don't apply to it.
+Specific token (trigger "token"): the holder names ONE coin to accumulate, e.g. "DCA into $PRIORS over 10 days" or "buy $AI when its market cap is under 20 ETH". It must be a Pons coin; use the address the holder gives, or one of these known coins: ${TOKEN_PICKS.filter((p) => !p.soon).map((p) => `$${p.symbol} ${p.address}`).join(", ")}. If they name a coin you don't have an address for, ask for its contract address. Default exit for a specific token is "hold". Filters (maxAgeMin, minLiquidityEth) don't apply to it.
 Signals: launch = a new coin launches; graduation = a coin's curve sells out and it moves to Uniswap; volume = a coin crosses a lifetime volume in USD; mcap = a coin's market cap crosses a value in ETH; devsell = the coin's creator sells.
 Only one exit type: either a holding time, or take profit and/or stop loss. Spending limits per trade and per day are set separately by the holder; never put amounts of ETH to spend in the rule.
 If the holder asks for something the schema can't express, choose the closest rule and say plainly what you left out. If you need one essential detail, ask one short question and return "rule": null.

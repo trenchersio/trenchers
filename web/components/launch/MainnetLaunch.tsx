@@ -22,7 +22,7 @@ import { useWallet } from "@/lib/wallet";
  * The mint stays closed: the Safe opens awakening and the mint afterwards.
  */
 type Name = keyof typeof artifacts;
-/** Agent wallet version 4: Programmable's Module Mode factory on Robinhood Chain, $TRENCHERS, and the factory's ETH-funded launch. */
+/** Agent wallet version 4: Programmable's launch factory on Robinhood Chain, $TRENCHERS, and the factory's ETH-funded launch. */
 const PG_FACTORY = "0x18cab14c69d0fe6df4a96256318b51c51c98da3f" as Address;
 const PG_LAUNCH_SELECTOR = "0x79082bf9" as `0x${string}`;
 const A = (n: Name) => artifacts[n].abi as Abi;
@@ -373,7 +373,7 @@ export function MainnetLaunch() {
 
       <section className="tn-card">
         <h2>7 · Agent coins on Programmable (agent wallet version 4)</h2>
-        <p>Version 4 is version 3 plus one thing: the agent wallet can launch its own coin on <b>Programmable</b> (Module Mode), paired with <b>$TRENCHERS</b>, with any of Programmable&apos;s modules. The agent wallet itself is the coin&apos;s creator; its creator fees ($TRENCHERS) are collected through it and sent to the holder. The first buy is paid from the agent&apos;s free balance, never the locked starter. The wallet only accepts Programmable&apos;s launch factory {PG_FACTORY} and checks the coin&apos;s record afterwards (creator = the agent wallet, pair = $TRENCHERS). Holders switch with one click on their agent&apos;s profile; nothing changes unless they do.</p>
+        <p>Version 4 is version 3 plus one thing: the agent wallet can launch its own coin on <b>Programmable</b>, paired with <b>$TRENCHERS</b>, with any of Programmable&apos;s modules. The agent wallet itself is the coin&apos;s creator; its creator fees ($TRENCHERS) are collected through it and sent to the holder. The first buy is paid from the agent&apos;s free balance, never the locked starter. The wallet only accepts Programmable&apos;s launch factory {PG_FACTORY} and checks the coin&apos;s record afterwards (creator = the agent wallet, pair = $TRENCHERS). Holders switch with one click on their agent&apos;s profile; nothing changes unless they do.</p>
         <p><b>Step 1.</b> Deploy agent wallet version 4 from the Deployer wallet.</p>
         {walletV4 ? (
           <>

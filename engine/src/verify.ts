@@ -8,7 +8,7 @@ import { FORWARDER_RUNTIME, REHEARSAL_RUNTIME } from "./livecheck-code";
 import { findLiveCoins } from "./selfcheck";
 import { FOUNDATION_FACTORY_ABI, TRENCHERS_TOKEN, encodeFundingPath, encodeLaunch, mineHookSalt, randomSalt, startTick, type ComposeResult, type LaunchParams } from "./programmable";
 
-/** Agent wallet version 4: Programmable's Module Mode factory on Robinhood Chain and its ETH-funded launch (fixed in the code). */
+/** Agent wallet version 4: Programmable's launch factory on Robinhood Chain and its ETH-funded launch (fixed in the code). */
 export const PROGRAMMABLE = {
   api: process.env.PROGRAMMABLE_API_URL || "https://programmable.market",
   factory: "0x18cab14c69d0fe6df4a96256318b51c51c98da3f" as Address,

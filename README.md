@@ -255,7 +255,7 @@ Rules:
 
 #### On Programmable, paired with $TRENCHERS
 
-The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (Uniswap v4 Module Mode) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules (for example Initial wallet buy limit, Hot potato, Plague, Entangled or Reactive pair) and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
+The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (a Uniswap v4 launchpad) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules (for example Initial wallet buy limit, Hot potato, Plague, Entangled or Reactive pair) and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
 
 | Who signs | Creator (gets the fees) | First buy paid by |
 | --- | --- | --- |
@@ -347,7 +347,7 @@ Instead of reacting to signals, an agent can build a **treasury** in one coin. I
 - **Buy the dip:** buy whenever its market cap is below a level in ETH, at most once every N hours.
 - **Buy once:** one buy, straight away.
 
-It holds what it buys unless the holder adds a take profit or stop loss. One tap picks $TRENCHERS, $ORBIO, $PRIORS, $AI or $BONER; $V4 (Programmable's token) is listed as *soon*, until agents can trade on Programmable. Any other ETH-paired Pons coin works by pasting its address, with a preview of its logo and market cap. The rule is stored on-chain like any other (for example *"Buy token 0x… every day for 10 days, up to 0.05 ETH in total, hold it (no automatic sell)."*), the engine runs the plan on time and price, and the Arena marks the agent with a **Treasury** badge, the coin's logo and the plan's progress (for example *DCA buy 3 of 10*). An agent can never buy its own coin.
+It holds what it buys unless the holder adds a take profit or stop loss. One tap picks $TRENCHERS, $ORBIO, $PRIORS, $AI or $BONER; $V4 is listed as *soon*, until agents can trade on Programmable. Any other ETH-paired Pons coin works by pasting its address, with a preview of its logo and market cap. The rule is stored on-chain like any other (for example *"Buy token 0x… every day for 10 days, up to 0.05 ETH in total, hold it (no automatic sell)."*), the engine runs the plan on time and price, and the Arena marks the agent with a **Treasury** badge, the coin's logo and the plan's progress (for example *DCA buy 3 of 10*). An agent can never buy its own coin.
 
 ### House templates: a baseline to beat
 
@@ -593,10 +593,9 @@ Trencher's own agent coin on **Pons**, launch it on **Programmable** paired with
 the **V4 Builder**. The V4 Builder is **open to everyone**: no Trencher needed.
 
 The **V4 Builder** launches coins on Robinhood Chain that each run their own **Uniswap v4 hook**: a small contract
-the pool calls on every trade, carrying the rules the launcher picked. It is our own deployment of an open launch
-system, not an integration with someone else's: the contracts are adapted from Programmable's open-source Foundation
-system (MIT licence), pinned to Robinhood Chain's official Uniswap v4 contracts and deployed by Trenchers. The page
-is at [trenchers.io/builder](https://www.trenchers.io/builder).
+the pool calls on every trade, carrying the rules the launcher picked. The launch contracts are deployed and
+configured by Trenchers, pinned to Robinhood Chain's official Uniswap v4 contracts, and open source (MIT; licence
+notices in [`v4builder/NOTICE.md`](v4builder/NOTICE.md)). The page is at [trenchers.io/builder](https://www.trenchers.io/builder).
 
 **One transaction.** Pressing launch creates, in a single transaction:
 
@@ -620,8 +619,8 @@ the creator at any time from the coin's page.
 |---|---|---|
 | Trading rules | Buy cooldown, Buy window, Price move guard, Growing buy limit, Launch wallet cap | Checked on every swap; a trade that breaks a rule fails |
 | Fee engines | Buyback and burn, Dip buyback, LP rewards, Full-range LP | Run on a share of the creator fee chosen at launch; anyone can trigger them when ready |
-| Games and rewards | Buyer rewards, Nth-buy pot, King of the hill, Hot potato, Plague | Cashback, pots and crowns paid from a share of the creator fee, or rules that turn trading into a game |
-| Linked pools | Reactive pair, Entangled | Tie the coin to another coin launched here with the same pair |
+| Games and rewards | Cashback, Lucky Nth buy, Top buyer crown, Pass the bag, Holders only | Cashback, pots and crowns paid from a share of the creator fee, or rules that turn trading into a game |
+| Linked pools | Linked buy cap, Linked unlock | Tie the coin to another coin launched here with the same pair |
 
 **Everything happens in the browser.** Module code hashes are read from the chain by running each module factory
 inside a single read-only call, the coin's address is predicted, the hook address is mined so that Uniswap v4 sees
@@ -726,10 +725,9 @@ Sources: [Bitquery Pons API](https://docs.bitquery.io/docs/blockchain/robinhood/
 
 ---
 
-## The agent's mind (AI via Orbio)
+## The agent's mind
 
-Each agent has an AI mind. When the holder talks to their agent, a language model (Claude, through
-[Orbio](https://www.orbio.so)'s inference gateway on Robinhood Chain) reads what they say, however
+Each agent has an AI mind. When the holder talks to their agent, a language model (Claude) reads what they say, however
 loose ("go for coins with real momentum but get out fast if they dump"), and turns it into one exact
 rule: a signal (new launch, graduation, volume or market cap crossing a level, dev sells), optional
 filters (token age, liquidity) and an exit (a holding time, or take profit / stop loss). It explains
@@ -750,7 +748,7 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 | Path | What |
 | --- | --- |
 | [`contracts/`](contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), `InferenceDesk`, `InferenceRouter` and `TrenchersOTC` (Trenchers Inference Markets: the burn-only desk, ETH in one step, the P2P Marketplace for $TRENCHERS), 93 tests |
-| [`v4builder/`](v4builder) | Foundry project for the Trenchers V4 Builder: the Foundation launch system adapted from Programmable (MIT) for Robinhood Chain (launch factory, per-coin hooks, fee ledger, 16 module factories), the deploy script, and the full test suite run against the real Universal Router and v4 contracts |
+| [`v4builder/`](v4builder) | Foundry project for the Trenchers V4 Builder on Robinhood Chain (launch factory, per-coin hooks, fee ledger, 16 module factories; MIT, see NOTICE.md), the deploy script, and the full test suite run against the real Universal Router and v4 contracts |
 | [`web/`](web) | Next.js site, built around the Trencher: the opening map and home page, mint, the Arena, the Collection, the Playground, the holders' chat, the NFT / Agent Profile with its own-coin launch, Inference Markets with the P2P Marketplace, the Coin Launcher, the V4 Builder, and these docs |
 | [`web/lib/steps.ts`](web/lib/steps.ts), [`web/components/Ecosystem.tsx`](web/components/Ecosystem.tsx) | How the site is organised: the Trencher at the centre and the four things you make it do (trade, think, talk, launch), the path strip above every page and the flywheel line |
 | [`web/components/inference/`](web/components/inference) | Inference Markets: buying credit, the model list, the P2P Marketplace, keys, and sending inference to a Trencher |

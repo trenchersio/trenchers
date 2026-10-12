@@ -1,5 +1,5 @@
 /**
- * Trenchers V4 Builder: indexes every coin launched through our own Foundation factory on Robinhood Chain and serves
+ * Trenchers V4 Builder: indexes every coin launched through the Trenchers V4 launch factory on Robinhood Chain and serves
  * the website's read-outs: /builder/config (where the contracts are), /builder/coins (every coin, its modules, price,
  * volume, fees and a small price history) and /builder/coin?token= (one coin with its full history).
  *

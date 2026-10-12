@@ -1,6 +1,6 @@
 /* Shared with web/lib/programmable.ts (same code): Programmable launch math for the engine's /verify rehearsal. */
 /**
- * Programmable (programmable.market) Module Mode launches on Robinhood Chain, for agent coins paired with $TRENCHERS.
+ * Programmable (programmable.market) launches on Robinhood Chain, for agent coins paired with $TRENCHERS.
  *
  * How a launch is made (mirrors Programmable's own website flow, github.com/programmablehq/programmable):
  *  1. Our server reads Programmable's live launch release and module catalog (/api/programmable/catalog).

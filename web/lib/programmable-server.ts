@@ -42,7 +42,7 @@ function fieldsOf(schema: Node, defaults: Record<string, unknown> | undefined): 
 
 let cache: { at: number; catalog: ProgrammableCatalog } | null = null;
 
-/** Programmable's live Module Mode release and catalog for Robinhood Chain, as display-safe data (cached 60 s). */
+/** Programmable's live release and catalog for Robinhood Chain, as display-safe data (cached 60 s). */
 export async function readCatalog(): Promise<ProgrammableCatalog> {
   if (cache && Date.now() - cache.at < 60_000) return cache.catalog;
   const r = await fetch(`${UPSTREAM}/api/module-foundation?chainId=4663`, { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(30_000) });

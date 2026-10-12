@@ -30,7 +30,7 @@ function Schematic() {
     { k: "in", t: "A buy comes in", tone: "fog", body: <span className="mono vb-pp-amt">0.50 ETH → $TIDE</span> },
     { k: "rules", t: "Before the swap: your rules", tone: "ice", body: <span className="vb-pp-chips">{["Buy window", "Cooldown", "Wallet cap"].map((x) => <i key={x}><b aria-hidden="true">✓</b>{x}</i>)}</span> },
     { k: "pool", t: "Uniswap v4 pool", tone: "fog", body: <span className="vb-pp-pool"><svg viewBox="0 0 120 28" aria-hidden="true"><path d="M2 24 L20 20 L34 22 L50 14 L66 16 L82 9 L98 11 L118 3" /></svg><em className="mono">liquidity locked forever</em></span> },
-    { k: "mech", t: "After the swap: mechanics", tone: "violet", body: <span className="vb-pp-chips">{["Cashback", "King of the hill", "Buyback"].map((x) => <i key={x}>{x}</i>)}</span> },
+    { k: "mech", t: "After the swap: mechanics", tone: "violet", body: <span className="vb-pp-chips">{["Cashback", "Top buyer crown", "Buyback"].map((x) => <i key={x}>{x}</i>)}</span> },
     { k: "fees", t: "Fees split", tone: "green", body: (
       <span className="vb-pp-fees">
         <span className="vb-pp-bar" aria-hidden="true"><i className="c" /><i className="m" /><i className="t" /></span>
@@ -62,7 +62,7 @@ const FAQ = [
   { q: "Can I pull the liquidity or change the rules later?", a: "No. The whole supply goes into the pool at launch and the position is owned by the dead address, so nobody can remove it. The hook's modules, settings and fees are set in its constructor and there is no owner or admin to change them." },
   { q: "Why pair with $TRENCHERS?", a: "Every buy of your coin is first a buy of $TRENCHERS, and every sell ends in a sale of it, so your coin's volume is $TRENCHERS volume too. Your fees are paid in $TRENCHERS. You still pay and receive ETH: the site routes through $TRENCHERS's own pool for you." },
   { q: "How do budget modules work?", a: "Fee engines and games run on a share of your creator fee that you choose at launch. That share is set aside for the module, separately from what you can claim, and the module spends it on its job: buying back and burning, adding liquidity, paying buyers. Anyone can trigger a fee engine when it is ready, from the coin's page." },
-  { q: "Who wrote the contracts?", a: "The launch system is adapted from Programmable's open-source Foundation contracts (MIT licence), configured for Robinhood Chain and deployed by Trenchers. Our copy, its changes and its full test suite are in the Trenchers GitHub. The contracts were reviewed before launch; as with any new contracts, only put in what you are comfortable with." },
+  { q: "Who runs the contracts?", a: "Trenchers deployed and configured the launch contracts for Robinhood Chain. They are open source (MIT), and the code, its changes and the full test suite are in the Trenchers GitHub. The contracts were reviewed before launch; as with any new contracts, only put in what you are comfortable with." },
   { q: "Is this financial advice?", a: "No. Coins launched here are created by their launchers, not by Trenchers. Anyone can launch anything, so check what you buy." },
 ];
 
@@ -177,7 +177,7 @@ export function Builder() {
           </nav>
         </div>
         <TokenLine />
-        <p>Coins launched here are created by their launchers, not by Trenchers. Nothing on this site is financial advice. Launch contracts adapted from Programmable&apos;s open-source Foundation system (MIT).</p>
+        <p>Coins launched here are created by their launchers, not by Trenchers. Nothing on this site is financial advice.</p>
       </footer>
     </main>
   );

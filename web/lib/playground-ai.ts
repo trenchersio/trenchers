@@ -37,7 +37,7 @@ export let lastPlaygroundError: string | null = null;
 
 export async function aiBoard(maxAgeMs = 8 * 60_000): Promise<AiBoard | null> {
   if (cache && Date.now() - cache.at < maxAgeMs) return cache.board;
-  if (!orbioKey()) { lastPlaygroundError = "ORBIO_API_KEY is not set"; return cache?.board ?? null; }
+  if (!orbioKey()) { lastPlaygroundError = "the AI key is not set"; return cache?.board ?? null; }
   running ??= (async () => {
     try {
       const r = await fetch(`${ENGINE_URL}/arena`, { cache: "no-store", signal: AbortSignal.timeout(8000) });

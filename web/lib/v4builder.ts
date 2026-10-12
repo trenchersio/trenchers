@@ -1,7 +1,7 @@
 /**
  * Trenchers V4 Builder: our own Uniswap v4 hook launches on Robinhood Chain.
  *
- * The contracts are the Foundation launch system (MIT, from Programmable), adapted for Trenchers and deployed by us
+ * The launch contracts (open source, MIT) are deployed and configured by Trenchers
  * (v4builder/ in this repository). A launch is one transaction to our factory: it creates the coin (fixed 1B supply),
  * a per-coin v4 hook with the chosen modules, the pool, a permanent liquidity position (the whole supply, owned by
  * the dead address) and the creator's first buy. Every trade pays the creator's fee and a 0.3% Trenchers fee in the
@@ -180,31 +180,31 @@ export const MODULES: ModuleDef[] = [
     encode: (v, d) => enc("uint128, uint128, uint32, uint32, uint16, uint16", [units(v.minimum, d), units(v.maximum, d), Number(v.interval), 300, pct(v.slippage), k === "dipBuyback" ? pct(v.dip) : 0]),
   })),
 
-  { key: "buyerRewards", name: "Buyer rewards", group: "Games and rewards", artifact: "BuyerRewardsFactoryV1", budget: true,
+  { key: "buyerRewards", name: "Cashback", group: "Games and rewards", artifact: "BuyerRewardsFactoryV1", budget: true,
     blurb: "Every qualifying buy earns a cashback from the module's share of the creator fee.",
     fields: [{ key: "minimum", label: "Smallest qualifying buy", type: "quote", default: "0.01" }, { key: "reward", label: "Cashback per buy", type: "percent", default: "2", min: 0.01, max: 10 }],
     encode: (v, d) => enc("uint128, uint16, uint32, uint32", [units(v.minimum, d), pct(v.reward), 0, 0]) },
-  { key: "nthBuyPot", name: "Nth-buy pot", group: "Games and rewards", artifact: "NthBuyPotFactoryV1", budget: true,
+  { key: "nthBuyPot", name: "Lucky Nth buy", group: "Games and rewards", artifact: "NthBuyPotFactoryV1", budget: true,
     blurb: "A pot builds from the creator fee; every Nth qualifying buyer takes it.",
     fields: [{ key: "minimum", label: "Smallest qualifying buy", type: "quote", default: "0.01" }, { key: "n", label: "Every Nth buy wins", type: "count", default: "25", min: 2, max: 1000000 }],
     encode: (v, d) => enc("uint128, uint16, uint32, uint32", [units(v.minimum, d), 0, Number(v.n), 0]) },
-  { key: "kingOfTheHill", name: "King of the hill", group: "Games and rewards", artifact: "KingOfTheHillFactoryV1", budget: true,
-    blurb: "The biggest recent buyer holds the crown and collects the pot. The crown weakens over time, so it can be taken.",
+  { key: "kingOfTheHill", name: "Top buyer crown", group: "Games and rewards", artifact: "KingOfTheHillFactoryV1", budget: true,
+    blurb: "The biggest recent buyer wears the crown and collects the pot. The crown fades, so someone can always take it.",
     fields: [{ key: "minimum", label: "Smallest qualifying buy", type: "quote", default: "0.01" }, { key: "decay", label: "Crown fades over", type: "seconds", default: "3600", min: 60, max: 2592000 }],
     encode: (v, d) => enc("uint128, uint16, uint32, uint32", [units(v.minimum, d), 0, 0, Number(v.decay)]) },
-  { key: "hotPotato", name: "Hot potato", group: "Games and rewards", artifact: "HotPotatoFactoryV1", budget: false,
-    blurb: "The last big buyer can't sell for a while. Someone else has to buy to take the potato.",
-    fields: [{ key: "minimum", label: "Buy size that catches the potato", type: "quote", default: "0.05" }, { key: "pause", label: "Holder can't sell for", type: "seconds", default: "300", min: 1, max: 3600 }],
+  { key: "hotPotato", name: "Pass the bag", group: "Games and rewards", artifact: "HotPotatoFactoryV1", budget: false,
+    blurb: "The last big buyer holds the bag and can't sell for a while, until someone else buys big and takes it.",
+    fields: [{ key: "minimum", label: "Buy size that takes the bag", type: "quote", default: "0.05" }, { key: "pause", label: "Holder can't sell for", type: "seconds", default: "300", min: 1, max: 3600 }],
     encode: (v, d) => enc("uint128, uint32", [units(v.minimum, d), Number(v.pause)]) },
-  { key: "plague", name: "Plague", group: "Games and rewards", artifact: "PlagueFactoryV1", budget: false,
+  { key: "plague", name: "Holders only", group: "Games and rewards", artifact: "PlagueFactoryV1", budget: false,
     blurb: "Only wallets that already hold some of the coin can buy it. Spreads by sending it to friends.",
     fields: [{ key: "minimum", label: "Must already hold", type: "tokens", default: "1000" }],
     encode: (v) => enc("uint128, uint32", [units(v.minimum, 18), 0]) },
-  { key: "reactivePair", name: "Reactive pair", group: "Linked pools", artifact: "ReactivePairFactoryV1", budget: false,
+  { key: "reactivePair", name: "Linked buy cap", group: "Linked pools", artifact: "ReactivePairFactoryV1", budget: false,
     blurb: "Linked to another coin with the same pair: the bigger that coin's price gets, the bigger the buys allowed here.",
     fields: [{ key: "reference", label: "Linked coin's hook", type: "address", default: "" }, { key: "base", label: "Buy cap now (of supply)", type: "percent", default: "1", min: 0.01, max: 100 }, { key: "min", label: "Smallest cap", type: "percent", default: "0.25", min: 0.01, max: 100 }, { key: "max", label: "Largest cap", type: "percent", default: "5", min: 0.01, max: 100 }],
     encode: (v) => enc("address, uint16, uint16, uint16, uint16", [v.reference as Address, pct(v.base), pct(v.min), pct(v.max), 0]) },
-  { key: "entangled", name: "Entangled", group: "Linked pools", artifact: "EntangledFactoryV1", budget: false,
+  { key: "entangled", name: "Linked unlock", group: "Linked pools", artifact: "EntangledFactoryV1", budget: false,
     blurb: "Buys stay locked until a linked coin rises by a set amount. Then they unlock for good.",
     fields: [{ key: "reference", label: "Linked coin's hook", type: "address", default: "" }, { key: "rise", label: "Unlocks when it rises by", type: "percent", default: "50", min: 0.01, max: 1000 }],
     encode: (v) => enc("address, uint16, uint16, uint16, uint16", [v.reference as Address, 0, 0, 0, pct(v.rise)]) },

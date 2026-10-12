@@ -31,7 +31,7 @@ export async function GET() {
   if (stale) {
     const t0 = Date.now();
     const out = configured ? await askMind("Buy every new launch and sell after 30 seconds.", null) : null;
-    lastCheck = { t: Date.now(), body: { configured, model: orbioModel, gateway: (process.env.ORBIO_BASE_URL || "https://api.orbio.so/api/v1"), working: !!out?.rule, ms: Date.now() - t0, sample: out, error: configured ? (out?.rule ? null : lastMindError) : "ORBIO_API_KEY is not set on this service" } };
+    lastCheck = { t: Date.now(), body: { configured, model: orbioModel, working: !!out?.rule, ms: Date.now() - t0, sample: out, error: configured ? (out?.rule ? null : lastMindError) : "the AI key is not set on this service" } };
   }
   return Response.json(lastCheck!.body, { headers: { "Cache-Control": "no-store" } });
 }

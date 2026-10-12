@@ -69,7 +69,7 @@ export const NFT_TRANSFER = parseAbi(["event Transfer(address indexed from, addr
 /** Pons factory: graduation step 1 (curve sold out and drained). Step 2, the pool, emits PoolGraduated. */
 export const LAUNCH_SWEPT = parseAbi(["event LaunchSwept(address indexed token, uint256 quoteOut, uint256 tokenOut)"])[0];
 
-/** Programmable's Module Mode (Foundation) V2 factory: a coin launch (agent coins can launch there, paired with $TRENCHERS). */
+/** Programmable's launch factory: a coin launch (agent coins can launch there, paired with $TRENCHERS). */
 export const FOUNDATION_LAUNCHED = parseAbiItem("event FoundationLaunchedV2(address indexed token, address indexed creator, bytes32 indexed poolId, address hook, address ledger, address quote, bytes32 metadataHash, bytes32 compositionHash, bytes32 custodyId, uint256 initialBuyQuoteAmount, (address token, address hook, address ledger, bytes32 poolId, address basePositionOwner, address creatorPositionOwner, address roundingInventoryRecipient, uint256 basePositionId, uint256 creatorPositionId, uint256 initialBuyTokenAmount, uint128 baseTokenPrincipal, uint128 baseTokenRounding, uint128 creatorQuotePrincipal, uint256 actualQuoteRefund) result)");
 export const FOUNDATION_TOKEN_ABI = parseAbi(["function website() view returns (string)"]);
 export const FOUNDATION_LEDGER_ABI = parseAbi(["function creatorCredited() view returns (uint256)", "function creatorClaimed() view returns (uint256)"]);
