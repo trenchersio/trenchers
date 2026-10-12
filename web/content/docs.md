@@ -729,6 +729,29 @@ Every Trenchers contract is live on Robinhood Chain mainnet (chain 4663) and ver
 | **Inference Desk** | Takes $TRENCHERS for inference credit; can only ever burn it (no owner) | [`0xfc092efc24658e4f9ac73f6283bc46c90ad0104f`](https://robin.etherscan.io/address/0xfc092efc24658e4f9ac73f6283bc46c90ad0104f#code) |
 | **Inference Router** | ETH to $TRENCHERS to the desk, in one transaction (no owner) | [`0x8ea38de7491a220b8d556dcd9b49b7a4ad23d535`](https://robin.etherscan.io/address/0x8ea38de7491a220b8d556dcd9b49b7a4ad23d535#code) |
 | **P2P Marketplace (TrenchersOTC)** | Escrowed orders for $TRENCHERS against ETH, no fee (no owner) | [`0xf9f44f7699a5fd61053447a2ef4523ca5c23fae4`](https://robin.etherscan.io/address/0xf9f44f7699a5fd61053447a2ef4523ca5c23fae4#code) |
+| **V4 Builder launch factory** | Creates each coin, its hook and its locked Uniswap v4 pool in one transaction (no owner) | [`0x8f6fa403fad955709c711b970dc842f16783abd2`](https://robin.etherscan.io/address/0x8f6fa403fad955709c711b970dc842f16783abd2#code) |
+| **V4 Builder hook deployer** | Deploys each coin's own hook with its modules and fees fixed (no owner) | [`0x69f1946cbdc4d80dff41185ded1551dd1d5bdf08`](https://robin.etherscan.io/address/0x69f1946cbdc4d80dff41185ded1551dd1d5bdf08#code) |
+
+**V4 Builder module factories (16)**
+
+| Module | Factory |
+|---|---|
+| Buy cooldown | [`0xafa0de77f2b80055a1ddca0632871bad0aba346f`](https://robin.etherscan.io/address/0xafa0de77f2b80055a1ddca0632871bad0aba346f#code) |
+| Buy window | [`0xb54eddc15de7ddf0acd53fcb8a1ed13e93474975`](https://robin.etherscan.io/address/0xb54eddc15de7ddf0acd53fcb8a1ed13e93474975#code) |
+| Price move guard | [`0x6948b57ef15b164ae2884311a13b4dd518942710`](https://robin.etherscan.io/address/0x6948b57ef15b164ae2884311a13b4dd518942710#code) |
+| Growing buy limit | [`0xb5931ddd239976289bb904194d46038d8eea1336`](https://robin.etherscan.io/address/0xb5931ddd239976289bb904194d46038d8eea1336#code) |
+| Launch wallet cap | [`0x6ae8bc1567b3122f239682c25c202a77eff1fbcb`](https://robin.etherscan.io/address/0x6ae8bc1567b3122f239682c25c202a77eff1fbcb#code) |
+| Buyback and burn | [`0xc5b552e2de2cc048fd5ec6d9497338086d30a7a1`](https://robin.etherscan.io/address/0xc5b552e2de2cc048fd5ec6d9497338086d30a7a1#code) |
+| Dip buyback | [`0xa11424829cb3486ae576ef1cd2b1b9aab88f357f`](https://robin.etherscan.io/address/0xa11424829cb3486ae576ef1cd2b1b9aab88f357f#code) |
+| LP rewards | [`0x2dec0cdabd3d51dcbad93864eb685e3bd28f55df`](https://robin.etherscan.io/address/0x2dec0cdabd3d51dcbad93864eb685e3bd28f55df#code) |
+| Full-range LP | [`0x0a0116e3a5cdf67f87d751b8dca6989e8d4c82c8`](https://robin.etherscan.io/address/0x0a0116e3a5cdf67f87d751b8dca6989e8d4c82c8#code) |
+| Cashback | [`0x1c249deb2b37a78b229eaf59c638428c5177de47`](https://robin.etherscan.io/address/0x1c249deb2b37a78b229eaf59c638428c5177de47#code) |
+| Lucky Nth buy | [`0x253c56e3fdd24f84e8559990a2b27d0d24639699`](https://robin.etherscan.io/address/0x253c56e3fdd24f84e8559990a2b27d0d24639699#code) |
+| Top buyer crown | [`0x17dad9feb1246db768d945a7fd481f4f6601d411`](https://robin.etherscan.io/address/0x17dad9feb1246db768d945a7fd481f4f6601d411#code) |
+| Pass the bag | [`0x2e0e79b217c64d293a9a6cda1efc0520c5923567`](https://robin.etherscan.io/address/0x2e0e79b217c64d293a9a6cda1efc0520c5923567#code) |
+| Holders only | [`0xc1f2ac38c38f97945a6f3d00429445cc86110a60`](https://robin.etherscan.io/address/0xc1f2ac38c38f97945a6f3d00429445cc86110a60#code) |
+| Linked buy cap | [`0x06e7c26ce49332964a0a9d73d62fd8537d186eda`](https://robin.etherscan.io/address/0x06e7c26ce49332964a0a9d73d62fd8537d186eda#code) |
+| Linked unlock | [`0x06910cb6dadea4de8e808ad813a2152639533a83`](https://robin.etherscan.io/address/0x06910cb6dadea4de8e808ad813a2152639533a83#code) |
 
 **Team wallets**
 
