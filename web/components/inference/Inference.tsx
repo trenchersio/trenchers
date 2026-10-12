@@ -30,11 +30,11 @@ function ISection({ id, n, label, title, lede, children, aside }: { id?: string;
 
 const FAQ = [
   { q: "What do I actually get?", a: "Access to the major model families (Claude, GPT, Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and more) behind a single address and a single key, funded with $TRENCHERS instead of a card. Any OpenAI-compatible client works by changing the base URL." },
-  { q: "Where does my $TRENCHERS go?", a: "To the dead address. Payments land in a contract whose only possible action is burning what it holds, and it is triggered on a schedule. The same is true whether you pay in $TRENCHERS, in ETH through the router, or by buying from holders on the P2P book." },
+  { q: "Where does my $TRENCHERS go?", a: "To the dead address. Payments land in a contract whose only possible action is burning what it holds, and it is triggered on a schedule. The same is true whether you pay in $TRENCHERS, in ETH through the router, or by buying on the P2P Marketplace." },
   { q: "How much does a request cost?", a: "Whatever it actually used. A request reserves a ceiling from your balance when it starts and is settled to the provider's real token count when it ends; the rest is released immediately. Requests that fail or never run cost nothing, and forgotten reservations are released automatically after 15 minutes." },
   { q: "Do I have to sign up?", a: "No. Whichever wallet paid holds the credit. To create keys, sign one message with that wallet. It is a signature, not a transaction: no gas and nothing moves." },
   { q: "Can I give a bot its own key?", a: "Yes, and you should. Each key can carry its own spending cap and be revoked without affecting the others. A key capped at $5 can never spend more than $5, however much the account holds." },
-  { q: "What is the P2P book?", a: "An order book where holders trade $TRENCHERS and agent coins directly at prices they set, with the escrow held by a contract and no fee. A $TRENCHERS ask can be filled straight into inference credit." },
+  { q: "What is the P2P Marketplace?", a: "An order book where people trade $TRENCHERS directly with each other at prices they set, with the escrow held by a contract and no fee. Any ask can be filled straight into inference credit." },
   { q: "What does sending inference to a Trencher do?", a: "It gives the Trencher a balance of its own on the desk, held by its agent wallet. Its holder can then make keys for it and call it as its own model, trencher-<number>: it knows its identity, its wallet and the rule it was trained with, and answers as itself, paid from its own balance. The balance stays with the Trencher when it is sold; the old holder's keys stop working." },
   { q: "What are the risks?", a: "Credit lives on the desk's ledger, not in a contract, so only top up what you intend to use. The router and P2P contracts are small, open source and reviewed before launch. Nothing here is financial advice." },
 ];
@@ -138,7 +138,7 @@ export function Inference() {
 
       <section className="iflow" aria-label="How it works">
         {[
-          ["01", "Top up", "Pay in $TRENCHERS, in ETH through the router, or from a holder on the P2P book.", ""],
+          ["01", "Top up", "Pay in $TRENCHERS, in ETH through the router, or on the P2P Marketplace.", ""],
           ["02", "Gone for good", "The desk contract has exactly one move: send what it holds to the dead address.", "burn"],
           ["03", "A dollar balance", "Credited to the wallet that paid (or to a Trencher), normally within a minute.", ""],
           ["04", "Call any model", "Name the model in each request. Only what the call really used is billed.", "go"],
@@ -168,8 +168,8 @@ export function Inference() {
         <Catalogue models={d.models} failed={d.modelsFailed} />
       </ISection>
 
-      <ISection id="p2p" n="03" label="P2P market" title="The holders' order book"
-        lede="Holders list $TRENCHERS and agent coins at their own price; the contract keeps the escrow until someone fills it. No curve, no slippage and no fee, and an ask can be filled straight into inference credit.">
+      <ISection id="p2p" n="03" label="P2P" title="P2P Marketplace"
+        lede="Buy and sell $TRENCHERS directly with other people, at your own price. The contract keeps the escrow until someone fills it. No curve, no slippage and no fee, and any ask can be filled straight into inference credit.">
         <P2P rate={d.rate} orders={d.orders} fills={d.fills} onChange={d.reloadOrders} />
       </ISection>
 
@@ -189,7 +189,7 @@ export function Inference() {
               <span className="mono iroute-k">B · ETH</span><b>Pay in ETH, one step</b><p>The router buys $TRENCHERS and delivers it to the desk in the same transaction.</p><span className="mono iroute-go">Buy with ETH →</span>
             </a>
             <a className="iroute" href="#p2p">
-              <span className="mono iroute-k">C · P2P</span><b>Buy from holders</b><p>Fill asks on the P2P book at the holders&apos; own prices, straight into credit.</p><span className="mono iroute-go">Open the book →</span>
+              <span className="mono iroute-k">C · P2P</span><b>P2P Marketplace</b><p>Fill $TRENCHERS asks at the sellers&apos; own prices, straight into credit.</p><span className="mono iroute-go">Open the marketplace →</span>
             </a>
           </div>
           <div className="ibridge">
@@ -197,7 +197,7 @@ export function Inference() {
             <ol>
               <li><b>Start with ETH</b><span>From an exchange withdrawal, a card purchase or a wallet you already use, on any network.</span></li>
               <li><b>Move it to Robinhood Chain</b><span><a href="https://relay.link/bridge/robinhood" target="_blank" rel="noreferrer">Relay</a> and <a href="https://across.to/?to=robinhood" target="_blank" rel="noreferrer">Across</a> are the fast lanes from most networks. <a href="https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum" target="_blank" rel="noreferrer">The canonical bridge</a> is slower but goes straight through Ethereum.</span></li>
-              <li><b>Fuel the desk</b><span>Use the panel at the top: pay in ETH, in $TRENCHERS, or from a holder on the P2P book.</span></li>
+              <li><b>Fuel the desk</b><span>Use the panel at the top: pay in ETH, in $TRENCHERS, or on the P2P Marketplace.</span></li>
             </ol>
             <p className="inf-fine">Bridges are run by third parties. Nothing here is financial advice.</p>
           </div>

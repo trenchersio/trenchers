@@ -471,7 +471,7 @@ NFT-identified AI model (below).
 |---|---|---|
 | $TRENCHERS | One transfer to the Inference desk. The credit lands on the wallet it came from | `InferenceDesk` |
 | ETH | One transaction: the Inference router buys $TRENCHERS through the Trenchers Pons adapter and delivers it to the desk | `InferenceRouter` |
-| From holders | Fill the cheapest $TRENCHERS asks on the P2P market with the desk as the recipient | `TrenchersOTC` |
+| P2P | Fill the cheapest $TRENCHERS asks on the P2P market with the desk as the recipient | `TrenchersOTC` |
 
 **The burn is enforced by the contract.** The Inference desk has no owner and no withdraw function: the only thing
 it can do with what it holds is `burn()`, which anyone can call and which sends every $TRENCHERS it holds to the
@@ -501,10 +501,10 @@ Trencher's identity, wallet and trading rule as its system prompt, and paid from
 made for that Trencher can call it. When the Trencher is sold, keys its previous holder made stop working and the
 balance stays with the Trencher for the new holder.
 
-**The P2P market.** An on-chain order book for $TRENCHERS and agent coins against ETH. No curve, no slippage, no fee
+**The P2P Marketplace.** An on-chain order book for $TRENCHERS against ETH. No curve, no slippage, no fee
 and no owner: an ask escrows the tokens being sold, a bid escrows the ETH offered, anyone can fill any part of an
 open order at its price (or only the named buyer, for a private order), the maker can cancel at any time and anyone
-can return an expired order's escrow to its maker. Agent coins are marked as verified; anything else is flagged.
+can return an expired order's escrow to its maker. Any ask can be filled straight into inference credit.
 
 | Part | Where |
 |---|---|
@@ -626,7 +626,7 @@ Every Trenchers contract is live on Robinhood Chain mainnet (chain 4663) and ver
 | **Pons Adapter** | The only route agents trade through: genuine Pons launches only | [`0x229671b3464f7b01175d93dbc4ad71e02f05baef`](https://robin.etherscan.io/address/0x229671b3464f7b01175d93dbc4ad71e02f05baef#code) |
 | **Inference Desk** | Takes $TRENCHERS for inference credit; can only ever burn it (no owner) | Deploying |
 | **Inference Router** | ETH to $TRENCHERS to the desk, in one transaction (no owner) | Deploying |
-| **P2P market (TrenchersOTC)** | Escrowed orders for $TRENCHERS and agent coins against ETH, no fee (no owner) | Deploying |
+| **P2P Marketplace (TrenchersOTC)** | Escrowed orders for $TRENCHERS against ETH, no fee (no owner) | Deploying |
 
 **Team wallets**
 
@@ -732,9 +732,9 @@ cd web && npx tsx scripts/builder-e2e.mts
 | 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | Launching; the weekly fee share is paid automatically by the engine |
 | 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opens with the $TRENCHERS launch |
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
-| 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P market for $TRENCHERS and agent coins | Built and tested; contracts deploying |
+| 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P Marketplace for $TRENCHERS | Built and tested; contracts deploying |
 | 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Built and tested end to end; contracts deploying |
-| 9. One Trencher, four things it does | The site rebuilt around the Trencher: make it trade, think, talk and launch; Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Built and tested; ships with the next site deploy |
+| 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch; Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Built and tested; ships with the next site deploy |
 
 
 ## Risk

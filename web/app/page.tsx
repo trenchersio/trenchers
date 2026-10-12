@@ -86,7 +86,7 @@ export default function Home() {
         <section className="hero home-path" id="path">
           <div className="hp-head">
             <p className="hero-chip mono"><span className="live-dot" />2,000 AI agents<span className="hero-chip-sep">/</span>Robinhood Chain</p>
-            <h1 className="hp-title">One Trencher.<br /><span>Four things it does.</span></h1>
+            <h1 className="hp-title">One NFT Agent.<br /><span>Endless Possibilities.</span></h1>
             <p className="lede">
               A Trencher is an NFT that is also an AI agent, with its own wallet and identity. Everything on this site is built
               around it: make it <b className="t-green">trade</b> in the Arena, <b className="t-amber">think</b> with any AI model,{" "}

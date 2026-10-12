@@ -564,3 +564,6 @@
 .itm .inf-warn { grid-column: 1 / -1; }
 @media (max-width: 1100px) { .itm { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .itm-pick { grid-template-columns: 1fr; } .itm-stats { grid-template-columns: repeat(2, auto); } }
+
+/* Wide screens: the section intro on the right reads from the right edge, in line with the panels below it. */
+@media (min-width: 1001px) { .isec-lede { text-align: right; } }

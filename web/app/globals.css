@@ -2461,7 +2461,7 @@ img.tk-logo { flex: none; }
 .pg-hooks { font-style: normal; margin-left: 8px; font-size: 10px; letter-spacing: .06em; color: var(--green); border: 1px solid rgba(57,255,136,.4); border-radius: 999px; padding: 1px 7px; }
 
 /* ---------------------------------------------------------------- the ecosystem: the Trencher on top of four parts */
-.eco { position: relative; --core: 300px; }
+.eco { position: relative; --core: 360px; }
 .eco-grid { position: relative; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 14px; }
 .eco-part { position: relative; display: flex; flex-direction: column; min-height: 320px; padding: 26px; border-radius: 14px; border: 1px solid #222826; color: var(--fog); text-align: left; font: inherit; overflow: hidden; --tone: var(--green);
   background: radial-gradient(90% 90% at var(--ox) var(--oy), color-mix(in srgb, var(--tone) 11%, transparent), transparent 62%), #0D100F; transition: border-color .2s ease; }
@@ -2510,8 +2510,9 @@ img.tk-logo { flex: none; }
 @keyframes ecofade { from { opacity: .2; } }
 .eco-core-k { color: #6F7873; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
 .eco-core-t { font-size: 22px; letter-spacing: -.02em; }
-.eco-core-p { color: var(--quiet); font-size: 12.5px; line-height: 1.4; max-width: 18em; }
+.eco-core-p { color: var(--quiet); font-size: 12.5px; line-height: 1.4; white-space: nowrap; }
 .eco-core-cta { display: flex; gap: 8px; margin-top: 4px; align-items: center; }
+.eco:not(.eco-compact) .eco-art { width: 92px; height: 92px; }
 .eco-core-go { color: var(--fog); font-size: 12px; }
 button.eco-core { cursor: pointer; }
 button.eco-core:hover .eco-core-go { color: var(--green); }
@@ -2585,6 +2586,8 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .ln-v4 { border-color: rgba(110,200,255,.45); background: radial-gradient(120% 70% at 100% 0%, rgba(110,200,255,.1), transparent 60%), var(--panel); }
 .ln-v4 .ln-n { border-color: var(--ice); color: var(--ice); }
 .ln-v4 .ln-tag { color: var(--ice); }
+.ln-card p.ln-open { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(110,200,255,.45); background: rgba(110,200,255,.1); color: var(--ice); font-size: 11px; line-height: 1.35; letter-spacing: .03em; text-transform: uppercase; }
+.ln-open-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ice); box-shadow: 0 0 10px var(--ice); }
 .ln-more { margin-top: 22px; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .ln-row { display: grid; grid-template-columns: 180px 1fr 20px; gap: 16px; align-items: center; padding: 18px 4px; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--fog); }
 .ln-row span { color: var(--ice); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
@@ -2705,3 +2708,12 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .home-path .eco-core { animation: ecocore .8s cubic-bezier(.2,.9,.2,1.05) both; animation-delay: .1s; }
 .home-path .eco-part { animation: ecounfold .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(.3s + var(--i) * .1s); --dx: 0px; --dy: 18px; }
 @media (prefers-reduced-motion: reduce) { .home-path .eco-core, .home-path .eco-part { animation: none !important; } }
+
+/* Wide screens: the two parts on the right read from the right edge, mirroring the two on the left. Phones keep the stacked layout. */
+@media (min-width: 761px) {
+  .eco-q1 .eco-body, .eco-q3 .eco-body { align-items: flex-end; text-align: right; }
+  .eco-q1 .eco-links, .eco-q3 .eco-links { justify-content: flex-end; }
+  .eco-q1 .eco-go, .eco-q3 .eco-go { text-align: right; }
+  .eco-q1 .eco-motif, .eco-q3 .eco-motif { transform: scaleX(-1); }
+  .eco-q1 .eco-motif .m-t, .eco-q3 .eco-motif .m-t { transform: scaleX(-1); transform-box: fill-box; transform-origin: center; }
+}

@@ -58,7 +58,7 @@ function Core({ compact, onEnter }: { compact: boolean; onEnter?: () => void }) 
       <span className="eco-art"><img key={id} src={`nft/${id}.webp`} alt="" width={140} height={140} /></span>
       <span className="eco-core-k mono">the centre</span>
       <b className="eco-core-t">Your Trencher</b>
-      {!compact && <span className="eco-core-p">An AI agent with its own wallet and identity. 2,000 in the collection.</span>}
+      {!compact && <span className="eco-core-p">An AI agent with its own wallet.</span>}
     </>
   );
   return onEnter

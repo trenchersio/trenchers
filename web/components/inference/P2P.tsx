@@ -1,5 +1,5 @@
 "use client";
-// Trenchers P2P: holders trade $TRENCHERS and agent coins with each other, at their own prices, escrowed on-chain.
+// Trenchers P2P Marketplace: people trade $TRENCHERS with each other, at their own prices, escrowed on-chain.
 // No curve, no slippage, no fee. An ask holds the tokens in the contract until it is filled or cancelled; a bid
 // holds the ETH. A $TRENCHERS ask can be filled straight into inference credit, with the desk as the recipient.
 import { useEffect, useMemo, useState } from "react";
@@ -32,16 +32,11 @@ export function P2P({ rate, orders, fills, onChange }: { rate: Rate | null; orde
   const otc = (rate?.otc ?? null) as Address | null;
   const desk = (rate?.deposit.address ?? null) as Address | null;
 
-  // The markets on the book, $TRENCHERS first, then agent coins, then anything else.
+  // The marketplace is for $TRENCHERS only.
   const markets = useMemo(() => {
-    const m = new Map<string, { token: string; symbol: string; verified: boolean; agent: number | null; n: number }>();
-    if (trenchers) m.set(trenchers, { token: trenchers, symbol: "TRENCHERS", verified: true, agent: null, n: 0 });
-    for (const o of orders ?? []) {
-      const k = o.token.toLowerCase();
-      const e = m.get(k) ?? { token: k, symbol: o.symbol, verified: o.verified, agent: o.agent, n: 0 };
-      e.n += 1; m.set(k, e);
-    }
-    return [...m.values()].sort((a, b) => (a.token === trenchers ? -1 : b.token === trenchers ? 1 : (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.n - a.n));
+    if (!trenchers) return [] as { token: string; symbol: string; verified: boolean; agent: number | null; n: number }[];
+    const n = (orders ?? []).filter((o) => o.token.toLowerCase() === trenchers).length;
+    return [{ token: trenchers, symbol: "TRENCHERS", verified: true, agent: null as number | null, n }];
   }, [orders, trenchers]);
   const [mkt, setMkt] = useState<string>("");
   useEffect(() => { if (!mkt && markets[0]) setMkt(markets[0].token); }, [markets, mkt]);
@@ -124,7 +119,7 @@ export function P2P({ rate, orders, fills, onChange }: { rate: Rate | null; orde
     finally { setBusy(null); }
   }
 
-  const mine = (orders ?? []).filter((o) => w.address && o.maker.toLowerCase() === w.address.toLowerCase());
+  const mine = (orders ?? []).filter((o) => w.address && o.token.toLowerCase() === trenchers && o.maker.toLowerCase() === w.address.toLowerCase());
   const cancel = async (id: number) => {
     if (!otc || !w.address) return;
     const { sendCall, reason } = await import("@/lib/chain");
@@ -164,7 +159,7 @@ export function P2P({ rate, orders, fills, onChange }: { rate: Rate | null; orde
             <button key={m.token} type="button" role="tab" aria-selected={market?.token === m.token} className={market?.token === m.token ? "on" : ""} onClick={() => setMkt(m.token)}>
               <b>${m.symbol}</b>
               <span>{m.token === trenchers ? "the token" : m.agent ? `agent #${m.agent}` : "unverified"}</span>
-              {m.verified ? <i className="ip2p-ok" title="Verified: $TRENCHERS or an agent coin">✓</i> : <i className="ip2p-warn" title="Not a Trenchers token: check the address">!</i>}
+              {m.verified ? <i className="ip2p-ok" title="Verified: the $TRENCHERS token">✓</i> : <i className="ip2p-warn" title="Not a Trenchers token: check the address">!</i>}
             </button>
           ))}
         </div>

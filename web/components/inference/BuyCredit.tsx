@@ -183,7 +183,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
       </div>
 
       <div className="ibuy-tabs" role="tablist" aria-label="Pay with">
-        {([["token", "$TRENCHERS"], ["eth", "ETH"], ["p2p", "From holders"]] as [Pay, string][]).map(([k, l]) => (
+        {([["token", "$TRENCHERS"], ["eth", "ETH"], ["p2p", "P2P"]] as [Pay, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={pay === k} className={pay === k ? "on" : ""}
             onClick={() => { setPay(k); setAmount(""); setErr(null); setSent(null); }}>{l}</button>
         ))}
@@ -232,7 +232,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
             {TRENCHERS_PONS && <a className="tbtn" href={TRENCHERS_PONS} target="_blank" rel="noreferrer">Buy $TRENCHERS on Pons ↗</a>}
           </div>
         ) : unavailable === "p2p" ? (
-          <div className="ibuy-note"><p>The P2P market opens when its contract is live. Orders will show here and fill straight into credit.</p></div>
+          <div className="ibuy-note"><p>The P2P Marketplace opens when its contract is live. Orders will show here and fill straight into credit.</p></div>
         ) : unavailable ? (
           <div className="ibuy-note"><p>{unavailable}</p></div>
         ) : (
@@ -252,7 +252,7 @@ export function BuyCredit({ rate, orders, mock, onSent }: { rate: Rate | null; o
         <p className="ibuy-foot">
           {pay === "token" && "One transfer to the desk contract. Whichever wallet sends it gets the credit."}
           {pay === "eth" && "Your ETH buys $TRENCHERS on the way in and the desk burns it, all in a single transaction signed by you."}
-          {pay === "p2p" && "Takes the lowest asks on the P2P book and routes the tokens straight to the desk instead of your wallet."}
+          {pay === "p2p" && "Takes the lowest asks on the P2P Marketplace and routes the tokens straight to the desk instead of your wallet."}
           {" "}Your balance is in dollars and does not expire.
         </p>
       </div>

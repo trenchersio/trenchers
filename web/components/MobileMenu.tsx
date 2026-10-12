@@ -29,7 +29,7 @@ export function MobileMenu({ page }: { page: Page }) {
     ["b-top", "Overview", "?#top"], ["b-launch", "Launch a coin", "?#launch"], ["b-explore", "Explore coins", "?#explore"], ["b-modules", "Modules", "?#modules"],
     ["b-how", "How it works", "?#how"],
   ] : inference ? [
-    ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-trencher", "Inference for a Trencher", "#trencher"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P market", "#p2p"],
+    ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-trencher", "Inference for a Trencher", "#trencher"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P Marketplace", "#p2p"],
     ["inf-account", "Account and keys", "#account"],
   ] : [];
   const links: [string, string, string][] = [

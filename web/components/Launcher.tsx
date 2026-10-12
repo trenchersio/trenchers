@@ -16,9 +16,9 @@ const ROUTES_OUT = [
     cta: { label: "Launch from My Trencher", href: ROUTES.agents }, ext: { label: "Programmable", href: PROGRAMMABLE_SITE },
   },
   {
-    key: "v4", n: "C", name: "Trenchers V4 Builder", tag: "new · ours",
+    key: "v4", n: "C", name: "Trenchers V4 Builder", tag: "new", open: true,
     who: "Anyone", pair: "ETH or $TRENCHERS", fees: "Your fee (0 to 10%) plus 0.3% to the $TRENCHERS buyback", liq: "Locked forever in a Uniswap v4 pool",
-    body: "Our own launch system on Robinhood Chain. Pick trading rules, fee engines and games from 16 modules, set your own fees, and launch a coin with its own Uniswap v4 hook in one transaction.",
+    body: "The Trenchers launch system on Robinhood Chain. Pick trading rules, fee engines and games from 16 modules, set your own fees, and launch a coin with its own Uniswap v4 hook in one transaction.",
     cta: { label: "Open the V4 Builder", href: ROUTES.builder }, ext: null,
   },
 ];
@@ -36,6 +36,7 @@ export function Launcher() {
         {ROUTES_OUT.map((r) => (
           <article key={r.key} className={`ln-card ln-${r.key}`}>
             <header><span className="ln-n mono">{r.n}</span><span className="ln-tag mono">{r.tag}</span></header>
+            {"open" in r && r.open && <p className="ln-open mono"><span className="ln-open-dot" aria-hidden="true" />Accessible to everyone · you don&apos;t need a Trencher</p>}
             <h2>{r.name}</h2>
             <p>{r.body}</p>
             <dl className="mono">
