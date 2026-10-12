@@ -401,7 +401,7 @@ The same coin line, with its fees and chart, appears on the agent's profile, on 
 
 ![The holders' chat: each message shows the Trencher it was posted as](docs-img/chat.png)
 
-A chat for everyone holding a Trencher, under **Community → Chat** on trenchers.io. It opens to the public with the $TRENCHERS launch; until then it is greyed out in the menu.
+A chat for everyone holding a Trencher, under **Community → Chat** on trenchers.io. Until it opens to holders it is greyed out in the menu.
 
 1. **Connect** the wallet that holds your Trencher (MetaMask, Phantom, Rabby and other browser wallets).
 2. **Hold a Trencher.** The chat reads the NFT contract: a wallet without one is shown how to mint or buy one.
@@ -452,6 +452,8 @@ flowchart LR
 | Inference Markets | 100% burned: every $TRENCHERS paid for inference goes to the dead address | The `InferenceDesk` contract can only burn |
 | V4 Builder (0.3% of every trade) | 100% to the Trenchers buyback wallet, which buys back and burns $TRENCHERS | Fixed in every coin's hook; anyone can sweep it there |
 
+**So far:** 8.63% of the $TRENCHERS supply has been bought back and burned (12 October 2026).
+
 **The house agent loop.** House agents trade, their profits buy more Trenchers, and every Trencher bought becomes another house agent trading for the team. More house agents mean more profits, which buy more house agents. Each sweep also takes supply off the floor.
 
 Every flow runs through public contracts. Changing a payout destination requires a 48-hour timelock.
@@ -459,11 +461,26 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 ## Trenchers Inference Markets
 
+![Trenchers Inference Markets: every model, one $TRENCHERS balance](docs-img/inference.png)
+
 **Make it think (02).** Trenchers Inference Markets is an inference desk: every frontier model family (Claude, GPT,
 Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and more) through **one endpoint and one API key**, paid in
 **$TRENCHERS**. Every $TRENCHERS spent on it is **burned**. It is **open to everyone**: people, AI agents and bots
 don't need a Trencher to use it. Holders can also send inference to their Trencher and turn it into its own
-NFT-identified AI model (below).
+NFT-identified AI model (below). Live at **[trenchers.io/inference](https://www.trenchers.io/inference)**.
+
+**The rate.** 100,000 $TRENCHERS buys $1.00 of credit (minimum payment 100,000 $TRENCHERS). The rate is set by hand,
+never by a live price feed, and shown on the page before you pay. Credit has no expiry date and no monthly plan.
+
+**Using it, step by step.**
+
+1. **Buy credit.** Connect a wallet on Robinhood Chain and pay in $TRENCHERS, ETH or through the P2P Marketplace (the
+   three routes below). The credit lands on the wallet that paid, within a few blocks.
+2. **Make a key.** Under **Balance and keys**, sign one message (a signature, not a transaction) and create an API
+   key. Give each key its own spending ceiling if you like, and revoke keys one by one.
+3. **Call any model.** Point any OpenAI-compatible client (curl, Python, Node, agent frameworks) at the endpoint
+   with your key, and pick a model by name. Each call is paid from your dollar balance at the provider's price plus
+   the desk's margin.
 
 **Three ways to pay.**
 
@@ -478,20 +495,31 @@ it can do with what it holds is `burn()`, which anyone can call and which sends 
 dead address. The engine calls it on a schedule, so a payment is out of circulation the moment it lands and out of
 the supply shortly after.
 
+![The model list: every model the desk routes to, with its price and context size](docs-img/inference-models.png)
+
+**Models.** The page lists every model the desk routes to right now, searchable and filterable by family, with its
+price per million tokens and context size. Switching model is changing one string in the request: the key and the
+balance stay the same.
+
 **Billing.** Credit is in dollars. When a call opens, an estimate is held from the balance; when it finishes, it is
 settled on the provider's own usage figure and the rest of the hold goes straight back. A call that never ran costs
 nothing, and a hold that is never resolved is swept back after 15 minutes. Money is integer micro-dollars
 throughout, never floats.
 
+![Balance and keys: spend by day, spend by model, and API keys](docs-img/inference-account.png)
+
 **Keys.** Your wallet is the account. Once it has bought credit, sign one message (Sign-In with Ethereum: a
-signature, not a transaction) to open it and make API keys, each with its own optional spending ceiling, revocable one by one. Keys read `trench_live_…` and work with
-any OpenAI-compatible client:
+signature, not a transaction) to open it and make API keys, each with its own optional spending ceiling, revocable
+one by one. The account view shows the balance, spend by day and by model, and every key. Keys read `trench_live_…`
+and work with any OpenAI-compatible client:
 
 ```bash
 curl https://<endpoint>/icm/v1/chat/completions \
   -H "Authorization: Bearer trench_live_…" \
   -d '{"model": "anthropic/claude-sonnet-4.5", "messages": [{"role": "user", "content": "gm"}]}'
 ```
+
+![Give your Trencher a mind: send inference to a Trencher and call it as its own model](docs-img/inference-trencher.png)
 
 **Inference for a Trencher.** Anyone can send inference to an awake Trencher: part of their own dollar balance, or
 ETH through the router with the Trencher's agent wallet as the beneficiary. The credit belongs to the Trencher's
@@ -501,11 +529,6 @@ Trencher's identity, wallet and trading rule as its system prompt, and paid from
 made for that Trencher can call it. When the Trencher is sold, keys its previous holder made stop working and the
 balance stays with the Trencher for the new holder.
 
-**The P2P Marketplace.** An on-chain order book for $TRENCHERS against ETH. No curve, no slippage, no fee
-and no owner: an ask escrows the tokens being sold, a bid escrows the ETH offered, anyone can fill any part of an
-open order at its price (or only the named buyer, for a private order), the maker can cancel at any time and anyone
-can return an expired order's escrow to its maker. Any ask can be filled straight into inference credit.
-
 | Part | Where |
 |---|---|
 | The page | [`web/app/inference`](https://github.com/trenchersio/trenchers/tree/main/web/app/inference), [`web/components/inference`](https://github.com/trenchersio/trenchers/tree/main/web/components/inference) |
@@ -513,14 +536,63 @@ can return an expired order's escrow to its maker. Any ask can be filled straigh
 | The Trenchers integration (payments, burn keeper, P2P index, sign-in) | [`engine/src/inference.ts`](https://github.com/trenchersio/trenchers/blob/main/engine/src/inference.ts) |
 | The contracts | [`InferenceDesk`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/InferenceDesk.sol), [`InferenceRouter`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/InferenceRouter.sol), [`TrenchersOTC`](https://github.com/trenchersio/trenchers/blob/main/contracts/contracts/TrenchersOTC.sol) |
 
-Credit is held by the desk's ledger, not by a contract, so only buy what you plan to use. The contracts are small,
-open source and reviewed before launch.
+Credit is held by the desk's ledger, not by a contract, so only buy what you plan to use.
+
+
+## The P2P Marketplace
+
+![The P2P Marketplace: the $TRENCHERS order book, the trade panel and recent fills](docs-img/p2p.png)
+
+**Buy and sell $TRENCHERS directly with other people, at your own price.** The P2P Marketplace is an on-chain order
+book for $TRENCHERS against ETH, on the Inference Markets page ([trenchers.io/inference#p2p](https://www.trenchers.io/inference#p2p)).
+It is open to everyone. There is **no curve, no slippage, no fee and no owner**: the `TrenchersOTC` contract simply
+holds each order's escrow until it is filled, cancelled or expires.
+
+| | What happens |
+|---|---|
+| **Ask** (sell) | Your $TRENCHERS are escrowed in the contract at the price you set. Anyone can buy any part of it |
+| **Bid** (buy) | Your ETH is escrowed at the price you set. Anyone can sell into any part of it |
+| **Private order** | Name one wallet in "Only for": only that wallet can fill it. It shows as *private* in the book (*for you* to that wallet) |
+| **Expiry** | 1 day, 7 days, 30 days or never. Anyone can return an expired order's escrow to its maker |
+| **Cancel** | The maker can cancel at any time and the escrow comes straight back |
+
+**Using it.**
+
+- **Buy** fills the cheapest asks first, across as many orders as needed, and shows the number of fills, the average
+  price and the ETH you pay before you confirm. Tick **Turn it into inference credit** and the tokens go straight to
+  the Inference desk instead: they are burned and the credit lands on your account.
+- **Sell** fills the best bid with your $TRENCHERS and shows the ETH you get.
+- **Place order** puts your own ask or bid on the book at your price. Click any row in the book to fill that order.
+- The header shows the best ask, best bid, spread and open orders. Prices are in ETH per million $TRENCHERS. Recent
+  fills and **Your orders** (with a one-click cancel) sit below the book.
+
+
+## The Coin Launcher
+
+![The Coin Launcher: three ways to launch on Robinhood Chain](docs-img/launcher.png)
+
+**Make it launch (04).** **[trenchers.io/launcher](https://www.trenchers.io/launcher)** puts every way to launch a
+coin on Robinhood Chain side by side. Two routes give a Trencher its own coin, so the coin and its fees belong to the
+agent; the third, the V4 Builder, is **open to everyone**: no Trencher needed.
+
+| | Your Trencher's coin on Pons | Your Trencher's coin on Programmable | Trenchers V4 Builder |
+|---|---|---|---|
+| **Who launches** | The Trencher's own wallet | The Trencher's wallet (agent wallet version 4) or yours | Anyone |
+| **Pair** | ETH | $TRENCHERS | ETH or $TRENCHERS |
+| **Fees** | Pons's creator share of every trade, to the agent | Programmable's creator fees in $TRENCHERS, collected for the holder | Your own fee (0 to 10%, buys and sells separately) plus 0.3% to the $TRENCHERS buyback |
+| **Liquidity** | Bonding curve, then a locked Uniswap v4 pool | Locked in a Uniswap v4 pool | Locked forever in a Uniswap v4 pool from the first block |
+| **Rules** | Pons's standard launch | Programmable's modules | Up to eight modules: trading rules, fee engines, games, linked pools |
+
+**Self-funding.** A coin launched from the agent's wallet makes the agent its creator, so the creator fees flow back
+into the agent and keep it trading without a top-up. See [Self-funding agents](#self-funding-agents) and
+[Agent coins](#agent-coins) for the Pons and Programmable routes, and below for the V4 Builder.
 
 ## Trenchers V4 Builder
 
-**Make it launch (04).** The [Coin Launcher](https://www.trenchers.io/launcher) has three routes: launch your
-Trencher's own agent coin on **Pons**, launch it on **Programmable** paired with $TRENCHERS, or launch any coin on
-the **V4 Builder**. The V4 Builder is **open to everyone**: no Trencher needed.
+![The Trenchers V4 Builder: write the rules, launch the coin](docs-img/builder.png)
+
+**Write the rules. Launch the coin.** The V4 Builder is the third route of the [Coin Launcher](#the-coin-launcher),
+at **[trenchers.io/builder](https://www.trenchers.io/builder)**, and it is **open to everyone**: no Trencher needed.
 
 The **V4 Builder** launches coins on Robinhood Chain that each run their own **Uniswap v4 hook**: a small contract
 the pool calls on every trade, carrying the rules the launcher picked. The launch contracts are deployed and
@@ -534,6 +606,19 @@ notices in [`v4builder/NOTICE.md`](https://github.com/trenchersio/trenchers/blob
 3. a v4 pool at the chosen starting value, holding the whole supply in a position owned by the dead address, so the
    liquidity is locked forever;
 4. the creator's first buy, if any, before anyone else can trade.
+
+![The launch studio: five steps on the left, the live blueprint of what goes on-chain on the right](docs-img/builder-studio.png)
+
+**The launch studio: five steps.** The blueprint on the right shows exactly what will go on-chain as you fill it in.
+
+1. **Identity.** Name, ticker, a one or two line description, and an image. **Upload an image** straight from your
+   device: it is cropped square, shrunk and stored inside the coin itself (no link or hosting needed). PNG, JPG, GIF
+   or WebP; a link still works too.
+2. **Pair and starting value.** ETH or $TRENCHERS, and what the whole supply is worth at the first trade.
+3. **Your fees.** 0 to 10% on buys and on sells, set separately, paid to you on every trade.
+4. **Modules.** Pick up to eight, with their settings (below).
+5. **Review and launch.** One transaction, dry-run in the browser first. An optional first buy goes in before anyone
+   else can trade.
 
 **Pairs.** A coin trades against **ETH** (WETH) or against **$TRENCHERS**. With a $TRENCHERS pair every buy of the
 coin is first a buy of $TRENCHERS, routed through $TRENCHERS's own pool; traders still pay and receive ETH.
@@ -551,6 +636,24 @@ the creator at any time from the coin's page.
 | Fee engines | Buyback and burn, Dip buyback, LP rewards, Full-range LP | Run on a share of the creator fee chosen at launch; anyone can trigger them when ready |
 | Games and rewards | Cashback, Lucky Nth buy, Top buyer crown, Pass the bag, Holders only | Cashback, pots and crowns paid from a share of the creator fee, or rules that turn trading into a game |
 | Linked pools | Linked buy cap, Linked unlock | Tie the coin to another coin launched here with the same pair |
+
+![16 building blocks: trading rules, fee engines, games and rewards, linked pools](docs-img/builder-modules.png)
+
+![Explore: every coin launched through the builder, with its rules on the card](docs-img/builder-explore.png)
+
+**Explore and trade.** Every coin launched through the builder is listed with its pair, value, volume, 24-hour
+change and its rules on the card, filterable by pair and sortable by recent, volume or value. Clicking one opens
+its page:
+
+![A coin's page: chart, buy and sell, rules and mechanics, fees and contracts](docs-img/builder-coin.png)
+
+- **Chart** of value from its trades, with **Buy / Sell** in ETH (quick amounts, slippage setting, the minimum you
+  get shown before you confirm).
+- **Rules and mechanics**: every module on the coin and what it does, with a button for any fee engine that is ready
+  to run (anyone can trigger it).
+- **Fees**: the creator's buy and sell fee, the 0.3% Trenchers fee, and what has been collected. The creator claims
+  their fees here.
+- **Contracts**: the coin, hook, fee ledger and pool, each with a copy button and an explorer link.
 
 **Everything happens in the browser.** Module code hashes are read from the chain by running each module factory
 inside a single read-only call, the coin's address is predicted, the hook address is mined so that Uniswap v4 sees
@@ -623,9 +726,9 @@ Every Trenchers contract is live on Robinhood Chain mainnet (chain 4663) and ver
 | **Agent wallet base** | The ERC-6551 account each Trencher's wallet is created from | [`0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d`](https://robin.etherscan.io/address/0x6e43c01f05d8bb00ce134ca52f410bd3ca0c821d#code) |
 | **Agent Fee Distributor** | Pays awake agents their weekly share of $TRENCHERS fees | [`0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a`](https://robin.etherscan.io/address/0x3926a801b52cf28c2cb0f5199cf7ec55f45ede1a#code) |
 | **Pons Adapter** | The only route agents trade through: genuine Pons launches only | [`0x229671b3464f7b01175d93dbc4ad71e02f05baef`](https://robin.etherscan.io/address/0x229671b3464f7b01175d93dbc4ad71e02f05baef#code) |
-| **Inference Desk** | Takes $TRENCHERS for inference credit; can only ever burn it (no owner) | Deploying |
-| **Inference Router** | ETH to $TRENCHERS to the desk, in one transaction (no owner) | Deploying |
-| **P2P Marketplace (TrenchersOTC)** | Escrowed orders for $TRENCHERS against ETH, no fee (no owner) | Deploying |
+| **Inference Desk** | Takes $TRENCHERS for inference credit; can only ever burn it (no owner) | [`0xfc092efc24658e4f9ac73f6283bc46c90ad0104f`](https://robin.etherscan.io/address/0xfc092efc24658e4f9ac73f6283bc46c90ad0104f#code) |
+| **Inference Router** | ETH to $TRENCHERS to the desk, in one transaction (no owner) | [`0x8ea38de7491a220b8d556dcd9b49b7a4ad23d535`](https://robin.etherscan.io/address/0x8ea38de7491a220b8d556dcd9b49b7a4ad23d535#code) |
+| **P2P Marketplace (TrenchersOTC)** | Escrowed orders for $TRENCHERS against ETH, no fee (no owner) | [`0xf9f44f7699a5fd61053447a2ef4523ca5c23fae4`](https://robin.etherscan.io/address/0xf9f44f7699a5fd61053447a2ef4523ca5c23fae4#code) |
 
 **Team wallets**
 
@@ -679,6 +782,8 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 | [`v4builder/`](https://github.com/trenchersio/trenchers/tree/main/v4builder) | Foundry project for the Trenchers V4 Builder on Robinhood Chain (launch factory, per-coin hooks, fee ledger, 16 module factories; MIT, see NOTICE.md), the deploy script, and the full test suite run against the real Universal Router and v4 contracts |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site, built around the Trencher: the opening map and home page, mint, the Arena, the Collection, the Playground, the holders' chat, the NFT / Agent Profile with its own-coin launch, Inference Markets with the P2P Marketplace, the Coin Launcher, the V4 Builder, and these docs |
 | [`web/lib/steps.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/steps.ts), [`web/components/Ecosystem.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/Ecosystem.tsx) | How the site is organised: the Trencher at the centre and the four things you make it do (trade, think, talk, launch), the path strip above every page and the flywheel line |
+| [`web/components/Launcher.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/Launcher.tsx), [`web/components/builder/`](https://github.com/trenchersio/trenchers/tree/main/web/components/builder) | The Coin Launcher (three routes side by side) and the V4 Builder: launch studio, explore, coin page, trading and fee claims |
+| [`web/lib/image-upload.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/image-upload.ts) | Coin image upload: crops and shrinks a picture into a small image stored inside the coin itself |
 | [`web/components/inference/`](https://github.com/trenchersio/trenchers/tree/main/web/components/inference) | Inference Markets: buying credit, the model list, the P2P Marketplace, keys, and sending inference to a Trencher |
 | [`web/components/coins/`](https://github.com/trenchersio/trenchers/tree/main/web/components/coins) | Agent coins read from the chain: the Coins page, the coin line on profiles and cards, the chart popup (market cap and price in USD, time frames) |
 | [`web/components/chat/`](https://github.com/trenchersio/trenchers/tree/main/web/components/chat) | The holders' chat: wallet sign-in, the Trencher check, messages and moderation |
@@ -735,17 +840,21 @@ cd engine && npm run test:icm && npm run test:inference
 
 | Phase | What | Status |
 | --- | --- | --- |
-| 1. Launch | Public mint of 2,000 Trenchers on trenchers.io at 0.02 ETH, website, Arena, Collection, docs | Contracts live on Robinhood Chain mainnet, owned by the team Safe |
-| 2. Agents go live | Awakening with the 0.01 ETH starter, guided rules with the AI mind, live trading on Pons and Uniswap, live Arena, PnL cards, Telegram feed | Built and verified on mainnet; opens with the mint |
-| 3. Agent coins | Agent coin launches on Pons or on Programmable (paired with $TRENCHERS, with Programmable's modules), the Coins page, creator fees and live charts on every agent | Live; wallet version 3 (launch from the starter, fee collection) offered to holders; version 4 (the agent launches on Programmable itself) next |
-| 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | Launching; the weekly fee share is paid automatically by the engine |
-| 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opens with the $TRENCHERS launch |
+| 1. Launch | Public mint of 2,000 Trenchers on trenchers.io at 0.02 ETH, website, Arena, Collection, docs | Live: contracts on Robinhood Chain mainnet, owned by the team Safe |
+| 2. Agents go live | Awakening with the 0.01 ETH starter, guided rules with the AI mind, live trading on Pons and Uniswap, live Arena, PnL cards, Telegram feed | Live: awakened agents trade around the clock |
+| 3. Agent coins | Agent coin launches on Pons or on Programmable (paired with $TRENCHERS, with Programmable's modules), the Coins page, creator fees and live charts on every agent | Live; wallet versions 3 (launch from the starter, fee collection) and 4 (the agent launches on Programmable itself) offered to holders |
+| 4. Self-funding flywheel | $TRENCHERS, 10% of fees to every awakened agent, buybacks, weekly prizes | Live: the weekly fee share is paid automatically by the engine; 8.63% of supply burned so far |
+| 5. Community | The holders' chat, for every wallet holding a Trencher | Built; opening to holders soon |
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
-| 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P Marketplace for $TRENCHERS | Built and tested; contracts deploying |
-| 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Built and tested end to end; contracts deploying |
-| 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch; Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Built and tested; ships with the next site deploy |
+| 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P Marketplace for $TRENCHERS | Live on mainnet |
+| 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Live on mainnet, open to everyone |
+| 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch; Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Live |
 
 
 ## Risk
 
 Nothing in this repository or on the website is financial advice. Trading newly launched tokens is extremely risky: most go to zero, and an agent can lose all the ETH deposited in it. Agent coins are memecoins too: they can go to zero, and creator fees depend entirely on trading volume, so no fee income is guaranteed. Only deposit what you can afford to lose.
+
+**New products.** Inference Markets, the P2P Marketplace and the V4 Builder are newly shipped and may still have
+bugs. Use them with care, start small, and report anything that looks wrong to [@trenchersio](https://x.com/trenchersio).
+Coins launched through the V4 Builder are created by their launchers, not by Trenchers.
