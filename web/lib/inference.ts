@@ -100,6 +100,15 @@ export function family(slug: string) {
 
 /** One call to the desk, through the site. Every request has a deadline and fails with a sentence, never a hang. */
 export async function deskApi<T>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  // The static preview has no server: it answers from the same sample data the local mock uses.
+  if (process.env.NEXT_PUBLIC_PREVIEW === "1") {
+    const { mockInference } = await import("@/lib/inference-mock");
+    await new Promise((r) => setTimeout(r, 150));
+    const r = mockInference((opts.method ?? "GET").toUpperCase(), `/icm${path}`, opts.body as Record<string, unknown> | undefined);
+    const j = r.json as { error?: { message?: string } } | null;
+    if (r.status >= 400) throw new Error(j?.error?.message ?? `The desk is not answering (${r.status}).`);
+    return r.json as T;
+  }
   const res = await fetch(`/api/inference${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json" },

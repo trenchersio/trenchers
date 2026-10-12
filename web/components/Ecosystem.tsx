@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/constants";
 function Motif({ k }: { k: Step["key"] }) {
   if (k === "trade") return (
     <svg viewBox="0 0 120 44" className="eco-motif" aria-hidden="true">
-      <path d="M2 36 L18 30 L30 33 L44 22 L58 26 L72 14 L86 18 L100 8 L118 4" className="m-line" />
+      <path d="M2 36 L18 30 L30 33 L44 22 L58 26 L72 14 L86 18 L100 8 L118 4" className="m-line m-draw" pathLength={100} />
       <path d="M2 36 L18 30 L30 33 L44 22 L58 26 L72 14 L86 18 L100 8 L118 4 L118 44 L2 44 Z" className="m-area" />
       <circle cx="118" cy="4" r="3" className="m-dot" />
     </svg>
@@ -18,19 +18,19 @@ function Motif({ k }: { k: Step["key"] }) {
     <svg viewBox="0 0 120 44" className="eco-motif" aria-hidden="true">
       <rect x="4" y="4" width="62" height="18" rx="6" className="m-box" /><path d="M14 22 L12 30 L22 22" className="m-box" />
       <rect x="40" y="24" width="74" height="16" rx="6" className="m-box m-fill" />
-      <circle cx="16" cy="13" r="2" className="m-dot" /><circle cx="25" cy="13" r="2" className="m-dot" /><circle cx="34" cy="13" r="2" className="m-dot" />
+      <circle cx="16" cy="13" r="2" className="m-dot m-type" /><circle cx="25" cy="13" r="2" className="m-dot m-type" style={{ animationDelay: ".2s" }} /><circle cx="34" cy="13" r="2" className="m-dot m-type" style={{ animationDelay: ".4s" }} />
     </svg>
   );
   if (k === "launch") return (
     <svg viewBox="0 0 120 44" className="eco-motif" aria-hidden="true">
       <path d="M6 40 C 40 40, 70 34, 96 10" className="m-line m-dash" />
-      <circle cx="98" cy="9" r="7" className="m-box m-fill" /><text x="98" y="12" className="m-t">$</text>
+      <g className="m-coin"><circle cx="98" cy="9" r="7" className="m-box m-fill" /><text x="98" y="12" className="m-t">$</text></g>
       <circle cx="30" cy="38" r="2" className="m-dot" /><circle cx="56" cy="33" r="2" className="m-dot" /><circle cx="78" cy="23" r="2" className="m-dot" />
     </svg>
   );
   return (
     <svg viewBox="0 0 120 44" className="eco-motif" aria-hidden="true">
-      {[[12, 10], [12, 34], [44, 6], [44, 22], [44, 38], [78, 14], [78, 30], [108, 22]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3" className={i === 7 ? "m-dot m-glow" : "m-dot"} />)}
+      {[[12, 10], [12, 34], [44, 6], [44, 22], [44, 38], [78, 14], [78, 30], [108, 22]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3" className={i === 7 ? "m-dot m-glow m-node" : "m-dot m-node"} style={{ animationDelay: `${[0, 0, .3, .3, .3, .6, .6, .9][i]}s` }} />)}
       <path d="M12 10 L44 6 M12 10 L44 22 M12 34 L44 22 M12 34 L44 38 M44 6 L78 14 M44 22 L78 14 M44 22 L78 30 M44 38 L78 30 M78 14 L108 22 M78 30 L108 22" className="m-line m-thin" />
     </svg>
   );
@@ -53,7 +53,7 @@ function Core({ compact, onEnter }: { compact: boolean; onEnter?: () => void }) 
     <>
       <svg viewBox="0 0 200 200" className="eco-orbit" aria-hidden="true">
         <defs><path id="eco-ring" d="M100,100 m-88,0 a88,88 0 1,1 176,0 a88,88 0 1,1 -176,0" /></defs>
-        <text><textPath href="#eco-ring" startOffset="0">$TRENCHERS · coin fees buy it back · inference burns it · 10% of fees go to every agent ·</textPath></text>
+        <text><textPath href="#eco-ring" startOffset="0">$TRENCHERS · every fee buys it back · inference burns it · sweeps the Trenchers floor ·</textPath></text>
       </svg>
       <span className="eco-art"><img key={id} src={`nft/${id}.webp`} alt="" width={140} height={140} /></span>
       <span className="eco-core-k mono">the centre</span>
@@ -72,22 +72,23 @@ export function Ecosystem({ compact = false, onPick, onEnter }: { compact?: bool
       <div className="eco-grid">
         {STEPS.map((s, i) => {
           const body = (
-            <>
+            <span className="eco-body">
               <span className="eco-k mono"><i>{s.n}</i>{s.verb}</span>
-              <b className="eco-t">{s.name}</b>
-              <span className="eco-does">It {s.does}.</span>
-              {!compact && <span className="eco-p">{s.blurb}</span>}
+              <b className="eco-t">{s.product}</b>
+              <span className="eco-does">{compact ? s.short : s.what}</span>
+              <span className={`eco-who mono${s.open ? " open" : ""}`}>{s.who}</span>
               <Motif k={s.key} />
               {!compact && (
                 <span className="eco-links">
-                  {s.pages.map((p) => <a key={p.label} href={p.href} className="mono">{p.label} →</a>)}
+                  <a href={s.home} className="mono eco-open">Open {s.product.replace(/^The /, "the ")} →</a>
+                  {s.pages.filter((p) => p.href !== s.home).map((p) => <a key={p.label} href={p.href} className="mono">{p.label}</a>)}
                 </span>
               )}
-            </>
+            </span>
           );
           const cls = `eco-part eco-q${i} tone-${s.tone}`;
           return onPick
-            ? <button key={s.key} type="button" className={cls} onClick={() => onPick(s)}>{body}<span className="eco-go mono">{s.verb.toLowerCase()} →</span></button>
+            ? <button key={s.key} type="button" className={cls} onClick={() => onPick(s)}>{body}<span className="eco-go mono">open {s.product.replace(/^The /, "the ").toLowerCase()} →</span></button>
             : <div key={s.key} className={cls}><a className="eco-cover" href={s.home} aria-label={s.verb} />{body}</div>;
         })}
         <Core compact={compact} onEnter={onEnter} />
@@ -99,5 +100,36 @@ export function Ecosystem({ compact = false, onPick, onEnter }: { compact?: bool
         </p>
       )}
     </div>
+  );
+}
+
+/** Where every fee goes: one loop, drawn left to right, that ends where it started. */
+export function FlywheelLoop() {
+  const SOURCES = [
+    { k: "Royalties", v: "every Trencher resale" },
+    { k: "Coin Launcher", v: "0.3% of every V4 coin trade" },
+    { k: "Inference", v: "$TRENCHERS paid for compute" },
+    { k: "$TRENCHERS", v: "its trading fees" },
+  ];
+  return (
+    <section className="fwl" aria-label="The flywheel">
+      <div className="fwl-head">
+        <p className="fwl-k mono"><span className="fwb-ic" aria-hidden="true" />The flywheel</p>
+        <h2>Every fee feeds $TRENCHERS.</h2>
+        <p>Whatever part of Trenchers you use, the fees it earns go one way: buying back $TRENCHERS, burning it, and sweeping the Trenchers floor.</p>
+      </div>
+      <div className="fwl-flow">
+        <ul className="fwl-src">{SOURCES.map((x) => <li key={x.k}><b>{x.k}</b><span className="mono">{x.v}</span></li>)}</ul>
+        <span className="fwl-arrow" aria-hidden="true"><i /></span>
+        <div className="fwl-mid"><b>Buyback wallet</b><span className="mono">collects every fee</span></div>
+        <span className="fwl-arrow" aria-hidden="true"><i /></span>
+        <ul className="fwl-out">
+          <li className="g"><b>Buy back $TRENCHERS</b><span className="mono">from the open market</span></li>
+          <li className="a"><b>Burn</b><span className="mono">out of supply for good</span></li>
+          <li className="v"><b>Sweep the floor</b><span className="mono">buy cheap Trenchers</span></li>
+        </ul>
+      </div>
+      <p className="fwl-loop mono">↻ More usage means more buybacks, fewer tokens and a firmer floor for every holder and every agent.</p>
+    </section>
   );
 }

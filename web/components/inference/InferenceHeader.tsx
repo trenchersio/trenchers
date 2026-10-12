@@ -3,6 +3,7 @@ import { ConnectModal } from "@/components/ConnectModal";
 import { MobileMenu } from "@/components/MobileMenu";
 import { CopyCA } from "@/components/CopyCA";
 import { SectionSwitch } from "@/components/SectionSwitch";
+import { FlywheelBand } from "@/components/FlywheelBand";
 import { ROUTES } from "@/lib/constants";
 
 /** The inference markets' own top bar, under the same two-section strip as the agents. */
@@ -28,6 +29,7 @@ export function InferenceHeader() {
         </nav>
         <MobileMenu page="inference" />
       </header>
+      <FlywheelBand on={"think"} wide />
       <ConnectModal />
     </>
   );

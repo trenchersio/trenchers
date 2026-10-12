@@ -3,6 +3,7 @@ import { ConnectModal } from "@/components/ConnectModal";
 import { MobileMenu } from "@/components/MobileMenu";
 import { CopyCA } from "@/components/CopyCA";
 import { SectionSwitch } from "@/components/SectionSwitch";
+import { FlywheelBand } from "@/components/FlywheelBand";
 import { ROUTES } from "@/lib/constants";
 
 /** The V4 Builder's own top bar, under the same section strip as the agents and the inference markets. */
@@ -27,6 +28,7 @@ export function BuilderHeader() {
         </nav>
         <MobileMenu page="builder" />
       </header>
+      <FlywheelBand on={"launch"} wide />
       <ConnectModal />
     </>
   );

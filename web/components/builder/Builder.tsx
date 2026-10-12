@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { GITHUB_URL, ROUTES, SOCIALS } from "@/lib/constants";
 import { MODULES, PLATFORM_FEE_BPS, type BuilderCoin, type ModuleDef } from "@/lib/v4builder";
 import { TokenLine } from "@/components/TokenLine";
-import { useBuilder } from "./useBuilder";
+import { builderApi, useBuilder } from "./useBuilder";
 import { Studio } from "./Studio";
 import { Explore } from "./Explore";
 import { CoinView } from "./CoinView";
@@ -83,7 +83,7 @@ export function Builder() {
   useEffect(() => {
     if (!coinAddr) { setFull(null); return; }
     let live = true;
-    fetch(`/api/builder/coin?token=${coinAddr}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((c) => { if (live && c?.token) setFull(c); }).catch(() => {});
+    builderApi(`coin?token=${coinAddr}`).then((x) => { const c = x as BuilderCoin | null; if (live && c?.token) setFull(c); }).catch(() => {});
     return () => { live = false; };
   }, [coinAddr, d.coins]);
   const coin = coinAddr ? full ?? d.coins?.find((c) => c.token.toLowerCase() === coinAddr) ?? null : null;
@@ -108,7 +108,7 @@ export function Builder() {
           <div className="vb-hero-pitch">
             <p className="vb-eyebrow mono"><span>v4</span>Hook coins on Robinhood Chain</p>
             <h1 className="vb-title">Write the <em>rules</em>.<br />Launch the coin.</h1>
-            <p className="vb-lede">Pick trading rules, fee engines and games, set your own fees, and launch a Uniswap v4 coin with its own hook in one transaction. Liquidity is locked forever. Every trade also feeds the $TRENCHERS buyback.</p>
+            <p className="vb-lede">Pick trading rules, fee engines and games, set your own fees, and launch a Uniswap v4 coin with its own hook in one transaction. Liquidity is locked forever. Every trade also feeds the $TRENCHERS buyback. Open to everyone: no Trencher needed.</p>
             <div className="vb-hero-cta">
               <a href="#launch" className="vb-btn">Start building</a>
               <a href="#explore" className="vb-ghost">Explore coins</a>

@@ -5,6 +5,7 @@ import { NavDropdown, type NavItem } from "./NavDropdown";
 import { CopyCA } from "@/components/CopyCA";
 import { WakeBanner } from "@/components/WakeBanner";
 import { SectionSwitch } from "@/components/SectionSwitch";
+import { FlywheelBand } from "@/components/FlywheelBand";
 import { CHAT_OPEN, GITHUB_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 import { HUB, step, stepOf, type PageKey } from "@/lib/steps";
 
@@ -57,6 +58,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
         </nav>
         <MobileMenu page={page} />
       </header>
+      <FlywheelBand on={where} wide={wide} />
       <WakeBanner page={page} />
       <ConnectModal />
     </>

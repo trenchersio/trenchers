@@ -42,6 +42,8 @@ export function Intro({ onEnter }: { onEnter: (to: Where) => void }) {
         </p>
         <div className={`intro-doors intro-eco${ready ? " show" : ""}`} aria-hidden={!ready}>
           <Ecosystem compact onPick={(st: Step) => ready && enter(st.key)} onEnter={() => ready && enter("hub")} />
+          <p className="intro-open intro-fw"><span className="fwb-ic" aria-hidden="true" />Every fee feeds the flywheel: $TRENCHERS buybacks, burns and Trencher floor sweeps.</p>
+          <p className="intro-open">No Trencher? <button type="button" className="intro-link ia" onClick={() => ready && enter("think")}>Inference Markets</button> and the <button type="button" className="intro-link ib" onClick={() => ready && enter("launch")}>Coin Launcher</button> are open to everyone.</p>
         </div>
       </div>
     </div>

@@ -95,13 +95,13 @@ export function Inference() {
       <section className="ihero">
         <div className="ihero-grid" aria-hidden="true" />
         <div className="ihero-pitch">
-          <p className="hero-chip mono"><span className="live-dot" />04 · Make it think<span className="hero-chip-sep">/</span>{n ? `${n} models` : "Inference Markets"}</p>
+          <p className="hero-chip mono"><span className="live-dot" />02 · Make it think<span className="hero-chip-sep">/</span>{n ? `${n} models` : "Inference Markets"}</p>
           <h1 className="ihero-title">
             Every model.<br />One <mark>$TRENCHERS</mark> balance.
           </h1>
           <p className="lede ihero-lede">
             Top up once and call Claude, GPT, Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and the rest from the same endpoint.
-            Whatever you pay in leaves the supply for good. Hand your bots a key each, or give your Trencher a mind of its own.
+            Whatever you pay in leaves the supply for good. Open to anyone with a wallet: hand your bots and agents a key each, or give your Trencher a mind of its own.
           </p>
 
         </div>

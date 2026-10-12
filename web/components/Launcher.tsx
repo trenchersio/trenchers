@@ -27,7 +27,7 @@ export function Launcher() {
   return (
     <main className="ln">
       <section className="ln-hero">
-        <p className="ln-k mono"><i>03</i>Make it launch</p>
+        <p className="ln-k mono"><i>04</i>Make it launch</p>
         <h1>Give your Trencher<br /><span>a coin of its own.</span></h1>
         <p className="lede">Three ways to launch on Robinhood Chain. A Trencher can launch its own coin from its wallet, so the coin and its fees belong to the agent. Or build a coin with its own rules in the V4 Builder.</p>
       </section>
