@@ -53,7 +53,7 @@ function Core({ compact, onEnter }: { compact: boolean; onEnter?: () => void }) 
     <>
       <svg viewBox="0 0 200 200" className="eco-orbit" aria-hidden="true">
         <defs><path id="eco-ring" d="M100,100 m-88,0 a88,88 0 1,1 176,0 a88,88 0 1,1 -176,0" /></defs>
-        <text><textPath href="#eco-ring" startOffset="0" textLength="550" lengthAdjust="spacing">$TRENCHERS · every fee buys it back · inference burns it · $TRENCHERS · sweeps the Trenchers floor ·</textPath></text>
+        <text><textPath href="#eco-ring" startOffset="0" textLength="547" lengthAdjust="spacing">$TRENCHERS · every fee buys it back · inference burns it · $TRENCHERS · sweeps the Trenchers floor ·</textPath></text>
       </svg>
       <span className="eco-art"><img key={id} src={`nft/${id}.webp`} alt="" width={140} height={140} /></span>
       <span className="eco-core-k mono">the centre</span>
