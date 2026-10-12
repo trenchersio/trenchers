@@ -255,7 +255,7 @@ Rules:
 
 #### On Programmable, paired with $TRENCHERS
 
-The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (a Uniswap v4 launchpad) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules (for example Initial wallet buy limit, Hot potato, Plague, Entangled or Reactive pair) and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
+The same card has a second option: launch the coin on **[Programmable](https://programmable.market)** (a Uniswap v4 launchpad) instead of Pons. A Programmable agent coin is always **paired with $TRENCHERS**, never ETH, so every buy of it with ETH buys $TRENCHERS first. The holder can switch on any of Programmable's live modules and set their options, choose a creator fee of 0% to 10%, and a first buy in ETH (Programmable requires about $2). The coin starts near a $5,000 market cap; Programmable adds its own 0.30% platform fee.
 
 | Who signs | Creator (gets the fees) | First buy paid by |
 | --- | --- | --- |
