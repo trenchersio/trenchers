@@ -1,9 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { PixelMosaic } from "./PixelMosaic";
+import { Ecosystem } from "./Ecosystem";
+import type { Step, Where } from "@/lib/steps";
 
-/** Black intro screen: Trenchers assemble across the screen while the agents "boot". */
-export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference" | "builder") => void }) {
+/** Black intro screen: Trenchers assemble across the screen while the agents "boot", then the map of what a
+ *  Trencher does: the Trencher at the centre, and the four parts around it. */
+export function Intro({ onEnter }: { onEnter: (to: Where) => void }) {
   const [count, setCount] = useState(0);
   const [exiting, setExiting] = useState(false);
 
@@ -22,7 +25,7 @@ export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference" | "bui
   }, []);
 
   const ready = count >= 2000;
-  function enter(to: "agents" | "inference" | "builder") {
+  function enter(to: Where) {
     if (exiting) return;
     setExiting(true);
     setTimeout(() => onEnter(to), 750);
@@ -37,25 +40,8 @@ export function Intro({ onEnter }: { onEnter: (to: "agents" | "inference" | "bui
           {ready ? "2,000 agents online" : `booting agents ${count.toLocaleString()} / 2,000`}
           <span className="caret" />
         </p>
-        <div className={`intro-doors${ready ? " show" : ""}`} role="group" aria-label="Choose where to go">
-          <button type="button" className="door door-a" onClick={() => enter("agents")} disabled={!ready} tabIndex={ready ? 0 : -1}>
-            <span className="door-k mono"><i className="door-dot" />01 · Trenchers</span>
-            <b>AI Agents</b>
-            <span className="door-p">2,000 NFT trading agents. Mint one, train it in plain English and climb the Arena.</span>
-            <span className="door-go mono">Enter the agents <span aria-hidden="true">→</span></span>
-          </button>
-          <button type="button" className="door door-i" onClick={() => enter("inference")} disabled={!ready} tabIndex={ready ? 0 : -1}>
-            <span className="door-k mono"><i className="door-dot" />02 · Trenchers</span>
-            <b>Inference Markets</b>
-            <span className="door-p">Burn $TRENCHERS, run any model. Claude, GPT, Gemini, Grok and more behind one address.</span>
-            <span className="door-go mono">Enter the markets <span aria-hidden="true">→</span></span>
-          </button>
-          <button type="button" className="door door-b" onClick={() => enter("builder")} disabled={!ready} tabIndex={ready ? 0 : -1}>
-            <span className="door-k mono"><i className="door-dot" />03 · Trenchers<em>New</em></span>
-            <b>V4 Builder</b>
-            <span className="door-p">Launch a Uniswap v4 hook coin with its own rules, fees and mechanics in one transaction.</span>
-            <span className="door-go mono">Enter the builder <span aria-hidden="true">→</span></span>
-          </button>
+        <div className={`intro-doors intro-eco${ready ? " show" : ""}`} aria-hidden={!ready}>
+          <Ecosystem compact onPick={(st: Step) => ready && enter(st.key)} onEnter={() => ready && enter("hub")} />
         </div>
       </div>
     </div>

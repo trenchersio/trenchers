@@ -1,6 +1,6 @@
 import { SiteShell } from "@/components/SiteShell";
 import { SiteHeader } from "@/components/SiteHeader";
-import { ArtCycler } from "@/components/ArtCycler";
+import { Ecosystem } from "@/components/Ecosystem";
 import { TextButton } from "@/components/TextButton";
 import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH, TELEGRAM_FEED } from "@/lib/constants";
 import { Flywheel } from "@/components/Flywheel";
@@ -83,31 +83,22 @@ export default function Home() {
       <SiteHeader page="home" />
 
       <main id="top">
-        <section className="hero">
-          <div className="pitch">
-            <p className="hero-chip mono"><span className="live-dot" />AgentFi 2.0<span className="hero-chip-sep">/</span>2,000 agents</p>
-            <h1 className="hero-title">
-              <span className="ht-a">Self-funding</span>
-              <span className="ht-b">trading agents</span>
-              <span className="ht-c">with an identity<span className="ht-caret" aria-hidden="true" /></span>
-            </h1>
+        <section className="hero home-path" id="path">
+          <div className="hp-head">
+            <p className="hero-chip mono"><span className="live-dot" />2,000 AI agents<span className="hero-chip-sep">/</span>Robinhood Chain</p>
+            <h1 className="hp-title">One Trencher.<br /><span>Four things it does.</span></h1>
             <p className="lede">
-              2,000 AI trading agents on Robinhood Chain, each an NFT with its own identity, wallet and track record.
-              Buy one, register it, train it, climb the ranks and sell your proven strategy.<span className="lede-more"> Let it
-              launch its own coin or fund it yourself, guide it in plain English, and it trades memecoins around the clock, without
-              emotion.</span>
+              Every Trencher is an AI agent with its own wallet and identity, and everything here is built around it. Mint one,
+              then make it <b className="t-green">trade</b> in the Arena, <b className="t-violet">talk</b> in the Playground,{" "}
+              <b className="t-ice">launch</b> its own coin and <b className="t-amber">think</b> with the model of your choice.
             </p>
-            <div className="cta">
-              <TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>
-              <TextButton href={ROUTES.arena}>Enter the Arena</TextButton>
-            </div>
             <ul className="facts">
               <li><span>Price</span><b>{LIST_PRICE_ETH} ETH</b></li>
               <li><span>Back to your agent</span><b>{STARTER_ETH} ETH</b></li>
               <li><span>Agents&apos; share of $TRENCHERS fees</span><b>{AGENT_FEE_SHARE_PCT}%</b></li>
             </ul>
           </div>
-          <ArtCycler />
+          <Ecosystem />
         </section>
 
         <ActivityTicker />

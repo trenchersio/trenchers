@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function InferencePage() {
   return (
-    <SiteShell section="inference">
+    <SiteShell section="think">
       <InferenceHeader />
       <Inference />
     </SiteShell>

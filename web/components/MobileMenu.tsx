@@ -4,8 +4,9 @@ import { CopyCA } from "@/components/CopyCA";
 import { CHAT_OPEN, GITHUB_URL, OPENSEA_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
 import { useChatUnread } from "@/lib/chat-unread";
 import { short, useWallet } from "@/lib/wallet";
+import { HUB, STEPS, stepOf, type PageKey } from "@/lib/steps";
 
-type Page = "home" | "arena" | "agents" | "docs" | "collection" | "mint" | "coins" | "chat" | "playground" | "inference" | "builder";
+type Page = PageKey;
 
 /** Small screens: one [Menu] button that opens every link and the wallet control. */
 export function MobileMenu({ page }: { page: Page }) {
@@ -21,16 +22,23 @@ export function MobileMenu({ page }: { page: Page }) {
   }, [open]);
   const inference = page === "inference";
   const builder = page === "builder";
-  const links: [Page | "github" | "x" | string, string, string][] = builder ? [
+  const where = stepOf(page);
+  const st = STEPS.find((x) => x.key === where);
+  // Pages with their own sections list those; every other page lists its step's pages, then the hub.
+  const own: [string, string, string][] = builder ? [
     ["b-top", "Overview", "?#top"], ["b-launch", "Launch a coin", "?#launch"], ["b-explore", "Explore coins", "?#explore"], ["b-modules", "Modules", "?#modules"],
-    ["b-how", "How it works", "?#how"], ["docs", "Docs", `${ROUTES.docs}#trenchers-v4-builder`],
+    ["b-how", "How it works", "?#how"],
   ] : inference ? [
-    ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P market", "#p2p"],
-    ["inf-account", "Account and keys", "#account"], ["inf-start", "Get $TRENCHERS", "#start"], ["docs", "Docs", `${ROUTES.docs}#trenchers-inference-markets`],
-  ] : [
-    ["home", "Home", ROUTES.home], ["mint", "Mint", ROUTES.mint], ["arena", "Arena", ROUTES.arena], ["collection", "Collection", ROUTES.collection], ["coins", "Agent coins", ROUTES.coins],
-    ["docs", "Docs", ROUTES.docs], ["agents", "NFT / Agent Profile", ROUTES.agents], ["playground", "Playground", ROUTES.playground],
-    ...(CHAT_OPEN ? [["chat", "Holders' chat", ROUTES.chat] as [Page, string, string]] : []),
+    ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-trencher", "Inference for a Trencher", "#trencher"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P market", "#p2p"],
+    ["inf-account", "Account and keys", "#account"],
+  ] : [];
+  const links: [string, string, string][] = [
+    ...own,
+    ...(st ? st.pages.filter((p) => !own.length || p.key !== page).map((p) => [p.key, p.label, p.href] as [string, string, string]) : []),
+    ["home", "Home", ROUTES.home],
+    ...HUB.pages.map((p) => [p.key, p.label, p.href] as [string, string, string]),
+    ...HUB.external.map((x) => [x.href, `${x.label} ↗`, x.href] as [string, string, string]),
+    ["docs", "Docs", ROUTES.docs],
   ];
   return (
     <div className="mm">
@@ -39,10 +47,11 @@ export function MobileMenu({ page }: { page: Page }) {
       </button>
       {open && (
         <div id="mobile-menu" className="mm-panel">
-          <div className="mm-switch" role="group" aria-label="Trenchers sections">
-            <a href={ROUTES.home} className={!inference && !builder ? "on" : undefined}>AI Agents</a>
-            <a href={ROUTES.inference} className={inference ? "on on-i" : undefined}>Inference</a>
-            <a href={ROUTES.builder} className={builder ? "on on-b" : undefined}>V4 Builder</a>
+          <p className="mm-make mono">Make your Trencher</p>
+          <div className="mm-switch" role="group" aria-label="Make your Trencher">
+            {STEPS.map((x) => (
+              <a key={x.key} href={x.home} className={`tone-${x.tone}${where === x.key ? " on" : ""}`}><i>{x.n}</i>{x.name.toLowerCase()}</a>
+            ))}
           </div>
           <nav aria-label="Pages">
             {links.map(([k, label, href]) => (
@@ -51,7 +60,7 @@ export function MobileMenu({ page }: { page: Page }) {
               </a>
             ))}
           </nav>
-          {!CHAT_OPEN && !inference && !builder && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
+          {!CHAT_OPEN && where === "hub" && <p className="mm-soon mono">Holders&apos; chat · opens after the $TRENCHERS launch</p>}
           <div className="mm-row">
             {OPENSEA_URL && <a className="tbtn" href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>}
             <CopyCA />

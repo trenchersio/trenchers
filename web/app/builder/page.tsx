@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function BuilderPage() {
   return (
-    <SiteShell section="builder">
+    <SiteShell section="launch">
       <BuilderHeader />
       <Builder />
     </SiteShell>

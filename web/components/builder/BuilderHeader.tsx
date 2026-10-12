@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/constants";
 export function BuilderHeader() {
   return (
     <>
-      <SectionSwitch on="builder" wide />
+      <SectionSwitch on="launch" wide />
       <header className="bar bar-wide vb-bar">
         <a href="?" className="inf-brand" aria-label="Trenchers V4 Builder">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />

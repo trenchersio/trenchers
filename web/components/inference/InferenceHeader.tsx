@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/constants";
 export function InferenceHeader() {
   return (
     <>
-      <SectionSwitch on="inference" wide />
+      <SectionSwitch on="think" wide />
       <header className="bar bar-wide inf-bar">
         <a href="#top" className="inf-brand" aria-label="Trenchers Inference Markets">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
