@@ -11,12 +11,13 @@ export function BuilderHeader() {
   return (
     <>
       <SectionSwitch on="launch" wide />
-      <header className="bar bar-wide vb-bar">
+      <header className="bar bar-wide vb-topbar">
         <a href="?" className="inf-brand" aria-label="Trenchers V4 Builder">
           <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
           <span className="inf-brand-tag vb-brand-tag mono">Make it<br />launch</span>
         </a>
         <nav>
+          <a href={ROUTES.mint} className="nav-mint">Mint</a>
           <a href="?#launch" className="nav-mint vb-cta">Launch a coin</a>
           <a href="?#explore" className="tbtn">Explore</a>
           <a href="?#modules" className="tbtn">Modules</a>

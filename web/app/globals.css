@@ -2645,7 +2645,7 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .fwl-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: "k k" "h p"; gap: 8px 40px; align-items: end; margin-bottom: 20px; }
 .fwl-k { grid-area: k; display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--green); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
 .fwl-head h2 { grid-area: h; margin: 0; font-size: clamp(26px, 2.8vw, 38px); letter-spacing: -.03em; line-height: 1.05; }
-.fwl-head p { grid-area: p; margin: 0; color: var(--quiet); font-size: 15px; line-height: 1.55; }
+.fwl-head p:not(.fwl-k) { grid-area: p; margin: 0; color: var(--quiet); font-size: 15px; line-height: 1.55; }
 .fwl-flow { display: grid; grid-template-columns: minmax(0, 1.2fr) 44px minmax(0, .8fr) 44px minmax(0, 1.2fr); align-items: center; gap: 0; }
 .fwl-flow ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .fwl-flow li, .fwl-mid { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: #0F1311; }

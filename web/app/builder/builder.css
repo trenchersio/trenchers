@@ -3,7 +3,7 @@
    a faint construction grid, crop marks on the sheets and numbered steps. Green stays the colour of action. */
 .vb { --ice: #6EC8FF; --ice-d: rgba(110,200,255,.14); --ice-l: rgba(110,200,255,.42); --sheet: #0C1013; --sheet2: #0F1418; --tr: #39FF88; --down: #FF6B6B; --up: #39FF88;
   max-width: 1440px; margin: 0 auto; padding: 0 24px; overflow-x: clip; font-variant-numeric: tabular-nums; }
-.vb-bar { max-width: 1440px; }
+.vb-topbar { max-width: 1440px; }
 .vb-brand-tag { color: var(--ice) !important; }
 .vb-cta { background: var(--ice) !important; color: #06131C !important; white-space: nowrap; }
 .vb-cta:hover { box-shadow: 0 6px 22px rgba(110,200,255,.35) !important; }
@@ -414,3 +414,17 @@
 .vb-pp-legend i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 5px; }
 .vb-pp-legend .c { background: var(--green); } .vb-pp-legend .m { background: var(--ice); } .vb-pp-legend .t { background: var(--amber); }
 @media (prefers-reduced-motion: reduce) { .vb-pp::before, .vb-pp-n, .vb-pp-b, .vb-pp-pool path { animation: none; } }
+
+/* image upload in the launch studio */
+.vb-upload { position: relative; display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 12px; border: 1px dashed #2E4352; border-radius: 6px; background: #080B0D; color: #A9B5BD; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.vb-upload:hover, .vb-upload:focus-within { border-color: var(--ice); background: rgba(110,200,255,.05); }
+.vb-upload input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.vb-upload i { font-style: normal; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: rgba(110,200,255,.12); color: var(--ice); font-size: 15px; }
+.vb-upload img { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; image-rendering: auto; }
+.vb-upload span { font-size: 13px; }
+.vb-upload.has { border-style: solid; border-color: rgba(110,200,255,.5); }
+.vb-upload-x { position: relative; z-index: 1; margin-left: auto; background: none; border: 0; color: #7D8B94; font-size: 12px; cursor: pointer; }
+.vb-upload-x:hover { color: var(--fog); }
+.vb-upload-note { color: #5F6C75; font-size: 11.5px; line-height: 1.5; }
+.vb-upload-note b { color: #FF8A8A; font-weight: 500; }
+.vb-linkbtn { background: none; border: 0; padding: 0; color: var(--ice); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

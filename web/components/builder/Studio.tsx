@@ -39,6 +39,16 @@ export function Studio({ config, coins, onLaunched }: { config: BuilderConfig | 
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [imgNote, setImgNote] = useState<string | null>(null);
+  const [imgBusy, setImgBusy] = useState(false);
+  const [useLink, setUseLink] = useState(false);
+  const onPickImage = async (file: File | undefined) => {
+    if (!file) return;
+    setImgBusy(true); setImgNote(null);
+    try { const { imageToDataUri } = await import("@/lib/image-upload"); setImage(await imageToDataUri(file)); setImgNote(file.name); }
+    catch (e) { setImgNote((e as Error).message); }
+    finally { setImgBusy(false); }
+  };
   const [website, setWebsite] = useState("");
   const [pair, setPair] = useState<"eth" | "trenchers">("eth");
   const [startCap, setStartCap] = useState("1");
@@ -74,7 +84,7 @@ export function Studio({ config, coins, onLaunched }: { config: BuilderConfig | 
     if (name.trim().length > 32) return "Keep the name to 32 characters.";
     if (!/^[A-Za-z0-9]{1,10}$/.test(symbol.trim())) return "The ticker is 1 to 10 letters or numbers.";
     if (/^trenchers$/i.test(symbol.trim())) return "That ticker belongs to $TRENCHERS. Pick your own.";
-    if (image.trim() && !/^(https|ipfs):\/\/\S+$/.test(image.trim())) return "The image link has to start with https:// or ipfs://";
+    if (image.trim() && !/^(https|ipfs):\/\/\S+$/.test(image.trim()) && !/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(image.trim())) return "The image link has to start with https:// or ipfs://";
     if (image.trim().length > 2048) return "The image link is too long.";
     if (website.trim() && !/^https:\/\/\S+$/.test(website.trim())) return "The website has to start with https://";
     if (!(Number(startCap) > 0)) return "Set a starting value.";
@@ -152,7 +162,23 @@ export function Studio({ config, coins, onLaunched }: { config: BuilderConfig | 
           </div>
           <label className="vb-f"><span>What is it? <em>optional</em></span><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={280} placeholder="One or two lines people see on the coin page." /></label>
           <div className="vb-grid2">
-            <label className="vb-f"><span>Image link <em>or we make a badge</em></span><input value={image} onChange={(e) => setImage(e.target.value.trim())} placeholder="https://…/logo.png" /></label>
+            <div className="vb-f">
+              <span>Image <em>optional, or we make a badge</em></span>
+              {useLink ? (
+                <input value={image.startsWith("data:") ? "" : image} onChange={(e) => setImage(e.target.value.trim())} placeholder="https://…/logo.png" aria-label="Image link" />
+              ) : (
+                <label className={`vb-upload${image.startsWith("data:") ? " has" : ""}`}>
+                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => { onPickImage(e.target.files?.[0]); e.currentTarget.value = ""; }} />
+                  {image.startsWith("data:") ? <img src={image} alt="" /> : <i aria-hidden="true">↑</i>}
+                  <span className="mono">{imgBusy ? "Shrinking…" : image.startsWith("data:") ? "Change image" : "Upload an image"}</span>
+                  {image.startsWith("data:") && <button type="button" className="vb-upload-x mono" onClick={(e) => { e.preventDefault(); setImage(""); setImgNote(null); }}>Remove</button>}
+                </label>
+              )}
+              <small className="vb-upload-note mono">
+                {imgNote && !image ? <b>{imgNote}</b> : "PNG, JPG, GIF or WebP. Cropped square and stored in the coin itself."}{" "}
+                <button type="button" className="vb-linkbtn" onClick={() => { setUseLink(!useLink); setImage(""); setImgNote(null); }}>{useLink ? "Upload instead" : "Use a link instead"}</button>
+              </small>
+            </div>
             <label className="vb-f"><span>Website or X <em>optional</em></span><input value={website} onChange={(e) => setWebsite(e.target.value.trim())} placeholder="https://x.com/…" /></label>
           </div>
         </fieldset>

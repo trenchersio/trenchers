@@ -17,6 +17,7 @@ export function InferenceHeader() {
           <span className="inf-brand-tag mono">Make it<br />think</span>
         </a>
         <nav>
+          <a href={ROUTES.mint} className="nav-mint">Mint</a>
           <a href="#buy" className="nav-mint inf-cta">Buy credit</a>
           <a href="#models" className="tbtn">Models</a>
           <a href="#p2p" className="tbtn">P2P</a>

@@ -44,12 +44,14 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
           {st && <span className={`inf-brand-tag step-tag tone-${st.tone} mono`}>Make it<br />{st.name.toLowerCase()}</span>}
         </a>
         <nav>
-          {(st ? st.pages : HUB.pages).map((p) => (
+          {/* Mint is always the first button */}
+          <a href={ROUTES.mint} className={`nav-mint${page === "mint" ? " on" : ""}`} aria-current={page === "mint" ? "page" : undefined}>Mint</a>
+          {(st ? st.pages : HUB.pages).filter((p) => p.key !== "mint").map((p) => (
             <a key={p.key} href={p.href} title={p.hint}
               className={p.key === "mint" ? `nav-mint${page === p.key ? " on" : ""}` : `tbtn${page === p.key ? " tbtn-on" : ""}`}
               aria-current={page === p.key ? "page" : undefined}>{p.label}</a>
           ))}
-          {st ? <a href={ROUTES.mint} className="nav-mint">Mint</a> : HUB.external.map((x) => <a key={x.href} href={x.href} target="_blank" rel="noreferrer" className="tbtn">{x.label} ↗</a>)}
+          {st ? null : HUB.external.map((x) => <a key={x.href} href={x.href} target="_blank" rel="noreferrer" className="tbtn">{x.label} ↗</a>)}
           <NavDropdown label="Learn" items={learn} active={page === "docs"} />
           <NavDropdown label="Community" items={community} />
           <CopyCA />
