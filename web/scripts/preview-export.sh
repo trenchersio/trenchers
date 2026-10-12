@@ -14,4 +14,17 @@ cp out/index.html out/site.html
 sed -i 's#url(\./_next/static/media/#url(../media/#g; s#url(_next/static/media/#url(../media/#g' out/_next/static/css/*.css
 # Only what the pages use: no page loads these in the preview, and RSC payloads aren't needed for plain links.
 rm -rf out/video out/nft-hd; find out -name "*.txt" -delete
+# Artifact hosting reserves top-level names starting with "_": serve Next's files from nx/ instead.
+mv out/_next out/nx
+grep -rlZ "_next/" out --include=*.html --include=*.js --include=*.css | xargs -0 sed -i 's#_next/#nx/#g'
+# Artifact hosting refuses literal U+FFFD characters: write them as the \ufffd escape (they sit in JS strings).
+python3 - <<'PY'
+import os
+for d,_,fs in os.walk('out'):
+    for f in fs:
+        if f.endswith(('.js','.html','.css','.json')):
+            p=os.path.join(d,f); b=open(p,encoding='utf-8').read()
+            if '\ufffd' in b: open(p,'w',encoding='utf-8').write(b.replace('\ufffd','\\ufffd'))
+PY
+find out -name "*.woff" -delete; rm -f out/index.html
 echo "preview in web/out"
