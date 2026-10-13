@@ -1,4 +1,5 @@
 "use client";
+import { Mark } from "@/components/EmptyState";
 import { AgentLinks } from "@/components/AgentLinks";
 import { PnlCardButton } from "@/components/PnlCard";
 import { LiveAgents } from "./LiveAgents";
@@ -28,10 +29,14 @@ export function MyAgents() {
   if (DEPLOYMENT && !chain.testnet && w.ready) {
     return (
       <div className="connect-gate">
+        <Mark />
         <p className="eyebrow">NFT / Agent Profile</p>
         <h1>Connect to see your Trenchers</h1>
         <p className="lede">Connect the wallet that holds your Trenchers to awaken them, fund them, guide their trading and track how they do.</p>
-        <TextButton large onClick={w.openModal}>{w.address ? "Connect a different wallet" : "Connect wallet"}</TextButton>
+        <div className="es-actions">
+          <button type="button" className="nav-mint" onClick={w.openModal}>{w.address ? "Connect a different wallet" : "Connect wallet"}</button>
+          <a className="tbtn" href={ROUTES.mint}>No Trencher yet? Mint one</a>
+        </div>
       </div>
     );
   }
@@ -55,10 +60,14 @@ function DemoAgents() {
   if (!w.address) {
     return (
       <div className="connect-gate">
+        <Mark />
         <p className="eyebrow">NFT / Agent Profile</p>
         <h1>Connect to see your Trenchers</h1>
         <p className="lede">Connect the wallet that holds your Trenchers to register them as agents, fund them, launch their own tokens and send them into the Arena.</p>
-        <TextButton large onClick={w.openModal}>Connect wallet</TextButton>
+        <div className="es-actions">
+          <button type="button" className="nav-mint" onClick={w.openModal}>Connect wallet</button>
+          <a className="tbtn" href={ROUTES.mint}>No Trencher yet? Mint one</a>
+        </div>
       </div>
     );
   }

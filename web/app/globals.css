@@ -2731,3 +2731,23 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
   .eco-q1 .eco-motif .m-t, .eco-q3 .eco-motif .m-t { transform: scaleX(-1); transform-box: fill-box; transform-origin: center; }
 }
 .video-btn.video-btn-sm.doc-inline-video { width: auto; display: inline-flex; margin: 6px 0 4px; }
+
+/* ---------------------------------------------------------------- empty states */
+.es { min-height: 46vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 64px 16px; max-width: 560px; margin: 0 auto; }
+.es-mark { display: grid; grid-template-columns: repeat(3, 14px); gap: 7px; margin-bottom: 8px; --tone: var(--green); }
+.es-mark i { width: 14px; height: 14px; border-radius: 50%; background: #E8ECE9; opacity: .14; }
+.es-mark i.sq { border-radius: 3px; }
+.es-mark i.eye { opacity: 1; background: var(--tone); box-shadow: 0 0 16px var(--tone); }
+.es-amber { --tone: var(--amber); } .es-ice { --tone: var(--ice); } .es-violet { --tone: var(--violet); } .es-red { --tone: #FF4D4D; }
+.es-title { margin: 0; font-size: 26px; letter-spacing: -.01em; color: var(--fog); }
+.es-text { margin: 0; color: var(--quiet); font-size: 15px; line-height: 1.6; }
+.es-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 20px; margin-top: 10px; }
+.connect-gate .es-mark { margin-bottom: 18px; }
+.live-stale { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid rgba(255,176,32,.35); border-radius: 10px; background: rgba(255,176,32,.06); color: #E9C77A; font-size: 12.5px; }
+.live-stale i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: ld-eye 1.8s ease-in-out infinite; flex: none; }
+.vb-hero-cta .howto-btn { width: auto; }
+/* Phones: the section strip loses its label, fades at the edge so it reads as scrollable */
+@media (max-width: 640px) {
+  .secsw-make { display: none; }
+  .secsw-path { -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); padding-right: 28px; }
+}

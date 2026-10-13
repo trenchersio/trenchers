@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { parseAbi, zeroAddress, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { TextButton } from "@/components/TextButton";
+import { EmptyState } from "@/components/EmptyState";
 import { Loader } from "@/components/Loader";
 import { ABI, DEPLOYMENT, reader } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, gmgnToken } from "@/lib/constants";
@@ -61,7 +62,9 @@ export function AgentCoins() {
       </header>
 
       {rows === null && info === null ? <Loader label="Finding agent coins" sub="Reading every agent wallet on Robinhood Chain" /> : merge(rows ?? [], info ?? []).length === 0 ? (
-        <p className="coll-empty mono">{error ? "Couldn't reach Robinhood Chain right now. Refresh in a moment." : "No agent has launched its coin yet. Be the first: open your agent's profile, Funding → Its own coin."}</p>
+        error
+          ? <EmptyState tone="red" title="Can't reach Robinhood Chain right now" text="The coin list is read straight from the chain. Try again in a moment." actions={[{ label: "Try again", onClick: () => location.reload() }]} />
+          : <EmptyState tone="ice" title="No agent coins yet" text="When a Trencher launches its own coin, it shows up here with its live chart and the creator fees it earns for its agent." actions={[{ label: "Launch your agent's coin", href: ROUTES.agents, primary: true }, { label: "Or build a V4 coin", href: ROUTES.builder }]} />
       ) : (
         <ul className="coins-grid">
           {merge(rows ?? [], info ?? []).map(({ r, c }) => <CoinCard key={r.coin} r={r} engine={c} />)}

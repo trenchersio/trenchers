@@ -1,6 +1,7 @@
 "use client";
 // Trenchers V4 Builder: launch a Uniswap v4 hook coin on Robinhood Chain with its own rules, fees and mechanics.
 import { useEffect, useState, type ReactNode } from "react";
+import { VideoButton } from "@/components/docs/VideoButton";
 import { GITHUB_URL, ROUTES, SOCIALS } from "@/lib/constants";
 import { MODULES, PLATFORM_FEE_BPS, type BuilderCoin, type ModuleDef } from "@/lib/v4builder";
 import { TokenLine } from "@/components/TokenLine";
@@ -116,6 +117,7 @@ export function Builder() {
             <div className="vb-hero-cta">
               <a href="#launch" className="vb-btn">Start building</a>
               <a href="#explore" className="vb-ghost">Explore coins</a>
+              <VideoButton className="video-btn-sm howto-btn" src="how-to-v4-launcher" title="How to launch a coin with the V4 Builder" label="How it works" length="1 min" />
             </div>
             <dl className="vb-meter mono">
               <div><dt>coins launched</dt><dd>{d.coins ? total.toLocaleString() : "–"}</dd></div>

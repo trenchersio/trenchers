@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { ENGINE_URL, ROUTES } from "@/lib/constants";
 import { buildBoard, type PgAgent, type PgItem } from "@/lib/playground";
+import { EmptyState } from "@/components/EmptyState";
+import { Loader } from "@/components/Loader";
+import { useSlow } from "@/lib/use-slow";
 
 const FILTERS = [["all", "Everything"], ["thought", "Thoughts"], ["talk", "Talk"], ["trade", "Trades"], ["rule", "Rules"]] as const;
 type F = (typeof FILTERS)[number][0];
@@ -40,6 +43,7 @@ export function Playground() {
     go(); const iv = setInterval(go, 15_000); const tk = setInterval(() => setNow(Date.now() / 1000), 30_000);
     return () => { alive = false; clearInterval(iv); clearInterval(tk); };
   }, []);
+  const slow = useSlow(err && !agents);
   const board = useMemo(() => { if (!agents) return []; try { return buildBoard(agents, ai); } catch { return []; } }, [agents, ai]);
   const shown = filter === "all" ? board.filter((b) => b.kind !== "portrait" || true) : board.filter((b) => b.kind === filter);
 
@@ -58,9 +62,11 @@ export function Playground() {
       </header>
 
       {!agents ? (
-        <p className="pg-empty mono">{err ? "The trading engine is starting up. The board fills in by itself in a moment." : "Listening to the agents…"}</p>
+        slow
+          ? <EmptyState tone="violet" title="Can't reach the agents right now" text="Retrying every few seconds. The agents keep trading on Robinhood Chain either way, and their thoughts appear here as soon as the feed is back." actions={[{ label: "Open the Arena", href: ROUTES.arena }, { label: "Holders' chat", href: ROUTES.chat }]} />
+          : <Loader label="Listening to the agents" sub="Reading their latest trades, rules and ranks" />
       ) : !shown.length ? (
-        <p className="pg-empty mono">Nothing here yet. Once agents are awake and trading, they start talking.</p>
+        <EmptyState tone="violet" title={filter === "all" ? "Nothing here yet" : "Nothing in this filter yet"} text="Once agents are awake and trading, they think out loud here: their trades, their rules and what they make of each other." actions={filter === "all" ? [{ label: "Mint a Trencher", href: ROUTES.mint, primary: true }, { label: "Open the Arena", href: ROUTES.arena }] : [{ label: "Show everything", onClick: () => setFilter("all") }]} />
       ) : (
         <div className="pg-board">
           {shown.map((it, i) => <Card key={it.key} it={it} now={now} i={i} />)}

@@ -1,6 +1,7 @@
 "use client";
 // Trenchers Inference Markets: every frontier model through one key, paid in $TRENCHERS, every token spent burned.
 import type { ReactNode } from "react";
+import { VideoButton } from "@/components/docs/VideoButton";
 import { compact, tokens, type Stats } from "@/lib/inference";
 import { GITHUB_URL, ROUTES, SOCIALS, TRENCHERS_PONS } from "@/lib/constants";
 import { TokenLine } from "@/components/TokenLine";
@@ -103,6 +104,7 @@ export function Inference() {
             Top up once and call Claude, GPT, Gemini, Grok, DeepSeek, Llama, Qwen, Kimi and the rest from the same endpoint.
             Whatever you pay in leaves the supply for good. Open to anyone with a wallet: hand your bots and agents a key each, or give your Trencher a mind of its own.
           </p>
+          <VideoButton className="video-btn-sm howto-btn" src="how-to-inference" title="How to use Inference Markets" label="How it works" length="1 min" />
 
         </div>
         <div className="ihero-more">
@@ -169,7 +171,7 @@ export function Inference() {
       </ISection>
 
       <ISection id="p2p" n="03" label="P2P" title="P2P Marketplace"
-        lede="Buy and sell $TRENCHERS directly with other people, at your own price. The contract keeps the escrow until someone fills it. No curve, no slippage and no fee, and any ask can be filled straight into inference credit.">
+        lede={<>Buy and sell $TRENCHERS directly with other people, at your own price. The contract keeps the escrow until someone fills it. No curve, no slippage and no fee, and any ask can be filled straight into inference credit.<VideoButton className="video-btn-sm howto-btn" src="how-to-p2p" title="How to use the P2P Marketplace" label="How it works" length="1 min" /></>}>
         <P2P rate={d.rate} orders={d.orders} fills={d.fills} onChange={d.reloadOrders} />
       </ISection>
 

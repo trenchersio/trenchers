@@ -23,6 +23,8 @@ function useBook(address: string | null) {
   const [claimed, setClaimed] = useState<Set<number>>(new Set());
   const [agents, setAgents] = useState<Map<number, EngineAgent>>(new Map());
   const [mine, setMine] = useState<Set<number>>(new Set());
+  // null until the engine has answered once: "–", never a misleading 0
+  const [feedOk, setFeedOk] = useState<boolean | null>(null);
   useEffect(() => {
     if (!DEPLOYMENT) { setSupply(0); return; }
     const d = DEPLOYMENT, c = reader();
@@ -39,8 +41,8 @@ function useBook(address: string | null) {
       } catch { if (alive) setSupply((x) => x ?? 0); }
     };
     const feed = () => fetch(`${ENGINE_URL}/arena`, { cache: "no-store" }).then((r) => r.json()).then((j: { agents?: EngineAgent[] }) => {
-      if (alive && j.agents) setAgents(new Map(j.agents.map((a) => [a.id, a])));
-    }).catch(() => {});
+      if (alive && j.agents) { setAgents(new Map(j.agents.map((a) => [a.id, a]))); setFeedOk(true); }
+    }).catch(() => { if (alive) setFeedOk((x) => x ?? false); });
     load(); feed();
     const iv = setInterval(() => { load(); feed(); }, 30_000);
     return () => { alive = false; clearInterval(iv); };
@@ -61,12 +63,14 @@ function useBook(address: string | null) {
     }
     return m;
   }, [supply, claimed, agents, mine]);
-  return { book, supply };
+  return { book, supply, feedOk };
 }
 
 export function Collection() {
   const { address } = useWallet();
-  const { book, supply } = useBook(address);
+  const { book, supply, feedOk } = useBook(address);
+  // a count is only shown once its source has answered
+  const n = (v: number, ready: boolean) => (ready ? v.toLocaleString("en-US") : "–");
   const [filter, setFilter] = useState<Filter>("all");
   const [palette, setPalette] = useState("");
   const [q, setQ] = useState("");
@@ -91,10 +95,11 @@ export function Collection() {
     });
   }, [book, filter, palette, q]);
 
-  const FILTERS: [Filter, string, number][] = [
-    ["all", "All", SUPPLY], ["live", "In the Arena", counts.live], ["registered", "Awake", counts.registered], ["idle", "Dormant · 0.01 claimable", counts.idle], ["unminted", "Not minted yet", counts.unminted],
+  const chain = supply !== null, live = feedOk === true;
+  const FILTERS: [Filter, string, string][] = [
+    ["all", "All", n(SUPPLY, true)], ["live", "In the Arena", n(counts.live, live)], ["registered", "Awake", n(counts.registered, chain)], ["idle", "Dormant · 0.01 claimable", n(counts.idle, chain)], ["unminted", "Not minted yet", n(counts.unminted, chain)],
   ];
-  if (address) FILTERS.push(["mine", "Yours", counts.mine]);
+  if (address) FILTERS.push(["mine", "Yours", String(counts.mine)]);
 
   const pos = sel === null ? -1 : ids.indexOf(sel);
   const go = (d: number) => { if (pos < 0 || !ids.length) return; setSel(ids[(pos + d + ids.length) % ids.length]); };
@@ -108,9 +113,9 @@ export function Collection() {
           <p className="coll-lede">Every Trencher, live from Robinhood Chain: in colour once its agent is awake, grey while it&apos;s dormant (its 0.01 ETH starter balance still waiting to be claimed), faded until it&apos;s minted. The NFT&apos;s own metadata follows the same state on OpenSea. Select any of them for its owner, agent wallet, strategy and traits.</p>
         </div>
         <dl className="coll-stats">
-          <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{counts.live}</dd></div>
-          <div><dt className="mono">Awake</dt><dd><i className="lg-reg" />{counts.registered}</dd></div>
-          <div><dt className="mono">Dormant</dt><dd><i className="lg-idle" />{counts.idle}</dd></div>
+          <div><dt className="mono">In the Arena</dt><dd><i className="lg-live" />{n(counts.live, feedOk === true)}</dd></div>
+          <div><dt className="mono">Awake</dt><dd><i className="lg-reg" />{n(counts.registered, supply !== null)}</dd></div>
+          <div><dt className="mono">Dormant</dt><dd><i className="lg-idle" />{n(counts.idle, supply !== null)}</dd></div>
           <div><dt className="mono">Minted</dt><dd>{supply === null ? "…" : supply.toLocaleString("en-US")} <small>/ 2,000</small></dd></div>
           <div><dt className="mono">Price</dt><dd>{LIST_PRICE_ETH} <small>ETH</small></dd></div>
         </dl>
@@ -118,9 +123,9 @@ export function Collection() {
 
       <div className="coll-bar">
         <div className="coll-filters" role="tablist" aria-label="Filter by status">
-          {FILTERS.map(([k, label, n]) => (
+          {FILTERS.map(([k, label, count]) => (
             <button key={k} type="button" role="tab" aria-selected={filter === k} className={`tbtn${filter === k ? " tbtn-on" : ""}`} onClick={() => setFilter(k)}>
-              {label} <span className="coll-n">{n}</span>
+              {label} <span className="coll-n">{count}</span>
             </button>
           ))}
         </div>

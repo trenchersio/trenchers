@@ -10,11 +10,13 @@ import { AgentLinks } from "@/components/AgentLinks";
 import type { PnlCardData } from "@/lib/pnl-card";
 import { badgeOf, type Blocked } from "@/lib/agent-status";
 import { useActivity } from "@/lib/activity";
-import { ENGINE_URL, PONS_TOKEN_URL, openseaItem } from "@/lib/constants";
+import { ENGINE_URL, PONS_TOKEN_URL, ROUTES, openseaItem } from "@/lib/constants";
 import { short } from "@/lib/wallet";
 import { LineChart, RangeTabs } from "./LineChart";
 import { STRATEGIES } from "@/lib/strategies";
 import { Loader } from "@/components/Loader";
+import { EmptyState } from "@/components/EmptyState";
+import { useSlow } from "@/lib/use-slow";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
@@ -50,21 +52,25 @@ function useFeed() {
   const [feed, setFeed] = useState<Feed | null>(null);
   useEffect(() => { try { const v = localStorage.getItem(FEED_KEY); if (v) setFeed((f) => f ?? JSON.parse(v)); } catch { /* none */ } }, []);
   const [error, setError] = useState<string | null>(null);
+  // "starting": the engine answered but isn't ready; "down": it didn't answer at all.
+  const [kind, setKind] = useState<"starting" | "down" | null>(null);
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      let r: Response;
+      try { r = await fetch(`${ENGINE_URL}/arena`, { cache: "no-store", signal: AbortSignal.timeout(15_000) }); }
+      catch (e) { if (alive) { setError((e as Error).message); setKind("down"); } return; }
       try {
-        const r = await fetch(`${ENGINE_URL}/arena`, { cache: "no-store" });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error ?? "The engine isn't ready yet");
-        if (alive) { setFeed(j); setError(null); try { localStorage.setItem(FEED_KEY, JSON.stringify(j)); } catch { /* private mode */ } }
-      } catch (e) { if (alive) setError((e as Error).message); }
+        if (alive) { setFeed(j); setError(null); setKind(null); try { localStorage.setItem(FEED_KEY, JSON.stringify(j)); } catch { /* private mode */ } }
+      } catch (e) { if (alive) { setError((e as Error).message); setKind("starting"); } }
     };
     load();
     const iv = setInterval(load, 5000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
-  return { feed, error };
+  return { feed, error, kind };
 }
 
 export function cardFromLive(a: LiveAgent, of: number): PnlCardData {
@@ -84,7 +90,8 @@ export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string
 
 /** `only`: show just these Trenchers (the holder's own agents on their profile). */
 export function LiveArena({ only }: { only?: number[] } = {}) {
-  const { feed: full, error } = useFeed();
+  const { feed: full, error, kind } = useFeed();
+  const slow = useSlow(!!error);
   const activity = useActivity();
   const coins = useCoins();
   const coinOf = (wallet?: string | null) => (wallet && coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase())) || null;
@@ -92,7 +99,10 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
 
-  if (!full) return <Loader label={error ? "The trading engine is starting up" : "Connecting to the Arena"} sub={error ? "It's catching up on the chain. This page updates by itself in a moment." : "Reading live agents and trades from Robinhood Chain"} />;
+  if (!full) {
+    if (error && slow) return <EmptyState tone={kind === "starting" ? "amber" : "red"} title={kind === "starting" ? "The trading engine is still starting up" : "Can't reach the live feed right now"} text="Retrying every few seconds. The agents keep trading on Robinhood Chain either way, and this page fills in by itself." actions={[{ label: "Browse the Collection", href: ROUTES.collection }, { label: "How the Arena works", href: `${ROUTES.docs}#the-arena` }]} />;
+    return <Loader label={kind === "starting" ? "The trading engine is starting up" : "Connecting to the Arena"} sub={kind === "starting" ? "It's catching up on the chain. This page updates by itself in a moment." : "Reading live agents and trades from Robinhood Chain"} />;
+  }
   const mine = only ? new Set(only) : null;
   const feed = mine ? { ...full, agents: full.agents.filter((a) => mine.has(a.id)), feed: full.feed.filter((t) => mine.has(t.agent)) } : full;
   const of = full.agents.length;
@@ -105,6 +115,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
 
   return (
     <div className="arena live-arena">
+      {error && <p className="live-stale mono"><i aria-hidden="true" />Showing the last data seen, {ago(now - full.updatedAt)} ago. Reconnecting to the live feed…</p>}
       {feed.paused && <p className="live-paused mono">Emergency stop is on: the team has paused all trading. Holders can still withdraw.</p>}
       <section className="arena-stats" aria-label="Arena totals">
         <div className="stat stat-main">

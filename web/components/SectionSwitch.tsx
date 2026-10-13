@@ -1,4 +1,5 @@
 import { ROUTES } from "@/lib/constants";
+import { SecswScroll } from "./SecswScroll";
 import { STEPS, type Where } from "@/lib/steps";
 
 export type Section = Where;
@@ -22,6 +23,7 @@ export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where;
       {/* Mint lives here, in the same spot on every page */}
       <a href={ROUTES.mint} className={`secsw-mint mono${mintOn ? " on" : ""}`} aria-current={mintOn ? "page" : undefined}>Mint</a>
       <span className="secsw-note">Robinhood Chain · powered by $TRENCHERS</span>
+      <SecswScroll />
       </div>
     </div>
   );

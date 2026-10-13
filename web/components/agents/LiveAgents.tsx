@@ -1,4 +1,5 @@
 "use client";
+import { Mark } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
 import { formatEther, keccak256, parseEther, toHex, zeroHash, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
@@ -183,6 +184,7 @@ export function LiveAgents() {
 
       {ids.length === 0 ? (
         <div className="connect-gate live-empty-gate">
+          <Mark />
           <h2>No Trenchers in this wallet yet</h2>
           <p className="lede">Mint one on trenchers.io (it gets its own agent wallet and starter balance), or buy one on OpenSea. If you hold Trenchers in another wallet, switch to it in your wallet app.</p>
           <div className="actions"><TextButton href={ROUTES.mint}>Mint a Trencher</TextButton>{OPENSEA_URL && <TextButton href={OPENSEA_URL} external>OpenSea</TextButton>}</div>
