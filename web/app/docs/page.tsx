@@ -70,6 +70,9 @@ export default function DocsPage() {
               <VideoButton className="video-btn-sm" src="how-to-pnl-card" title="How to share a PnL card" label="PnL card" length="30 s" />
               <VideoButton className="video-btn-sm" src="how-to-sell-on-opensea" title="How to sell your agent on OpenSea" label="Sell on OpenSea" length="39 s" />
               <VideoButton className="video-btn-sm" src="holders-chat" title="The holders' chat" label="Holders' chat" length="46 s" />
+              <VideoButton className="video-btn-sm" src="how-to-inference" title="How to use Inference Markets" label="Inference Markets" length="59 s" />
+              <VideoButton className="video-btn-sm" src="how-to-p2p" title="How to use the P2P Marketplace" label="P2P Marketplace" length="59 s" />
+              <VideoButton className="video-btn-sm" src="how-to-v4-launcher" title="How to launch a coin with the V4 Builder" label="V4 Coin Launcher" length="59 s" />
             </div>
           </div>
           <ReactMarkdown
@@ -89,6 +92,12 @@ export default function DocsPage() {
                 return isMermaid ? <>{children}</> : <pre>{children}</pre>;
               },
               a({ href = "", children }) {
+                // A link to one of our videos plays it right here, in the same popup as the buttons above.
+                const vid = /trenchers\.io\/video\/([a-z0-9-]+)\.mp4$/.exec(href);
+                if (vid) {
+                  const title = String(Array.isArray(children) ? children.join("") : children ?? "").replace(/^\W+/, "").replace(/\s*\(video[^)]*\)\s*$/, "");
+                  return <VideoButton className="video-btn-sm doc-inline-video" src={vid[1]} title={title} label={title} length="59 s" />;
+                }
                 const external = /^https?:/.test(href);
                 return <a href={href} {...(external ? { target: "_blank", rel: "noreferrer" } : {})}>{children}</a>;
               },

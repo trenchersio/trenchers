@@ -2730,3 +2730,4 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
   .eco-q1 .eco-motif, .eco-q3 .eco-motif { transform: scaleX(-1); }
   .eco-q1 .eco-motif .m-t, .eco-q3 .eco-motif .m-t { transform: scaleX(-1); transform-box: fill-box; transform-origin: center; }
 }
+.video-btn.video-btn-sm.doc-inline-video { width: auto; display: inline-flex; margin: 6px 0 4px; }

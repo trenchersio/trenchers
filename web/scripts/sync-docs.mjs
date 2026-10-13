@@ -22,6 +22,7 @@ md = md.replace(/<p[^>]*>\s*(<img[^>]*>)\s*<\/p>/g, "$1");
 md = md.replace(/<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/g, "![$2]($1)");
 // images and repository links
 md = md.replace(/docs\/img\//g, "docs-img/");
+md = md.replace(/^▶ /gm, ""); // the docs page turns video links into play buttons
 md = md.replace(/\]\((?!https?:|#|docs-img\/)([^)\s]+)\)/g, (_, p) => `](${REPO}/${/\.[a-z]+$/.test(p) ? "blob" : "tree"}/main/${p})`);
 writeFileSync(join(here, "..", "content", "docs.md"), md);
 

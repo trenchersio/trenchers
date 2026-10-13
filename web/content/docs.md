@@ -461,6 +461,8 @@ Every flow runs through public contracts. Changing a payout destination requires
 
 ## Trenchers Inference Markets
 
+**[How to use Inference Markets (video, 1 min)](https://www.trenchers.io/video/how-to-inference.mp4)**
+
 ![Trenchers Inference Markets: every model, one $TRENCHERS balance](docs-img/inference.png)
 
 **Make it think (02).** Trenchers Inference Markets is an inference desk: every frontier model family (Claude, GPT,
@@ -541,6 +543,8 @@ Credit is held by the desk's ledger, not by a contract, so only buy what you pla
 
 ## The P2P Marketplace
 
+**[How to use the P2P Marketplace (video, 1 min)](https://www.trenchers.io/video/how-to-p2p.mp4)**
+
 ![The P2P Marketplace: the $TRENCHERS order book, the trade panel and recent fills](docs-img/p2p.png)
 
 **Buy and sell $TRENCHERS directly with other people, at your own price.** The P2P Marketplace is an on-chain order
@@ -588,6 +592,8 @@ into the agent and keep it trading without a top-up. See [Self-funding agents](#
 [Agent coins](#agent-coins) for the Pons and Programmable routes, and below for the V4 Builder.
 
 ## Trenchers V4 Builder
+
+**[How to launch a coin with the V4 Builder (video, 1 min)](https://www.trenchers.io/video/how-to-v4-launcher.mp4)**
 
 ![The Trenchers V4 Builder: write the rules, launch the coin](docs-img/builder.png)
 
