@@ -2351,12 +2351,14 @@ html.menu-open, html.menu-open body { overflow: hidden; }
 .tp-head { display: flex; flex-direction: column; gap: 3px; }
 .tp-head b { font-size: 15px; }
 .tp-head span { font-size: 12px; color: var(--quiet); line-height: 1.45; }
-.tp-picks { display: flex; flex-wrap: wrap; gap: 6px; }
-.tp-pick { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 5px; border-radius: 999px; border: 1px solid var(--line); background: var(--black); color: var(--fog); cursor: pointer; font-size: 12px; }
+.tp-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 8px; }
+.tp-pick { display: flex; align-items: center; gap: 9px; min-width: 0; width: 100%; height: 46px; margin: 0; padding: 0 10px 0 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--black); color: var(--fog); cursor: pointer; font-size: 12.5px; text-align: left; white-space: nowrap; transition: border-color .15s ease, background .15s ease; }
+.tp-pick .tk-logo { flex: none; border-radius: 50%; object-fit: cover; }
+.tp-pick .tp-sym { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .tp-pick:hover:not(:disabled) { border-color: #3A4741; }
 .tp-pick.on { border-color: var(--green); background: rgba(57,255,136,.08); color: var(--green); }
-.tp-pick em { font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--green); border: 1px solid rgba(57,255,136,.4); border-radius: 4px; padding: 0 4px; }
-.tp-custom { display: flex; flex-direction: column; gap: 5px; flex-basis: 100%; }
+.tp-pick em { flex: none; font-style: normal; font-size: 9px; line-height: 1; text-transform: uppercase; letter-spacing: .06em; color: var(--green); border: 1px solid rgba(57,255,136,.4); border-radius: 4px; padding: 3px 4px; }
+.tp-custom { display: flex; flex-direction: column; gap: 5px; grid-column: 1 / -1; margin-top: 4px; }
 .tp-custom span { font-size: 10px; color: var(--quiet); text-transform: uppercase; letter-spacing: .08em; }
 .tp-custom input { width: 100%; background: var(--black); border: 1px solid var(--line); border-radius: 8px; color: var(--fog); font-size: 12px; padding: 9px 10px; }
 .tp-custom input:focus, .tp-custom.on input { outline: none; border-color: var(--green); }
@@ -2401,8 +2403,9 @@ img.tk-logo { flex: none; }
 .tk-badge em { font-style: normal; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: #FFC450; }
 .tk-badge b { font-size: 10.5px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--fog); }
 @media (max-width: 640px) { .tk-badge > span { display: none; } .tk-badge { padding: 3px; } }
-.tp-pick.soon { opacity: .55; cursor: default; border-style: dashed; }
-.tp-pick.soon em { color: var(--quiet); border-color: var(--line); }
+.tp-pick.tp-soon { opacity: .6; cursor: default; border-style: dashed; background: transparent; }
+.tp-pick.tp-soon .tk-logo { filter: grayscale(1); }
+.tp-pick.tp-soon em { color: var(--quiet); border-color: var(--line); }
 
 /* ---------------------------------------------------------------- agent coin: Pons or Programmable */
 .coin-venue { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 2px 0 14px; }

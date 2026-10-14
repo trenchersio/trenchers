@@ -52,11 +52,11 @@ export function TokenPlanner({ current, perTrade, disabled, onApply, onCancel }:
         {TOKEN_PICKS.map((p) => {
           const on = rule.token === p.address;
           return (
-            <button key={p.address} type="button" role="radio" aria-checked={on} className={`tp-pick${on ? " on" : ""}${p.soon ? " soon" : ""}`} disabled={disabled || p.soon}
+            <button key={p.address} type="button" role="radio" aria-checked={on} className={`tp-pick${on ? " on" : ""}${p.soon ? " tp-soon" : ""}`} disabled={disabled || p.soon}
               title={p.soon ? `$${p.symbol} trades on Programmable, not Pons: agents can buy it once trading on Programmable is live` : undefined}
               onClick={() => { set({ token: p.address, threshold: rule.tokenMode === "below" ? null : rule.threshold }); setCustom(""); }}>
-              <TokenLogo address={p.address} symbol={p.symbol} size={22} />
-              <span className="mono">${p.symbol}</span>
+              <TokenLogo address={p.address} symbol={p.symbol} size={26} />
+              <span className="mono tp-sym">${p.symbol}</span>
               {p.note && <em className="mono">{p.note}</em>}
             </button>
           );
