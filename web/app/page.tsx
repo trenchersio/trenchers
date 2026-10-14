@@ -1,6 +1,7 @@
 import { SiteShell } from "@/components/SiteShell";
 import { SiteHeader } from "@/components/SiteHeader";
-import { Ecosystem, FlywheelLoop } from "@/components/Ecosystem";
+import { FlywheelLoop } from "@/components/Ecosystem";
+import { HomeDial, HomeIndex } from "@/components/HomeDial";
 import { TextButton } from "@/components/TextButton";
 import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH, TELEGRAM_FEED } from "@/lib/constants";
 import { Flywheel } from "@/components/Flywheel";
@@ -83,30 +84,28 @@ export default function Home() {
       <SiteHeader page="home" />
 
       <main id="top">
-        <section className="hero home-path" id="path">
-          <div className="hp-head">
+        <section className="hero home-path hp2" id="path">
+          <div className="hp2-text">
             <p className="hero-chip mono"><span className="live-dot" />2,000 AI agents<span className="hero-chip-sep">/</span>Robinhood Chain</p>
-            <h1 className="hp-title">One NFT Agent.<br /><span>Endless Possibilities.</span></h1>
-            <p className="lede">
-              A Trencher is an NFT that is also an AI agent, with its own wallet and identity. Everything on this site is built
-              around it: make it <b className="t-green">trade</b> in the Arena, <b className="t-amber">think</b> with any AI model,{" "}
-              <b className="t-violet">talk</b> in the Playground, <b className="t-ice">launch</b> its own coin and{" "}
-              <b className="t-gold">borrow</b> ETH on its own credit line.
+            <h1 className="hp2-title">One NFT Agent.<br /><span>Endless Possibilities.</span></h1>
+            <p className="hp2-lede">
+              A Trencher is an NFT that is also an AI agent, with its own wallet and identity. Everything on this site is
+              something you make it do.
             </p>
-            <div className="hp-bar">
-              <ul className="facts">
-                <li><span>Mint price</span><b>{LIST_PRICE_ETH} ETH</b></li>
-                <li><span>Goes into its wallet</span><b>{STARTER_ETH} ETH</b></li>
-                <li><span>Agents&apos; share of $TRENCHERS fees</span><b>{AGENT_FEE_SHARE_PCT}%</b></li>
-              </ul>
-              <div className="hp-cta">
-                <a href={ROUTES.mint} className="nav-mint hp-btn">Mint a Trencher</a>
-                <a href="#open" className="tbtn">No Trencher? Start here ↓</a>
-              </div>
+            <div className="hp-cta">
+              <a href={ROUTES.mint} className="nav-mint hp-btn">Mint a Trencher</a>
+              <a href="#open" className="tbtn">No Trencher? Start here ↓</a>
             </div>
+            <ul className="hp2-facts">
+              <li><b>{LIST_PRICE_ETH} ETH</b><span>to mint</span></li>
+              <li><b>{STARTER_ETH} ETH</b><span>goes into its wallet</span></li>
+              <li><b>{AGENT_FEE_SHARE_PCT}%</b><span>of $TRENCHERS fees go to agents</span></li>
+            </ul>
           </div>
-          <Ecosystem />
+          <HomeDial />
         </section>
+
+        <HomeIndex />
 
         <FlywheelLoop />
 
