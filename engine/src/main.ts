@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { explain, mainnetRpcs, scrub } from "./rpc";
+import { explain, mainnetRpcs, rpcStats, scrub } from "./rpc";
 import { Engine } from "./engine";
 import { Chat } from "./chat";
 import { ENV, PROBLEMS } from "./env";
@@ -39,6 +39,19 @@ function runVerify() {
     .finally(() => { verifyRunning = false; });
 }
 let lastError: string | null = null;
+
+/** One answer shared by every visitor for `ms` (and one computation in flight at a time): each page polls every few
+ *  seconds, and without this every open tab made its own round of chain reads for every agent. */
+const cache = new Map<string, { at: number; body: string; pending?: Promise<string> }>();
+async function shared(key: string, ms: number, make: () => Promise<string>): Promise<string> {
+  const c = cache.get(key);
+  if (c && Date.now() - c.at < ms) return c.body;
+  if (c?.pending) return c.pending;
+  const pending = make().then((body) => { cache.set(key, { at: Date.now(), body }); return body; })
+    .catch((e) => { const old = cache.get(key); if (old) { delete old.pending; if (old.body) return old.body; } throw e; });
+  cache.set(key, { at: c?.at ?? 0, body: c?.body ?? "", pending });
+  return pending;
+}
 
 async function loop() {
   if (!engine) return;
@@ -83,12 +96,12 @@ inference.setTrenchers(async (id) => {
   return { id, wallet, holder, persona: trencherPersona({ id, wallet, rule: known?.ruleText ?? null, live: known?.live ?? false, coin: coin?.token ?? null }) };
 });
 const every = (ms: number, f: () => Promise<unknown> | unknown) => { const run = async () => { try { await f(); } catch (e) { console.warn(`[inference] ${(e as Error).message}`); } setTimeout(run, ms); }; setTimeout(run, 5_000); };
-every(30_000, () => inference.poll());
+every(60_000, () => inference.poll());
 every(600_000, () => inference.burn());
 every(300_000, () => { const swept = inference.sweep(); if (swept.length) console.warn(`[inference] swept ${swept.length} stale hold(s)`); });
-every(20_000, () => inference.updateBook());
+every(60_000, () => inference.updateBook());
 const builder = new BuilderIndex();
-every(20_000, () => builder.update());
+every(60_000, () => builder.update());
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
@@ -101,7 +114,7 @@ const server = createServer(async (req, res) => {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
+      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", rpc: rpcStats(), block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, lastError: engine.telegram.lastError } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.
@@ -117,7 +130,7 @@ const server = createServer(async (req, res) => {
       res.end(lastVerify?.body ?? JSON.stringify({ status: "running, refresh in a minute", runningFor: verifyRunning ? `${Math.round((Date.now() - verifyStarted) / 1000)}s` : "not started" }));
     } else if (path === "/coins") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
-      res.end(JSON.stringify(await engine.coins()));
+      res.end(await shared("coins", 30_000, async () => JSON.stringify(await engine.coins())));
     } else if (path === "/activity") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(JSON.stringify({ items: engine.activityFeed(), feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return null; } })(), now: Date.now() }));
@@ -135,7 +148,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(m ? { ok: true, ...m } : { ok: false, error: engine.notPons.has(a.toLowerCase() as `0x${string}`) ? "This isn't a Pons coin paired with ETH, so agents can't trade it." : "Couldn't read this coin right now. Try again in a minute." }));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
-      res.end(JSON.stringify(await engine.arena()));
+      res.end(await shared("arena", 15_000, async () => JSON.stringify(await engine.arena())));
     } else { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); }
   } catch (e) { res.statusCode = 500; res.end(scrub(JSON.stringify({ error: (e as Error).message }))); }
 });

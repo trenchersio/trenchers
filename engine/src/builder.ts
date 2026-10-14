@@ -196,7 +196,10 @@ export class BuilderIndex {
           if (c) fresh.set(c.poolId.toLowerCase(), c); else this.skipped++;
         }
         // Every FoundationSwap in the range, matched to our coins by pool id (one query, whatever the number of coins).
-        const swaps = (await this.pub.getLogs({ event: SWAP as never, fromBlock: BigInt(from), toBlock: BigInt(to) })) as unknown as Log[];
+        // Only our coins' own hooks (they emit FoundationSwap): never every swap on the chain.
+        const hooks = [...new Set([...this.coins.values(), ...fresh.values()].map((c) => c.hook))] as Address[];
+        const swaps: Log[] = [];
+        for (let i = 0; i < hooks.length; i += 300) swaps.push(...((await this.pub.getLogs({ address: hooks.slice(i, i + 300), event: SWAP as never, fromBlock: BigInt(from), toBlock: BigInt(to) })) as unknown as Log[]));
         const deltas: { pool: string; vol: bigint; point: { t: number; p: number } | null }[] = [];
         for (const s of swaps) {
           const a = s.args as { poolId: Hex; grossQuote: bigint; coreAmount0: bigint; coreAmount1: bigint };

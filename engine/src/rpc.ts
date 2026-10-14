@@ -6,8 +6,29 @@ import { fallback, http, type Transport } from "viem";
  */
 export const urls = (v: string | undefined) => (v ?? "").split(/[\s,]+/).map((u) => u.trim().replace(/^["']|["']$/g, "")).filter((u) => /^https?:\/\//.test(u));
 
+/** Every RPC request this process sends, by method, so /health shows what the RPC bill is made of. */
+const counts = new Map<string, number>();
+const since = Date.now();
+let recent: number[] = [];
+function count(body: unknown) {
+  try {
+    const items = Array.isArray(body) ? body : [body];
+    for (const it of items) { const m = (it as { method?: string })?.method ?? "?"; counts.set(m, (counts.get(m) ?? 0) + 1); }
+    recent.push(Date.now());
+    if (recent.length > 20_000) recent = recent.slice(-10_000);
+  } catch { /* never break a request over counting */ }
+}
+export function rpcStats() {
+  const hours = Math.max(1 / 60, (Date.now() - since) / 3_600_000);
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  const lastMin = recent.filter((t) => Date.now() - t < 60_000).length;
+  return { requestsLastMinute: lastMin, perDayAtThisRate: Math.round((total / hours) * 24), since: new Date(since).toISOString(),
+    byMethod: Object.fromEntries([...counts].sort((a, b) => b[1] - a[1])) };
+}
+
 export function transport(list: string[], opts: { retryCount?: number; retryDelay?: number; timeout?: number } = {}): Transport {
-  const ts = list.map((u) => http(u, { retryCount: opts.retryCount ?? 3, retryDelay: opts.retryDelay ?? 150, timeout: opts.timeout ?? 20_000 }));
+  const ts = list.map((u) => http(u, { retryCount: opts.retryCount ?? 2, retryDelay: opts.retryDelay ?? 400, timeout: opts.timeout ?? 20_000,
+    onFetchRequest: async (req) => { try { count(await req.clone().json()); } catch { count(null); } } }));
   return ts.length === 1 ? ts[0] : fallback(ts, { rank: false, retryCount: 1 });
 }
 

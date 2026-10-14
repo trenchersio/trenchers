@@ -74,3 +74,6 @@ export const FOUNDATION_LAUNCHED = parseAbiItem("event FoundationLaunchedV2(addr
 export const FOUNDATION_TOKEN_ABI = parseAbi(["function website() view returns (string)"]);
 export const FOUNDATION_LEDGER_ABI = parseAbi(["function creatorCredited() view returns (uint256)", "function creatorClaimed() view returns (uint256)"]);
 export const NFT_OWNER_ABI = parseAbi(["function ownerOf(uint256) view returns (address)"]);
+
+/** Every event the engine follows from Trenchers' own contracts and agent wallets, read in one query per window. */
+export const ALL_EVENTS = [TOKEN_LAUNCHED, POOL_GRADUATED, LAUNCH_SWEPT, CLAIMED, BOUGHT, SOLD, NFT_TRANSFER, FOUNDATION_LAUNCHED, RULE_APPLIED, POLICY_SET, CURVE_BUY, CURVE_SELL] as const;

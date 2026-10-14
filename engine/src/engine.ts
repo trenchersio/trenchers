@@ -1,4 +1,6 @@
 import { transport, urls } from "./rpc";
+const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11" as const;
+const MC3_ABI = [{ type: "function", name: "getEthBalance", stateMutability: "view", inputs: [{ name: "addr", type: "address" }], outputs: [{ name: "balance", type: "uint256" }] }] as const;
 import {
   createPublicClient, createWalletClient, decodeAbiParameters, encodeFunctionData, formatEther, http, defineChain, parseAbi,
   type Address, type Hash, type Hex, type Log, type PublicClient, type WalletClient,
@@ -10,7 +12,7 @@ import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
 import { BurnTracker } from "./burns";
 import {
-  PONS_RECORD_ABI, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED, FOUNDATION_LAUNCHED, FOUNDATION_TOKEN_ABI, FOUNDATION_LEDGER_ABI, NFT_OWNER_ABI,
+  PONS_RECORD_ABI, ALL_EVENTS, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED, FOUNDATION_LAUNCHED, FOUNDATION_TOKEN_ABI, FOUNDATION_LEDGER_ABI, NFT_OWNER_ABI,
 } from "./abis";
 
 /**
@@ -22,7 +24,7 @@ import {
  * events, rules from RuleApplied, positions and trade history from the adapter's Bought/Sold events.
  */
 
-type Token = { token: Address; curve: Address; deployer: Address; launchedAt: number; volumeEth: number; graduated: boolean; symbol?: string; supply?: bigint; tx?: Hash };
+type Token = { token: Address; curve: Address; deployer: Address; launchedAt: number; volumeEth: number; graduated: boolean; symbol?: string; supply?: bigint; tx?: Hash; block?: bigint };
 /** What the site shows for a specific-token strategy: the coin's ticker, name and logo (read from its Pons launch). */
 export type TokenMeta = { token: Address; symbol: string; name: string; logo: string | null; graduated: boolean; mcapEth: number | null };
 /** An agent's own coin (launched by its agent wallet): creator fees and a price history, from Pons's own trade events. */
@@ -80,6 +82,16 @@ export class Engine {
   /** The trading route agents actually use (AgentConfig.router), which is where Bought/Sold are emitted. */
   adapter: Address = lc(ENV.ADAPTER);
   lastAgentRefresh = 0;
+  private started = false;
+  private lastPauseRead = 0;
+  private multicall = false;
+  private chainDef: object;
+  /** Unfiltered curve trades (every Pons coin) are only read for recent history and when a rule needs them. */
+  private replayCurvesFrom = 0n;
+  /** Volume signals are only trusted for coins launched after curve trades were read without a gap. */
+  curvesFrom = 0n;
+  private curvesTo = -1n;
+  private lastWindow: { b: bigint; tb: number } | null = null;
   /** Offset between chain time and this server's clock, updated on every new block; decisions use chain time. */
   clockOffset = 0; lastHead = -1n;
   now() { return Math.floor(Date.now() / 1000 + this.clockOffset); }
@@ -88,6 +100,7 @@ export class Engine {
   constructor(log: (m: string) => void = (m) => console.log(new Date().toISOString(), m)) {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
     // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
+    this.chainDef = chain;
     this.pub = createPublicClient({ chain, transport: transport(urls(ENV.RPC_URL)), batch: { multicall: { wait: 16 } } }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
@@ -132,8 +145,18 @@ export class Engine {
     // Post what happened while the engine was down (restarts, redeploys), up to a day back.
     const saved = this.telegram?.savedBlock() ?? null;
     if (saved !== null && saved + 1n < this.catchUpFrom && head - saved < 400_000n) { this.catchUpFrom = saved + 1n; this.log(`telegram: posting mints, sales and awakenings since block ${saved + 1n}`); }
-    const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
-    this.cursor = start > 0n ? start - 1n : 0n;
+    // A failed start resumes where it stopped: history already read is never read again (it used to start over,
+    // reading millions of blocks every 30 s while the RPC was struggling).
+    if (!this.started) {
+      const start = ENV.START_BLOCK > 0n ? ENV.START_BLOCK : await this.deploymentBlock(head);
+      this.cursor = start > 0n ? start - 1n : 0n;
+      this.started = true;
+    } else this.log(`Resuming history from block ${this.cursor + 1n}`);
+    this.replayCurvesFrom = head > ENV.CURVE_REPLAY_BLOCKS ? head - ENV.CURVE_REPLAY_BLOCKS : 0n;
+    if (!this.multicall) {
+      const code = await this.pub.getCode({ address: MULTICALL3 }).catch(() => undefined);
+      if (code && code !== "0x") { this.multicall = true; (this.chainDef as { contracts?: unknown }).contracts = { multicall3: { address: MULTICALL3 } }; this.log("Multicall3 found: agent reads are batched"); }
+    }
     await this.discoverHouse(false);
     await this.resolveRouter();
     this.log(`Replaying history from block ${this.cursor + 1n} to ${head}${this.engineAddress ? ` · engine ${this.engineAddress}` : " · read-only (no ENGINE_KEY)"}${ENV.DRY_RUN ? " · DRY RUN" : ""}`);
@@ -149,14 +172,17 @@ export class Engine {
     const head = latest.number!;
     this.headTime = Number(latest.timestamp);
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
+    // The team's emergency stop: one cheap read every 15 s (agents themselves are re-read every minute or on their events).
+    if (Date.now() - this.lastPauseRead > 15_000) { this.lastPauseRead = Date.now(); await this.readPause(); }
     this.head = head;
     if (head > this.cursor) {
       try { await this.sync(head, true); this.syncError = null; }
       catch (e) { this.syncError = (e as Error).message.split("\n")[0].slice(0, 160); this.log(`reading new blocks failed at ${this.cursor + 1n}: ${this.syncError}`); }
     }
-    if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
-    if (Date.now() - this.lastSnapshot > 120_000) await this.snapshot();
-    if (Date.now() - this.lastRecover > 60_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
+    // Agents are re-read straight away on their own events (awakening, new rule, start/pause); this is the backstop.
+    if (Date.now() - this.lastAgentRefresh > 60_000) await this.refreshAgents(false);
+    if (Date.now() - this.lastSnapshot > 600_000) await this.snapshot();
+    if (Date.now() - this.lastRecover > 600_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
     if (ENV.FEE_KEEPER && ENV.DIST && Date.now() - this.feeKeeper.last > 600_000) await this.feeKeeper.run().catch((e) => this.log(`fee share upkeep failed: ${(e as Error).message.split("\n")[0]}`));
     if (this.paused) { this.entries = []; return; } // emergency stop: no buys, no sells
     await this.runEntries();
@@ -216,45 +242,67 @@ export class Engine {
     return t;
   }
 
+  /** Does any trading agent's rule react to every Pons coin's curve trades (volume, market cap, dev sells)? */
+  private needCurves() { for (const ag of this.agents.values()) if (ag.rule && (ag.rule.trigger === "volume" || ag.rule.trigger === "mcap" || ag.rule.trigger === "devsell") && this.tradable(ag)) return true; return false; }
+
   /** Reads all relevant logs up to `head` in order; `live` means new signals may lead to trades. */
   private async sync(head: bigint, live: boolean) {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
       const to = from + this.range - 1n < head ? from + this.range - 1n : head;
-      // Replay, or catching up after a pause: interpolate block times (two reads per window, not one per block).
-      if (!live || head - from > 100n) {
-        const [ba, bb] = await Promise.all([this.pub.getBlock({ blockNumber: from }), this.pub.getBlock({ blockNumber: to })]);
-        this.interp = { a: from, b: to, ta: Number(ba.timestamp), tb: Number(bb.timestamp) };
-      } else this.interp = null;
-      let got;
-      try { got = await Promise.all([
-        this.pub.getLogs({ address: ENV.PONS_FACTORY, events: [TOKEN_LAUNCHED, POOL_GRADUATED, LAUNCH_SWEPT], fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
-        this.pub.getLogs({ address: this.adapter, events: [BOUGHT, SOLD], fromBlock: from, toBlock: to }),
-        (this.telegram && (live || to >= this.catchUpFrom)) || live || to >= this.activityFrom ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
-        this.pub.getLogs({ address: ENV.PROGRAMMABLE_FACTORY, event: FOUNDATION_LAUNCHED, fromBlock: from, toBlock: to }).catch(() => []),
-      ]); } catch (e) {
+      const fixed = [ENV.PONS_FACTORY, ENV.FUND, this.adapter, ENV.NFT, ENV.PROGRAMMABLE_FACTORY].filter(Boolean).map((x) => lc(x as Address));
+      const wallets = [...this.agents.keys()];
+      const agentCurves = [...this.agentCoins.values()].map((c) => c.curve);
+      // Every Pons coin's curve trades: recent history and live, and only while a rule needs them.
+      const allCurves = live ? this.needCurves() : to >= this.replayCurvesFrom;
+      let logs: Log[] = [];
+      try {
+        // Replay, or catching up after a pause: interpolate block times (one block read per window, reusing the last).
+        if (!live || head - from > 100n) {
+          const ta = this.lastWindow && this.lastWindow.b === from - 1n ? this.lastWindow.tb : Number((await this.pub.getBlock({ blockNumber: from })).timestamp);
+          const tb = Number((await this.pub.getBlock({ blockNumber: to })).timestamp);
+          this.interp = { a: from, b: to, ta, tb };
+        } else this.interp = null;
+        // One query for everything Trenchers emits (factory, fund, route, NFT, agent wallets, agent coins' curves),
+        // in groups of 300 addresses, plus one for all curve trades when they are needed.
+        const addrs = [...new Set([...fixed, ...wallets, ...agentCurves])];
+        const qs: Promise<Log[]>[] = [];
+        for (let i = 0; i < addrs.length; i += 300) qs.push(this.pub.getLogs({ address: addrs.slice(i, i + 300), events: ALL_EVENTS, fromBlock: from, toBlock: to }) as Promise<Log[]>);
+        if (allCurves) qs.push(this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }) as Promise<Log[]>);
+        logs = (await Promise.all(qs)).flat();
+        // Wallets awakened in this window: their first rule may be in the same window.
+        const known = new Set(wallets);
+        const fresh = logs.filter((l) => lc(l.address) === lc(ENV.FUND) && (l as { eventName?: string }).eventName === "Claimed").map((l) => lc((l as unknown as { args: { agentWallet: Address } }).args.agentWallet)).filter((w) => !known.has(w));
+        if (fresh.length) logs.push(...(await this.pub.getLogs({ address: fresh, events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to }) as Log[]));
+      } catch (e) {
+        const m = (e as Error).message;
+        // A rate limit: smaller windows only make more calls; wait it out (the caller pauses).
+        if (/rate ?limit|too many|429|capacity|exceeded your|compute units/i.test(m)) throw e;
         // Too many logs in one window (busy blocks) or a flaky RPC: read a smaller window instead of retrying the
         // same one forever, which would freeze awakenings, rules and trades behind it.
-        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading blocks ${from}-${to} failed (${(e as Error).message.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
+        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading blocks ${from}-${to} failed (${m.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
         throw e;
       }
-      if (this.range < ENV.LOG_RANGE) this.range = this.range * 2n < ENV.LOG_RANGE ? this.range * 2n : ENV.LOG_RANGE;
-      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves, pgLaunches] = got;
+      if (this.interp) this.lastWindow = { b: to, tb: this.interp.tb };
+      // Window size follows how busy the chain is: bigger while quiet (fewer calls), smaller when full.
+      if (logs.length < 2_000 && this.range < ENV.LOG_RANGE_MAX) this.range = this.range * 2n < ENV.LOG_RANGE_MAX ? this.range * 2n : ENV.LOG_RANGE_MAX;
+      else if (logs.length > 8_000 && this.range > 1_000n) this.range = this.range / 2n;
+      if (allCurves) { if (this.curvesTo !== from - 1n) this.curvesFrom = from; this.curvesTo = to; }
+      const ev = (l: Log) => (l as { eventName?: string }).eventName;
+      const at = (l: Log, x: string | null | undefined) => !!x && lc(l.address) === lc(x as Address);
+      const factoryLogs = logs.filter((l) => at(l, ENV.PONS_FACTORY) && ["TokenLaunched", "PoolGraduated", "LaunchSwept"].includes(ev(l) ?? "")) as (Log & { eventName: string; args: Record<string, any> })[];
+      const seenCurve = new Set<string>();
+      const curveLogs = logs.filter((l) => (ev(l) === "CurveBuy" || ev(l) === "CurveSell") && !seenCurve.has(`${l.transactionHash}:${l.logIndex}`) && seenCurve.add(`${l.transactionHash}:${l.logIndex}`)) as (Log & { eventName: string; args: Record<string, any> })[];
+      const claims = logs.filter((l) => at(l, ENV.FUND) && ev(l) === "Claimed") as (Log & { eventName: string; args: Record<string, any> })[];
+      const adapterLogs = logs.filter((l) => at(l, this.adapter) && (ev(l) === "Bought" || ev(l) === "Sold")) as (Log & { eventName: string; args: Record<string, any> })[];
+      const nftMoves = logs.filter((l) => at(l, ENV.NFT) && ev(l) === "Transfer" && (l as { args?: { tokenId?: unknown } }).args?.tokenId !== undefined) as (Log & { eventName: string; args: Record<string, any> })[];
+      const pgLaunches = logs.filter((l) => at(l, ENV.PROGRAMMABLE_FACTORY) && ev(l) === "FoundationLaunchedV2");
+      const rules = logs.filter((l) => (ev(l) === "RuleApplied" || ev(l) === "PolicySet") && !fixed.includes(lc(l.address)));
       const launches = factoryLogs.filter((l) => l.eventName === "TokenLaunched");
       const grads = factoryLogs.filter((l) => l.eventName !== "TokenLaunched");
       const swepts: typeof grads = [];
       const buys = curveLogs.filter((l) => l.eventName === "CurveBuy"), sells = curveLogs.filter((l) => l.eventName === "CurveSell");
       const bought = adapterLogs, sold: typeof adapterLogs = [];
-      const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
-      // Rules and limits of every agent wallet, asked in groups so a long address list never exceeds an RPC limit.
-      const rules: Awaited<ReturnType<typeof this.pub.getLogs<undefined, [typeof RULE_APPLIED, typeof POLICY_SET]>>> = [];
-      try { for (let i = 0; i < wallets.length; i += 25) rules.push(...await this.pub.getLogs({ address: wallets.slice(i, i + 25), events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to })); }
-      catch (e) {
-        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading agent rules in ${from}-${to} failed (${(e as Error).message.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
-        throw e;
-      }
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
       for (const l of all) {
@@ -297,7 +345,7 @@ export class Engine {
     switch (l.eventName) {
       case "TokenLaunched": {
         if (a.pairToken !== "0x0000000000000000000000000000000000000000") return; // ETH launches only
-        const tok: Token = { token: lc(a.token), curve: lc(a.curve), deployer: lc(a.deployer), launchedAt: t, volumeEth: 0, graduated: false, tx: l.transactionHash ?? undefined };
+        const tok: Token = { token: lc(a.token), curve: lc(a.curve), deployer: lc(a.deployer), launchedAt: t, volumeEth: 0, graduated: false, tx: l.transactionHash ?? undefined, block: l.blockNumber ?? undefined };
         this.tokens.set(tok.token, tok); this.curves.set(tok.curve, tok.token);
         // Launched by an agent wallet: follow it as that agent's coin (fees, chart).
         const ag = this.agents.get(tok.deployer);
@@ -328,7 +376,7 @@ export class Engine {
           if (units > 0 && net > 0) { agentCoin.points.push({ t, p: net / units }); if (agentCoin.points.length > 2000) agentCoin.points.splice(0, agentCoin.points.length - 2000); }
         }
         if (!live) return;
-        this.signal("volume", tok, t, { before, after: tok.volumeEth });
+        if (tok.block !== undefined && tok.block >= this.curvesFrom) this.signal("volume", tok, t, { before, after: tok.volumeEth }); // only coins whose whole volume was read
         this.signal("mcap", tok, t);
         if (l.eventName === "CurveSell" && lc(a.seller) === tok.deployer) this.signal("devsell", tok, t);
         break;
@@ -515,14 +563,15 @@ export class Engine {
 
   private async refreshAgents(first: boolean, only?: Set<Address>) {
     if (!only) { this.lastAgentRefresh = Date.now(); await this.readPause(); if (!first) await this.discoverHouse(true); }
-    for (const ag of this.agents.values()) {
-      if (only && !only.has(ag.wallet)) continue;
+    // All agents at once: with Multicall3 every read (balances too) goes out as one request instead of six per agent.
+    await Promise.all([...this.agents.values()].map(async (ag) => {
+      if (only && !only.has(ag.wallet)) return;
       try {
         const [pol, owner, coin, balance, spentDay, spentToday] = await Promise.all([
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "policy" }),
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "owner" }),
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "coin" }),
-          this.pub.getBalance({ address: ag.wallet }),
+          this.multicall ? this.pub.readContract({ address: MULTICALL3, abi: MC3_ABI, functionName: "getEthBalance", args: [ag.wallet] }) : this.pub.getBalance({ address: ag.wallet }),
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "spentDay" }),
           this.pub.readContract({ address: ag.wallet, abi: AGENT_ABI, functionName: "spentToday" }),
         ]);
@@ -532,7 +581,7 @@ export class Engine {
         const isLive = ag.live && ag.setBy === ag.owner;
         if (!first && isLive !== wasLive) this.log(`Agent #${ag.id} is now ${isLive ? "trading" : "paused"}`);
       } catch (e) { this.log(`Agent #${ag.id}: could not read (${(e as Error).message.split("\n")[0]})`); }
-    }
+    }));
   }
 
   private tradable(ag: Agent) { return !!ag.rule && ag.live && !!ag.owner && ag.setBy === ag.owner && ag.perTrade > 0n; }
@@ -865,25 +914,41 @@ export class Engine {
     finally { this.busy.delete(key); }
   }
 
+  /** When each position's price was last read for a take-profit / stop-loss check (prices are only read for those). */
+  private quotedAt = new Map<string, number>();
   private async runExits() {
     const ts = this.now();
     for (const [w, book] of this.positions) {
       const ag = this.agents.get(w); if (!ag) continue;
+      // A paused agent can't sell anyway (its wallet refuses trades): don't spend chain reads on it.
+      if (!ag.live || ag.setBy !== ag.owner) continue;
       for (const p of book.values()) {
         const tok = this.tokens.get(p.token); if (!tok) continue;
         const r = ag.rule;
         const age = ts - p.openedAt;
         let why: string | null = null;
-        let value = 0n;
-        try { value = await this.quoteSell(tok, p.tokens); this.sellFails.delete(`q:${w}:${tok.token}`); }
-        catch (e) { this.failed(`q:${w}:${tok.token}`, ag, tok, p, `it can't be priced (${(e as Error).message.split("\n")[0].slice(0, 80)})`); continue; }
-        const pnl = p.ethIn > 0n ? Number(value - p.ethIn) / Number(p.ethIn) * 100 : 0;
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
-        else if (r?.exit === "tpsl" && r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
-        else if (r?.exit === "tpsl" && r.stopLossPct && pnl <= -r.stopLossPct) why = `stop loss ${pnl.toFixed(1)}%`;
         else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && !!r.token && lc(r.token) === p.token)) why = "max hold";
         else if (!r) why = "no rule any more";
-        if (why) await this.sell(ag, tok, p, value, why);
+        else if (r.exit === "tpsl" && (r.takeProfitPct || r.stopLossPct)) {
+          // Only take-profit / stop-loss needs the price, and at most every 15 s per position.
+          const k = `${w}:${p.token}`;
+          if (Date.now() - (this.quotedAt.get(k) ?? 0) < 15_000) continue;
+          this.quotedAt.set(k, Date.now());
+          let value = 0n;
+          try { value = await this.quoteSell(tok, p.tokens); this.sellFails.delete(`q:${w}:${tok.token}`); }
+          catch (e) { this.failed(`q:${w}:${tok.token}`, ag, tok, p, `it can't be priced (${(e as Error).message.split("\n")[0].slice(0, 80)})`); continue; }
+          const pnl = p.ethIn > 0n ? Number(value - p.ethIn) / Number(p.ethIn) * 100 : 0;
+          if (r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
+          else if (r.stopLossPct && pnl <= -r.stopLossPct) why = `stop loss ${pnl.toFixed(1)}%`;
+          if (why) { await this.sell(ag, tok, p, value, why); continue; }
+        }
+        if (why) {
+          let value = 0n;
+          try { value = await this.quoteSell(tok, p.tokens); }
+          catch (e) { this.failed(`q:${w}:${tok.token}`, ag, tok, p, `it can't be priced (${(e as Error).message.split("\n")[0].slice(0, 80)})`); continue; }
+          await this.sell(ag, tok, p, value, why);
+        }
       }
     }
   }
@@ -943,7 +1008,7 @@ export class Engine {
   /** Agent value: ETH in the wallet plus open positions at what they'd sell for now. */
   private async valueOf(ag: Agent) {
     const book = this.book(ag.wallet);
-    ag.balance = await this.pub.getBalance({ address: ag.wallet }).catch(() => ag.balance);
+    ag.balance = await (this.multicall ? this.pub.readContract({ address: MULTICALL3, abi: MC3_ABI, functionName: "getEthBalance", args: [ag.wallet] }) : this.pub.getBalance({ address: ag.wallet })).catch(() => ag.balance);
     let open = 0n, cost = 0n;
     const positions: { token: Address; symbol?: string; cost: number; value: number; since: number }[] = [];
     for (const p of book.values()) {
@@ -961,7 +1026,7 @@ export class Engine {
   private async snapshot() {
     this.lastSnapshot = Date.now();
     const t = this.now();
-    for (const ag of this.agents.values()) {
+    await Promise.all([...this.agents.values()].map(async (ag) => {
       try {
         const { nav } = await this.valueOf(ag);
         const h = this.history.get(ag.wallet) ?? [];
@@ -969,7 +1034,7 @@ export class Engine {
         while (h.length > 720) h.shift();
         this.history.set(ag.wallet, h);
       } catch { /* next time */ }
-    }
+    }));
   }
 
   /**
@@ -1029,8 +1094,10 @@ export class Engine {
   async arena() {
     const weekStart = this.now() - WEEK;
     const rows = [];
+    // Every agent valued at once, so the reads go out batched together.
+    const vals = new Map(await Promise.all([...this.agents.values()].map(async (ag) => [ag.wallet, await this.valueOf(ag)] as const)));
     for (const ag of this.agents.values()) {
-      const { open, cost, positions, nav } = await this.valueOf(ag);
+      const { open, cost, positions, nav } = vals.get(ag.wallet)!;
       const mine = this.trades.filter((x) => x.wallet === ag.wallet);
       const week = mine.filter((x) => x.time >= weekStart);
       const realized = this.realized.filter((x) => x.wallet === ag.wallet && x.time >= weekStart).reduce((sum, x) => sum + x.pnl, 0n);
