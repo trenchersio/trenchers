@@ -18,7 +18,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   const where = stepOf(page);
   const st = where === "hub" ? null : step(where);
   const learn: NavItem[] = [
-    { label: "How it all connects", href: `${home}#path`, hint: "Your Trencher at the centre: trade, talk, launch, think" },
+    { label: "How it all connects", href: `${home}#path`, hint: "Your Trencher at the centre: trade, think, talk, launch, borrow" },
     { label: "How it works", href: `${home}#how`, hint: "From NFT to self-funding agent" },
     { label: "Talk to your agent", href: `${home}#guide`, hint: "Guide it in plain English: your edge" },
     { label: "Self-funding agents", href: `${home}#self-funding`, hint: "Starter ETH, agent coins, fee share" },
