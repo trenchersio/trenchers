@@ -658,24 +658,30 @@ export class Engine {
 
   /** Coins confirmed not to be ETH-paired Pons launches (a rule pointing at one can't trade). */
   notPons = new Set<Address>();
+  private notPonsAt = new Map<Address, number>();
   private lookedUp = new Map<Address, number>();
   /** The coin a specific-token rule names: followed already, or looked up on the Pons factory (older launches). */
   async ensureToken(addr: Address): Promise<Token | null> {
     const a = lc(addr);
     const known = this.tokens.get(a); if (known) return known;
+    // A "not Pons" verdict is re-checked every 30 minutes, so nothing stays blocked by one bad answer.
+    if (this.notPons.has(a) && Date.now() - (this.notPonsAt.get(a) ?? 0) > 1_800_000) this.notPons.delete(a);
     if (this.notPons.has(a) || Date.now() - (this.lookedUp.get(a) ?? 0) < 120_000) return null;
     this.lookedUp.set(a, Date.now());
     try {
       const rec = await this.pub.readContract({ address: ENV.PONS_FACTORY, abi: PONS_RECORD_ABI, functionName: "getLaunchedToken", args: [a] }) as { token: Address; curve: Address; deployer: Address; pairToken: Address };
-      if (!rec || /^0x0+$/.test(rec.token) || !/^0x0+$/.test(rec.pairToken)) { this.notPons.add(a); this.log(`${a} isn't an ETH-paired Pons coin`); return null; }
+      if (!rec || /^0x0+$/.test(rec.token) || !/^0x0+$/.test(rec.pairToken)) { this.notPons.add(a); this.notPonsAt.set(a, Date.now()); this.log(`${a} isn't an ETH-paired Pons coin`); return null; }
       const tok: Token = { token: a, curve: lc(rec.curve), deployer: lc(rec.deployer), launchedAt: 0, volumeEth: 0, graduated: false };
       this.tokens.set(a, tok); this.curves.set(tok.curve, a);
       await this.onPool(tok).catch(() => false);
       this.log(`Following ${a} (${await this.symbolOf(a)}) for a specific-token strategy`);
       return tok;
     } catch (e) {
-      const m = (e as Error).message;
-      if (/revert|NotFound|Unknown|invalid/i.test(m)) { this.notPons.add(a); this.log(`${a} isn't a Pons coin (${m.split("\n")[0].slice(0, 80)})`); }
+      // Only the factory itself refusing (a contract revert) means "not a Pons coin". Network and RPC errors
+      // (timeouts, rate limits, "invalid response"...) are retried, never remembered: a hiccup must not stop a plan.
+      const m = (e as Error).message, reverted = (e as { name?: string }).name === "ContractFunctionExecutionError" && /revert/i.test(m) && !/HTTP|timeout|rate|fetch|network|socket/i.test(m);
+      if (reverted) { this.notPons.add(a); this.notPonsAt.set(a, Date.now()); this.log(`${a} isn't a Pons coin (${m.split("\n")[0].slice(0, 80)})`); }
+      else this.log(`${a}: lookup failed, retrying (${m.split("\n")[0].slice(0, 80)})`);
       return null;
     }
   }
@@ -846,7 +852,7 @@ export class Engine {
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
         else if (r?.exit === "tpsl" && r.takeProfitPct && pnl >= r.takeProfitPct) why = `take profit ${pnl.toFixed(1)}%`;
         else if (r?.exit === "tpsl" && r.stopLossPct && pnl <= -r.stopLossPct) why = `stop loss ${pnl.toFixed(1)}%`;
-        else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && r.token === p.token)) why = "max hold";
+        else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && !!r.token && lc(r.token) === p.token)) why = "max hold";
         else if (!r) why = "no rule any more";
         if (why) await this.sell(ag, tok, p, value, why);
       }
@@ -912,10 +918,11 @@ export class Engine {
     let open = 0n, cost = 0n;
     const positions: { token: Address; symbol?: string; cost: number; value: number; since: number }[] = [];
     for (const p of book.values()) {
-      const tok = this.tokens.get(p.token);
+      const tok = this.tokens.get(p.token) ?? await this.ensureToken(p.token).catch(() => null);
       cost += p.ethIn;
       let value = 0n;
-      if (tok) { try { value = await this.quoteSell(tok, p.tokens); } catch { /* skip */ } }
+      if (tok) { try { value = await this.quoteSell(tok, p.tokens); } catch (e) { this.noteOnce(`val:${ag.wallet}:${p.token}`, `Agent #${ag.id}: can't value ${p.token} (${(e as Error).message.split("\n")[0].slice(0, 80)})`); } }
+      else this.noteOnce(`val:${ag.wallet}:${p.token}`, `Agent #${ag.id}: can't value ${p.token} (coin not followed yet)`);
       open += value;
       positions.push({ token: p.token, symbol: this.symbols.get(p.token), cost: Number(formatEther(p.ethIn)), value: Number(formatEther(value)), since: p.openedAt });
     }
