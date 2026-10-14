@@ -149,7 +149,11 @@ export class Engine {
     const head = latest.number!;
     this.headTime = Number(latest.timestamp);
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
-    if (head > this.cursor) await this.sync(head, true);
+    this.head = head;
+    if (head > this.cursor) {
+      try { await this.sync(head, true); this.syncError = null; }
+      catch (e) { this.syncError = (e as Error).message.split("\n")[0].slice(0, 160); this.log(`reading new blocks failed at ${this.cursor + 1n}: ${this.syncError}`); }
+    }
     if (Date.now() - this.lastAgentRefresh > 15_000) await this.refreshAgents(false);
     if (Date.now() - this.lastSnapshot > 120_000) await this.snapshot();
     if (Date.now() - this.lastRecover > 60_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
@@ -194,6 +198,10 @@ export class Engine {
   }
 
   private headTime = 0;
+  /** Blocks read per log query: halves on failure, grows back on success. */
+  private range = ENV.LOG_RANGE;
+  head = 0n;
+  syncError: string | null = null;
   private async blockTime(n: bigint) {
     // Live: a block seen this tick is at most a few seconds old, so the head's time is precise enough
     // (and saves a chain read per block, which public RPCs rate-limit).
@@ -212,30 +220,51 @@ export class Engine {
   private async sync(head: bigint, live: boolean) {
     while (this.cursor < head) {
       const from = this.cursor + 1n;
-      const to = from + ENV.LOG_RANGE - 1n < head ? from + ENV.LOG_RANGE - 1n : head;
+      const to = from + this.range - 1n < head ? from + this.range - 1n : head;
       // Replay, or catching up after a pause: interpolate block times (two reads per window, not one per block).
       if (!live || head - from > 100n) {
         const [ba, bb] = await Promise.all([this.pub.getBlock({ blockNumber: from }), this.pub.getBlock({ blockNumber: to })]);
         this.interp = { a: from, b: to, ta: Number(ba.timestamp), tb: Number(bb.timestamp) };
       } else this.interp = null;
-      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves, pgLaunches] = await Promise.all([
+      let got;
+      try { got = await Promise.all([
         this.pub.getLogs({ address: ENV.PONS_FACTORY, events: [TOKEN_LAUNCHED, POOL_GRADUATED, LAUNCH_SWEPT], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ events: [CURVE_BUY, CURVE_SELL], fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: ENV.FUND, event: CLAIMED, fromBlock: from, toBlock: to }),
         this.pub.getLogs({ address: this.adapter, events: [BOUGHT, SOLD], fromBlock: from, toBlock: to }),
         (this.telegram && (live || to >= this.catchUpFrom)) || live || to >= this.activityFrom ? this.pub.getLogs({ address: ENV.NFT, event: NFT_TRANSFER, fromBlock: from, toBlock: to }) : Promise.resolve([]),
         this.pub.getLogs({ address: ENV.PROGRAMMABLE_FACTORY, event: FOUNDATION_LAUNCHED, fromBlock: from, toBlock: to }).catch(() => []),
-      ]);
+      ]); } catch (e) {
+        // Too many logs in one window (busy blocks) or a flaky RPC: read a smaller window instead of retrying the
+        // same one forever, which would freeze awakenings, rules and trades behind it.
+        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading blocks ${from}-${to} failed (${(e as Error).message.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
+        throw e;
+      }
+      if (this.range < ENV.LOG_RANGE) this.range = this.range * 2n < ENV.LOG_RANGE ? this.range * 2n : ENV.LOG_RANGE;
+      const [factoryLogs, curveLogs, claims, adapterLogs, nftMoves, pgLaunches] = got;
       const launches = factoryLogs.filter((l) => l.eventName === "TokenLaunched");
       const grads = factoryLogs.filter((l) => l.eventName !== "TokenLaunched");
       const swepts: typeof grads = [];
       const buys = curveLogs.filter((l) => l.eventName === "CurveBuy"), sells = curveLogs.filter((l) => l.eventName === "CurveSell");
       const bought = adapterLogs, sold: typeof adapterLogs = [];
       const wallets = [...this.agents.keys(), ...claims.map((c) => lc(c.args.agentWallet!))];
-      const rules = wallets.length ? await this.pub.getLogs({ address: wallets, events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to }) : [];
+      // Rules and limits of every agent wallet, asked in groups so a long address list never exceeds an RPC limit.
+      const rules: Awaited<ReturnType<typeof this.pub.getLogs<undefined, [typeof RULE_APPLIED, typeof POLICY_SET]>>> = [];
+      try { for (let i = 0; i < wallets.length; i += 25) rules.push(...await this.pub.getLogs({ address: wallets.slice(i, i + 25), events: [RULE_APPLIED, POLICY_SET], fromBlock: from, toBlock: to })); }
+      catch (e) {
+        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading agent rules in ${from}-${to} failed (${(e as Error).message.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
+        throw e;
+      }
       const all = [...launches, ...grads, ...swepts, ...buys, ...sells, ...claims, ...bought, ...sold, ...rules] as Log[];
       all.sort((a, b) => Number(a.blockNumber! - b.blockNumber!) || (a.logIndex! - b.logIndex!));
-      for (const l of all) await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live);
+      for (const l of all) {
+        try { await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live); }
+        catch (e) {
+          // One event that can't be read must not stop every event after it. Retried once, then logged and skipped.
+          try { await this.onLog(l as Log & { eventName: string; args: Record<string, unknown> }, live); }
+          catch { this.log(`Skipped a ${(l as { eventName?: string }).eventName ?? "log"} at block ${l.blockNumber} (${(e as Error).message.split("\n")[0].slice(0, 100)})`); }
+        }
+      }
       for (const l of pgLaunches) await this.onProgrammableLaunch(l as unknown as Log & { args: Record<string, any> }).catch((e) => this.log(`programmable: ${(e as Error).message.split("\n")[0]}`));
       // While catching up after a restart, mints and sales made since this process started are still posted
       // (the previous process stopped when this one came up, so it never saw them).
