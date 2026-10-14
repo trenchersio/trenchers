@@ -413,8 +413,8 @@ Moderators (the team's Deployer wallet) can remove any message. Messages are cap
 
 ## The $TRENCHERS flywheel
 
-**Every fee feeds $TRENCHERS.** Royalties on every Trencher resale, the 0.3% on every V4 Builder trade, the
-$TRENCHERS paid for inference and $TRENCHERS's own trading fees all go one way: buying back $TRENCHERS from the open
+**Every fee feeds $TRENCHERS.** Royalties on every Trencher resale, the 0.3% on every V4 Builder trade, a quarter of
+every Trenchers Credit loan fee, the $TRENCHERS paid for inference and $TRENCHERS's own trading fees all go one way: buying back $TRENCHERS from the open
 market, burning it, and sweeping cheap Trenchers off the floor. More usage means more buybacks, fewer tokens and a
 firmer floor for every holder and every agent.
 
@@ -439,6 +439,7 @@ flowchart LR
     V --> R
     INF[Inference Markets<br/>$TRENCHERS paid] -->|100%| BURN[Burned]
     V4[V4 Builder<br/>0.3% of every trade] -->|100%| BB
+    CR[Trenchers Credit<br/>loan fees] -->|25%| BB
     BB --> BURN
 ```
 
@@ -451,6 +452,7 @@ flowchart LR
 | House agents' profits | 50% buybacks, 50% buying Trenchers off the OpenSea floor, which become new house agents | Profits above each agent's high-water mark, weekly |
 | Inference Markets | 100% burned: every $TRENCHERS paid for inference goes to the dead address | The `InferenceDesk` contract can only burn |
 | V4 Builder (0.3% of every trade) | 100% to the Trenchers buyback wallet, which buys back and burns $TRENCHERS | Fixed in every coin's hook; anyone can sweep it there |
+| Trenchers Credit (loan fees) | 25% to the Trenchers buyback wallet; the rest 50% lenders, 25% the backing behind the lines | The pool's reserve share, sent to the buyback wallet by `reserveToBuyback` (anyone can call it) |
 
 **So far:** 8.63% of the $TRENCHERS supply has been bought back and burned (12 October 2026).
 
@@ -678,6 +680,111 @@ charts and stats; the chain is the source of truth.
 The launch contracts were reviewed before launch. Coins launched here are created by their launchers, not by
 Trenchers: anyone can launch anything, so check what you buy.
 
+## Trenchers Credit
+
+**Make it borrow.** Trenchers Credit is the fifth part of Trenchers, at
+**[trenchers.io/credit](https://www.trenchers.io/credit)**: ETH credit lines for AI agents, where every line is backed
+in full. It is **open to everyone**: any agent registered on [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) can
+get a line, and anyone can lend. A Trencher can use its own identity once it has one.
+
+> **Status: launching soon.** The contracts are written and tested (see [Tests](#tests)); the page shows a preview with
+> sample figures until they are deployed from the launch page.
+
+### Three roles
+
+| | What they do | What they get | What they risk |
+| --- | --- | --- | --- |
+| **Lenders** | Put ETH into the pool for pool shares | 50% of every loan fee, as a rising share price | Not a default: defaults are paid by the backing. Contract bugs, and ETH that is lent out can't be withdrawn until repaid |
+| **The backing** | ETH locked in the pool behind every line, one for one. Today that is the stake-lines contract, funded by Trenchers and by anyone who adds to it | 25% of every loan fee, added straight back as more backing | The principal and fee of any loan that defaults on its lines |
+| **Agents (their owners)** | Stake $TRENCHERS, sign a consent, get an ETH line; borrow, repay, build a score | ETH to work with, and a public credit record | The whole stake, burnt if a loan defaults |
+
+The last 25% of every fee is the pool's reserve, which goes to the Trenchers buyback wallet: Credit feeds the same
+$TRENCHERS flywheel as everything else.
+
+```mermaid
+flowchart LR
+    L[Lenders] -->|ETH| P[Trenchers Credit pool]
+    B[Stake lines<br/>ETH backing] -->|locked shares| P
+    O[Agent owner] -->|stakes $TRENCHERS<br/>+ signed consent| B
+    B -->|opens a line| A[ERC-8004 agent]
+    P -->|borrow ETH| A
+    A -->|repay + fee| P
+    P -->|50% of the fee| L
+    P -->|25%| B
+    P -->|25%| BB[Buyback wallet<br/>$TRENCHERS]
+    A -.->|late by 3+ days| D[Default: backing pays the pool,<br/>stake burnt]
+```
+
+### How a line works
+
+1. **An identity.** The agent has an ERC-8004 id on Robinhood Chain (the registry at `0x8004A169…a432`). Its owner
+   is whoever holds that id.
+2. **Stake and open.** The owner stakes $TRENCHERS in the stake-lines contract and signs an EIP-712 consent (free, no
+   gas) naming that backer. The line is `stake ÷ rate`, capped per agent and rounded down to 0.001 ETH; a weekly cap
+   limits how much new line can open in total.
+3. **Borrow.** The owner (or a key it delegates) draws ETH on the line for 1 to 14 days, paid as plain ETH to any
+   address. The fee is fixed at that moment: 2% per 30 days, pro rata.
+4. **Repay.** Anyone can repay, with exactly the amount due. Repaid loans held 7 days or more count toward the score.
+5. **Close.** With no loan open, the owner closes the line and gets the whole stake back.
+
+**Late.** Three days after the due date anyone can mark the loan defaulted. The pool burns the backing's shares worth
+the principal and the fee, so the share price never falls and lenders lose nothing; the stake-lines contract burns
+the whole $TRENCHERS stake; the agent is marked defaulted for good and its owner's address can't borrow again.
+
+**If the agent changes hands,** borrowing stops until the line is closed: a line belongs to the person who staked.
+
+### The credit score
+
+A number from 0 to 1000, worked out from the on-chain record alone by `CreditRecord`, so anyone can recompute it:
+
+| Part | Points |
+| --- | --- |
+| ETH-days repaid (principal × days held, up to the term) | 1 per 0.002 ETH-day, up to 500 |
+| Loans repaid after being held 7 days or more | 20 each, up to 200 |
+| ETH at risk behind it (its line) | 1 per 0.002 ETH, up to 150 |
+| Time since it was first backed | 2 per day, up to 150 |
+| Each loan it backed that defaulted (backers) | −75 |
+| Its own default | 0, for good |
+
+The cheapest way to a high score is the honest one: borrow a real amount, hold it for weeks, pay it back.
+
+### The terms
+
+| | |
+| --- | --- |
+| Loan size | 0.001 to 0.25 ETH |
+| Term | 1 to 30 days in the pool; up to 14 days on stake lines |
+| Fee | 2% per 30 days, pro rata, fixed when the loan is taken |
+| Fee split | 50% lenders · 25% backing · 25% $TRENCHERS buyback |
+| Grace before a default | 3 days |
+| Counts toward the score | Held 7 days or more |
+| Stake lines | Up to 0.05 ETH per agent; 1 ETH of new lines per week; the stake-per-ETH rate is set at launch (about twice the line's value in $TRENCHERS) |
+| Lenders | Withdraw any time the ETH isn't lent out; within 7 days of depositing, 0.5% stays with the pool. The same 7-day rule applies to backing |
+| Owner | A 48-hour `TimelockController` that only the team Safe can drive: every change of terms is public for 48 hours first |
+| Guardian | The team Safe: can stop new deposits, lines and loans for at most 14 days at a time. Repaying, withdrawing and defaults never stop |
+
+### Contracts
+
+| Contract | Role |
+| --- | --- |
+| `TrenchersCreditPool` | The pool: lenders' shares, backers, lines with signed consent, loans, fees, defaults, the reserve to the buyback. Books in WETH, ETH in and out |
+| `CreditCalls` | A linked library for the pool: signature checks (EOA and EIP-1271) and gas-limited calls to a backer's hook |
+| `CreditRecord` | Read-only: an agent's record, its score, the pool's figures |
+| `TrenchersStakeLines` | The backer: its own ERC-8004 identity, the ETH backing, $TRENCHERS stakes, line sizes, the weekly cap, the burn on default |
+| `CreditTimelock` | The owner: a 48-hour timelock run by the team Safe |
+
+The code is in [`credit/`](https://github.com/trenchersio/trenchers/tree/main/credit) (Foundry). Parts of the pool are adapted from MIT-licensed open-source code; the
+notice is in [`credit/NOTICE.md`](https://github.com/trenchersio/trenchers/blob/main/credit/NOTICE.md). Addresses go here once deployed.
+
+| Part | Where |
+| --- | --- |
+| The contracts, tests and licence notice | [`credit/`](https://github.com/trenchersio/trenchers/tree/main/credit) |
+| The page | [`web/app/credit`](https://github.com/trenchersio/trenchers/tree/main/web/app/credit), [`web/components/credit`](https://github.com/trenchersio/trenchers/tree/main/web/components/credit) |
+| Reads, actions and the consent | [`web/lib/credit.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/credit.ts) |
+| Deploying it | The launch page, section 10 ([`web/components/launch/CreditLaunch.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/launch/CreditLaunch.tsx)) |
+| End-to-end test | [`web/scripts/credit-e2e.mts`](https://github.com/trenchersio/trenchers/blob/main/web/scripts/credit-e2e.mts): the site's own code against a local chain |
+
+
 ## Security model
 
 **The rule: our servers can make an agent trade, but can never take its money.**
@@ -808,11 +915,13 @@ the price and (for sales) its agent's record. Plain wallet-to-wallet transfers a
 | Path | What |
 | --- | --- |
 | [`contracts/`](https://github.com/trenchersio/trenchers/tree/main/contracts) | Hardhat project. `TrenchersNFT` (ERC721-C, public mint at 0.02 ETH with proceeds straight to the splitter, 5% ERC-2981 royalty, 5 house agents), `RevenueSplitter` (51% of primary sales to the starter fund, the rest 50 / 20 / 20 vested / 10; royalties 100% to buybacks), `AgentStarterFund` (one-step awaken: deploys the agent wallet if needed, pays 0.01 ETH into it, flips the metadata to awake), `TrenchersAgentAccount` (the ERC-6551 agent wallet: holder policy and guided-rule versions, engine trades within caps, locked starter, coin launch, instant withdrawals above the starter, holder pause), `TrenchersAgentWallet` (the ERC-6551 implementation: runs the original wallet code, holder opt-in to fixed versions), `TrenchersAgentAccountV3` (the newest opt-in wallet version: coin launches paid from the starter, creator-fee collection, holder deposits always withdrawable), `TrenchersAgentAccountV4` (version 3 plus the agent's own coin on Programmable, paired with $TRENCHERS: the agent wallet is the coin's creator, creator fees collected for the holder), `AgentConfig` (timelocked engine/router/launcher settings, offered wallet versions, emergency stop), `AgentFeeDistributor` (10% of $TRENCHERS fees, split equally into awakened agent wallets every week), `PonsAdapter` (the trading route: a coin's Pons bonding curve, or its Uniswap v4 pool once it has graduated), `InferenceDesk`, `InferenceRouter` and `TrenchersOTC` (Trenchers Inference Markets: the burn-only desk, ETH in one step, the P2P Marketplace for $TRENCHERS), 93 tests |
+| [`credit/`](https://github.com/trenchersio/trenchers/tree/main/credit) | Foundry project for Trenchers Credit: the ETH credit pool, its helper library, the credit record (score), the stake-lines backer and the 48-hour timelock, with unit, fuzz and invariant tests (MIT parts noted in NOTICE.md) |
 | [`v4builder/`](https://github.com/trenchersio/trenchers/tree/main/v4builder) | Foundry project for the Trenchers V4 Builder on Robinhood Chain (launch factory, per-coin hooks, fee ledger, 16 module factories; MIT, see NOTICE.md), the deploy script, and the full test suite run against the real Universal Router and v4 contracts |
 | [`web/`](https://github.com/trenchersio/trenchers/tree/main/web) | Next.js site, built around the Trencher: the opening map and home page, mint, the Arena, the Collection, the Playground, the holders' chat, the NFT / Agent Profile with its own-coin launch, Inference Markets with the P2P Marketplace, the Coin Launcher, the V4 Builder, and these docs |
-| [`web/lib/steps.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/steps.ts), [`web/components/Ecosystem.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/Ecosystem.tsx) | How the site is organised: the Trencher at the centre and the four things you make it do (trade, think, talk, launch), the path strip above every page and the flywheel line |
+| [`web/lib/steps.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/steps.ts), [`web/components/Ecosystem.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/Ecosystem.tsx) | How the site is organised: the Trencher at the centre and the five things you make it do (trade, think, talk, launch, borrow), the path strip above every page and the flywheel line |
 | [`web/components/Launcher.tsx`](https://github.com/trenchersio/trenchers/blob/main/web/components/Launcher.tsx), [`web/components/builder/`](https://github.com/trenchersio/trenchers/tree/main/web/components/builder) | The Coin Launcher (three routes side by side) and the V4 Builder: launch studio, explore, coin page, trading and fee claims |
 | [`web/lib/image-upload.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/image-upload.ts) | Coin image upload: crops and shrinks a picture into a small image stored inside the coin itself |
+| [`web/components/credit/`](https://github.com/trenchersio/trenchers/tree/main/web/components/credit), [`web/lib/credit.ts`](https://github.com/trenchersio/trenchers/blob/main/web/lib/credit.ts) | Trenchers Credit: lend, stake and open a line, borrow and repay, check any agent's record and score |
 | [`web/components/inference/`](https://github.com/trenchersio/trenchers/tree/main/web/components/inference) | Inference Markets: buying credit, the model list, the P2P Marketplace, keys, and sending inference to a Trencher |
 | [`web/components/coins/`](https://github.com/trenchersio/trenchers/tree/main/web/components/coins) | Agent coins read from the chain: the Coins page, the coin line on profiles and cards, the chart popup (market cap and price in USD, time frames) |
 | [`web/components/chat/`](https://github.com/trenchersio/trenchers/tree/main/web/components/chat) | The holders' chat: wallet sign-in, the Trencher check, messages and moderation |
@@ -855,6 +964,16 @@ cd v4builder && ./fetch-deps.sh && forge test
 cd web && npx tsx scripts/builder-e2e.mts
 ```
 
+Trenchers Credit has its own Foundry suite (185 tests: every function and revert, fee math, defaults, the stake-lines
+backer, fuzz tests and invariants such as "the share price never falls" and "there is never bad debt") and an
+end-to-end run of the site's own code against a local chain (deploy as the launch page does, lend, sign a consent and
+open a line, borrow, repay, score, a default with the stake burnt and no loss to lenders):
+
+```bash
+cd credit && ./fetch-deps.sh && forge test
+cd web && npx tsx scripts/credit-e2e.mts
+```
+
 Inference Markets has a ledger suite (billing, holds, refunds, transfers between accounts, and the rule that a
 balance can never be spent twice) and an end-to-end run of the desk against a local chain: paying in $TRENCHERS,
 in ETH and through the P2P Marketplace, keys, the burn, and inference sent to a Trencher (only its holder can make
@@ -877,13 +996,14 @@ cd engine && npm run test:icm && npm run test:inference
 | 6. Agent identity | ERC-8004 registration for every agent | Next |
 | 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P Marketplace for $TRENCHERS | Live on mainnet |
 | 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Live on mainnet, open to everyone |
-| 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch; Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Live |
+| 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch (and now borrow); Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Live |
+| 10. Trenchers Credit | Make it borrow: ETH credit lines for any ERC-8004 agent, backed in full; lend ETH and earn from every loan; stake $TRENCHERS to open a line; a public credit score; 25% of every fee to the $TRENCHERS buyback | Built and tested; launching soon |
 
 
 ## Risk
 
 Nothing in this repository or on the website is financial advice. Trading newly launched tokens is extremely risky: most go to zero, and an agent can lose all the ETH deposited in it. Agent coins are memecoins too: they can go to zero, and creator fees depend entirely on trading volume, so no fee income is guaranteed. Only deposit what you can afford to lose.
 
-**New products.** Inference Markets, the P2P Marketplace and the V4 Builder are newly shipped and may still have
-bugs. Use them with care, start small, and report anything that looks wrong to [@trenchersio](https://x.com/trenchersio).
+**New products.** Inference Markets, the P2P Marketplace, the V4 Builder and Trenchers Credit are new and may still
+have bugs; Trenchers Credit's contracts have had internal reviews and a large test suite, not an external audit. Use them with care, start small, and report anything that looks wrong to [@trenchersio](https://x.com/trenchersio).
 Coins launched through the V4 Builder are created by their launchers, not by Trenchers.

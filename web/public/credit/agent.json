@@ -1,0 +1,8 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Trenchers Credit · stake lines",
+  "description": "The backer behind Trenchers Credit stake lines: an agent's owner stakes $TRENCHERS and this contract opens an ETH credit line for the agent, backed one for one by its own ETH in the Trenchers Credit pool.",
+  "image": "https://www.trenchers.io/brand/mark.svg",
+  "endpoints": [{ "name": "web", "endpoint": "https://www.trenchers.io/credit" }],
+  "supportedTrust": ["reputation"]
+}

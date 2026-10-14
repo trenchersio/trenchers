@@ -1,0 +1,27 @@
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+cbor_metadata = false
+auto_detect_remappings = false
+# The pool needs few optimizer runs to stay under the 24 KB code limit.
+additional_compiler_profiles = [{ name = "pool", via_ir = true, optimizer_runs = 1 }]
+compilation_restrictions = [{ paths = "src/TrenchersCreditPool.sol", via_ir = true, optimizer_runs = 1 }]
+
+[profile.default.fuzz]
+runs = 512
+
+[profile.default.invariant]
+runs = 64
+depth = 128
+fail_on_revert = false
+
+[lint]
+lint_on_build = false

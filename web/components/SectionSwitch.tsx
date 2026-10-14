@@ -4,7 +4,7 @@ import { STEPS, type Where } from "@/lib/steps";
 
 export type Section = Where;
 
-/** The strip above every header: the Trencher (home) first, then the four things you make it do, then Mint. */
+/** The strip above every header: the Trencher (home) first, then the five things you make it do, then Mint. */
 export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where; wide?: boolean; mintOn?: boolean }) {
   return (
     <div className={`secsw${wide ? " secsw-wide" : ""}`}>

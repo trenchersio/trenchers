@@ -11,7 +11,7 @@ import { HUB, step, stepOf, type PageKey } from "@/lib/steps";
 
 type Page = PageKey;
 
-/** Shared top bar. The path strip above it switches between the four steps; the bar shows the pages of the step
+/** Shared top bar. The path strip above it switches between the five steps; the bar shows the pages of the step
  *  you are in (or, on the hub pages, the way in: Mint), with Learn and Community in two compact dropdowns. */
 export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean }) {
   const home = page === "home" ? "" : ROUTES.home;

@@ -24,12 +24,16 @@ export function MobileMenu({ page }: { page: Page }) {
   }, [open]);
   const inference = page === "inference";
   const builder = page === "builder";
+  const credit = page === "credit";
   const where = stepOf(page);
   const st = STEPS.find((x) => x.key === where);
   // Pages with their own sections list those; every other page lists its step's pages, then the hub.
   const own: [string, string, string][] = builder ? [
     ["b-top", "Overview", "?#top"], ["b-launch", "Launch a coin", "?#launch"], ["b-explore", "Explore coins", "?#explore"], ["b-modules", "Modules", "?#modules"],
     ["b-how", "How it works", "?#how"],
+  ] : credit ? [
+    ["c-top", "Overview", "?#top"], ["c-lend", "Lend ETH", "?#lend"], ["c-borrow", "Open a line", "?#borrow"], ["c-record", "Check an agent", "?#record"],
+    ["c-how", "How it works", "?#how"], ["c-terms", "Terms", "?#terms"],
   ] : inference ? [
     ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-trencher", "Inference for a Trencher", "#trencher"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P Marketplace", "#p2p"],
     ["inf-account", "Account and keys", "#account"],

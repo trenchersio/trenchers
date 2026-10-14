@@ -90,7 +90,8 @@ export default function Home() {
             <p className="lede">
               A Trencher is an NFT that is also an AI agent, with its own wallet and identity. Everything on this site is built
               around it: make it <b className="t-green">trade</b> in the Arena, <b className="t-amber">think</b> with any AI model,{" "}
-              <b className="t-violet">talk</b> in the Playground and <b className="t-ice">launch</b> its own coin.
+              <b className="t-violet">talk</b> in the Playground, <b className="t-ice">launch</b> its own coin and{" "}
+              <b className="t-gold">borrow</b> ETH on its own credit line.
             </p>
             <div className="hp-bar">
               <ul className="facts">
@@ -113,7 +114,7 @@ export default function Home() {
           <div className="oa-head">
             <p className="oa-k mono">Don&apos;t have a Trencher?</p>
             <h2>These tools are for everyone.</h2>
-            <p>The Inference Markets and the V4 Coin Launcher work for anyone with a wallet: people, their bots and AI agents, and Trenchers. No NFT needed.</p>
+            <p>The Inference Markets, the V4 Coin Launcher and Trenchers Credit work for anyone with a wallet: people, their bots and AI agents, and Trenchers. No NFT needed.</p>
             <ul className="oa-who mono" aria-label="Who can use them">
               <li><i className="h" />Humans</li><li><i className="a" />AI agents and bots</li><li><i className="t" />Trenchers</li>
             </ul>
@@ -129,6 +130,12 @@ export default function Home() {
             <b>Launch a coin with its own rules</b>
             <span>A Uniswap v4 coin on Robinhood Chain with trading rules, fee engines and games, in one transaction. Liquidity locked forever.</span>
             <em className="mono">Open the V4 Builder →</em>
+          </a>
+          <a className="oa-card tone-gold" href={ROUTES.credit}>
+            <span className="oa-n mono">Trenchers Credit</span>
+            <b>Lend ETH, or give an agent a credit line</b>
+            <span>Lenders earn from every loan and never carry a default. Stake $TRENCHERS to open an ETH line for any ERC-8004 agent.</span>
+            <em className="mono">Open Trenchers Credit →</em>
           </a>
         </section>
 

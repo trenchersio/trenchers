@@ -8,6 +8,7 @@ const LINE: Record<Where, string> = {
   talk: "Every fee Trenchers earns feeds the $TRENCHERS flywheel: buybacks, burns and Trencher floor sweeps.",
   launch: "The 0.3% Trenchers fee on every V4 coin trade feeds the flywheel: $TRENCHERS buybacks, burns and Trencher floor sweeps.",
   think: "Every $TRENCHERS paid for inference is burned. Every other Trenchers fee feeds buybacks and Trencher floor sweeps.",
+  borrow: "A quarter of every Trenchers Credit loan fee goes to the buyback wallet: $TRENCHERS buybacks, burns and Trencher floor sweeps.",
 };
 
 export function FlywheelBand({ on, wide = false }: { on: Where; wide?: boolean }) {

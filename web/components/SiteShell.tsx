@@ -18,7 +18,7 @@ export function SiteShell({ children, section = "hub" }: { children: ReactNode; 
     document.documentElement.style.overflow = intro ? "hidden" : "";
   }, [intro]);
 
-  /** The intro is the map of Trenchers: the Trencher itself, or one of the four things it does of Trenchers: stay on this one, or go to the other. */
+  /** The intro is the map of Trenchers: the Trencher itself, or one of the five things it does of Trenchers: stay on this one, or go to the other. */
   function enter(to: Where) {
     try { sessionStorage.setItem("trenchers-entered", "1"); } catch {}
     if (to !== section) { window.location.href = to === "hub" ? ROUTES.home : STEPS.find((s) => s.key === to)!.home; return; }

@@ -59,6 +59,8 @@ export const ROUTES = {
   playground: PREVIEW ? "playground.html" : "/playground",
   inference: PREVIEW ? "inference.html" : "/inference",
   builder: PREVIEW ? "builder.html" : "/builder",
+
+  credit: PREVIEW ? "credit.html" : "/credit",
   launcher: PREVIEW ? "launcher.html" : "/launcher",
 };
 /** The holders' chat opens to the public once NEXT_PUBLIC_CHAT_OPEN=1 (until then it's greyed out in the menu). */

@@ -5,7 +5,7 @@ import { Ecosystem } from "./Ecosystem";
 import type { Step, Where } from "@/lib/steps";
 
 /** Black intro screen: Trenchers assemble across the screen while the agents "boot", then the map of what a
- *  Trencher does: the Trencher at the centre, and the four parts around it. */
+ *  Trencher does: the Trencher at the centre, and the five parts around it. */
 export function Intro({ onEnter }: { onEnter: (to: Where) => void }) {
   const [count, setCount] = useState(0);
   const [exiting, setExiting] = useState(false);

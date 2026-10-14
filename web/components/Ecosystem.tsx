@@ -1,6 +1,7 @@
 "use client";
-// How Trenchers fits together: the Trencher sits on top of everything, and each of the four parts around it is
-// something you make it do. The core literally overlaps the inner corner of every part.
+// How Trenchers fits together: the Trencher sits on top of everything, and each part around it is something you make
+// it do. The core overlaps the inner corner of the first four; the fifth, Trenchers Credit, runs underneath them all,
+// joined to the core by a line through the middle.
 import { useEffect, useState } from "react";
 import { HUB, STEPS, type Step } from "@/lib/steps";
 import { ROUTES } from "@/lib/constants";
@@ -19,6 +20,17 @@ function Motif({ k }: { k: Step["key"] }) {
       <rect x="4" y="4" width="62" height="18" rx="6" className="m-box" /><path d="M14 22 L12 30 L22 22" className="m-box" />
       <rect x="40" y="24" width="74" height="16" rx="6" className="m-box m-fill" />
       <circle cx="16" cy="13" r="2" className="m-dot m-type" /><circle cx="25" cy="13" r="2" className="m-dot m-type" style={{ animationDelay: ".2s" }} /><circle cx="34" cy="13" r="2" className="m-dot m-type" style={{ animationDelay: ".4s" }} />
+    </svg>
+  );
+  if (k === "borrow") return (
+    <svg viewBox="0 0 160 44" className="eco-motif eco-motif-wide" aria-hidden="true">
+      {/* a credit line: drawn, held, paid back */}
+      <rect x="2" y="16" width="156" height="12" rx="6" className="m-box" />
+      <rect x="2" y="16" width="96" height="12" rx="6" className="m-box m-fill m-draw-bar" />
+      <path d="M98 10 C 112 -2, 140 -2, 152 10" className="m-line m-dash" />
+      <path d="M150 5 L153 11 L146 11 Z" className="m-dot" />
+      <circle cx="98" cy="22" r="3" className="m-dot m-glow" />
+      <text x="2" y="42" className="m-t m-t-l">LINE</text><text x="158" y="42" className="m-t m-t-r">REPAID</text>
     </svg>
   );
   if (k === "launch") return (
@@ -67,32 +79,35 @@ function Core({ compact, onEnter }: { compact: boolean; onEnter?: () => void }) 
 }
 
 export function Ecosystem({ compact = false, onPick, onEnter }: { compact?: boolean; onPick?: (s: Step) => void; onEnter?: () => void }) {
+  const part = (s: Step, i: number) => {
+    const body = (
+      <span className="eco-body">
+        <span className="eco-k mono"><i>{s.n}</i>{s.verb}</span>
+        <b className="eco-t">{s.product}</b>
+        <span className="eco-does">{compact ? s.short : s.what}</span>
+        <span className={`eco-who mono${s.open ? " open" : ""}`}>{s.who}</span>
+        <Motif k={s.key} />
+        {!compact && (
+          <span className="eco-links">
+            <a href={s.home} className="mono eco-open">Open {s.product.replace(/^The /, "the ")} →</a>
+            {s.pages.filter((p) => p.href !== s.home).map((p) => <a key={p.label} href={p.href} className="mono">{p.label}</a>)}
+          </span>
+        )}
+      </span>
+    );
+    const cls = `eco-part eco-q${i}${i >= 4 ? " eco-wide" : ""} tone-${s.tone}`;
+    return onPick
+      ? <button key={s.key} type="button" className={cls} onClick={() => onPick(s)}>{body}<span className="eco-go mono">open {s.product.replace(/^The /, "the ").toLowerCase()} →</span></button>
+      : <div key={s.key} className={cls}><a className="eco-cover" href={s.home} aria-label={s.verb} />{body}</div>;
+  };
   return (
     <div className={`eco${compact ? " eco-compact" : ""}`}>
       <div className="eco-grid">
-        {STEPS.map((s, i) => {
-          const body = (
-            <span className="eco-body">
-              <span className="eco-k mono"><i>{s.n}</i>{s.verb}</span>
-              <b className="eco-t">{s.product}</b>
-              <span className="eco-does">{compact ? s.short : s.what}</span>
-              <span className={`eco-who mono${s.open ? " open" : ""}`}>{s.who}</span>
-              <Motif k={s.key} />
-              {!compact && (
-                <span className="eco-links">
-                  <a href={s.home} className="mono eco-open">Open {s.product.replace(/^The /, "the ")} →</a>
-                  {s.pages.filter((p) => p.href !== s.home).map((p) => <a key={p.label} href={p.href} className="mono">{p.label}</a>)}
-                </span>
-              )}
-            </span>
-          );
-          const cls = `eco-part eco-q${i} tone-${s.tone}`;
-          return onPick
-            ? <button key={s.key} type="button" className={cls} onClick={() => onPick(s)}>{body}<span className="eco-go mono">open {s.product.replace(/^The /, "the ").toLowerCase()} →</span></button>
-            : <div key={s.key} className={cls}><a className="eco-cover" href={s.home} aria-label={s.verb} />{body}</div>;
-        })}
+        {STEPS.slice(0, 4).map(part)}
         <Core compact={compact} onEnter={onEnter} />
+        {STEPS.length > 4 && <span className="eco-stem" aria-hidden="true" />}
       </div>
+      {STEPS.length > 4 && <div className="eco-under">{STEPS.slice(4).map((s, j) => part(s, 4 + j))}</div>}
       {!compact && (
         <p className="eco-foot mono">
           {HUB.pages.map((p) => <a key={p.key} href={p.href}>{p.label}</a>)}
@@ -109,6 +124,7 @@ export function FlywheelLoop() {
     { k: "Royalties", v: "every Trencher resale" },
     { k: "Coin Launcher", v: "0.3% of every V4 coin trade" },
     { k: "Inference", v: "$TRENCHERS paid for compute" },
+    { k: "Trenchers Credit", v: "25% of every loan fee" },
     { k: "$TRENCHERS", v: "its trading fees" },
   ];
   return (

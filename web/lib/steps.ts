@@ -6,16 +6,17 @@
  *   02 Think   the Inference Markets: any AI model for $TRENCHERS, and inference sent to a Trencher.
  *   03 Talk    the Playground and the holders' chat: it thinks out loud and talks.
  *   04 Launch  the coin launcher: Pons, Programmable, the V4 Builder, agent coins.
+ *   05 Borrow  Trenchers Credit: lend ETH, or stake $TRENCHERS for an ETH credit line for any ERC-8004 agent.
  */
 import { OPENSEA_URL, ROUTES } from "@/lib/constants";
 
-export type StepKey = "trade" | "talk" | "launch" | "think";
+export type StepKey = "trade" | "talk" | "launch" | "think" | "borrow";
 export type Where = StepKey | "hub";
 export type PageKey =
   | "home" | "docs" | "mint" | "collection" | "agents"
-  | "arena" | "playground" | "chat" | "launcher" | "builder" | "coins" | "inference";
+  | "arena" | "playground" | "chat" | "launcher" | "builder" | "coins" | "inference" | "credit";
 
-export type Tone = "green" | "violet" | "ice" | "amber";
+export type Tone = "green" | "violet" | "ice" | "amber" | "gold";
 export type Step = {
   key: StepKey; n: string; verb: string; name: string; tone: Tone;
   /** One line: what this part makes your Trencher do. */
@@ -87,10 +88,21 @@ export const STEPS: Step[] = [
       { key: "builder", label: "V4 Builder", href: ROUTES.builder, hint: "Uniswap v4 hook coins with your own rules" },
       { key: "coins", label: "Agent coins", href: ROUTES.coins, hint: "Coins launched by Trenchers" },
     ],
+  },
+  {
+    key: "borrow", n: "05", verb: "Make it borrow", name: "Borrow", tone: "gold", home: ROUTES.credit,
+    does: "borrows ETH and builds a credit record",
+    product: "Trenchers Credit", short: "ETH credit lines for AI agents",
+    what: "Stake $TRENCHERS to open an ETH credit line for any ERC-8004 agent, or lend ETH and earn from every loan. Every line is fully backed, so lenders never carry a default.",
+    open: true, who: "Open to everyone",
+    blurb: "Lend ETH and earn from every loan, or stake $TRENCHERS and give your agent a credit line. Repay on time and its credit score grows; a default burns the stake.",
+    pages: [
+      { key: "credit", label: "Trenchers Credit", href: ROUTES.credit, hint: "Lend, borrow and check any agent's record" },
+    ],
   }
 ];
 
-/** Which part a page belongs to. "My Trencher" is the centre: it is where all four are controlled. */
+/** Which part a page belongs to. "My Trencher" is the centre: it is where all five are controlled. */
 export const stepOf = (page: PageKey | string): Where =>
   HUB.pages.some((p) => p.key === page) || page === "home" || page === "docs" ? "hub" : STEPS.find((s) => s.pages.some((p) => p.key === page))?.key ?? "hub";
 export const step = (k: StepKey) => STEPS.find((s) => s.key === k)!;

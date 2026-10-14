@@ -14,6 +14,7 @@ import { MAINNET_LAUNCH as L, MAINNET_ROLES as R } from "@/lib/mainnet/roles";
 import { walletProvider } from "@/lib/chain";
 import { keccak256 } from "viem";
 import { useWallet } from "@/lib/wallet";
+import { CreditLaunch } from "@/components/launch/CreditLaunch";
 
 /**
  * Mainnet launch console (team only). Deploys every Trenchers contract from the Deployer wallet, in the
@@ -498,6 +499,7 @@ export function MainnetLaunch() {
           </>);
         })()}
       </section>
+      <CreditLaunch sendTx={sendTx} pub={pub} chain={chain} account={account ?? null} chainOk={chainOk} explorer={EXPLORER} errText={errText} />
     </div>
   );
 }
