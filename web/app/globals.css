@@ -2804,7 +2804,8 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .hh-what b { color: var(--fog); font-weight: 600; }
 .hh-cta { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
 .hh-mint { display: inline-flex; align-items: center; gap: 12px; height: 52px; padding: 0 26px; border-radius: 999px; background: var(--green); color: #04130A; font: 600 16px var(--sans); text-decoration: none; box-shadow: 0 10px 40px -10px rgba(57,255,136,.6); transition: transform .2s ease, box-shadow .2s ease; }
-.hh-mint span { font-size: 12px; opacity: .65; }
+.hh-mint-t { line-height: 1; }
+.hh-mint-p { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; background: rgba(4,19,10,.14); font-size: 12px; line-height: 1; }
 .hh-mint:hover { transform: translateY(-1px); box-shadow: 0 14px 50px -10px rgba(57,255,136,.8); }
 .hh-mint:focus-visible { outline: 2px dashed var(--green); outline-offset: 4px; }
 .hh-go { color: var(--tone); font: 500 14px var(--mono); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; transition: color .4s ease; }
@@ -2831,13 +2832,20 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 
 @media (max-width: 900px) {
   .hh { height: auto; }
-  .hh-shade { background: linear-gradient(180deg, rgba(11,13,12,.92) 0%, rgba(11,13,12,.7) 45%, rgba(11,13,12,.5) 70%, rgba(11,13,12,.95) 100%); }
-  .hh-in { grid-template-columns: 1fr; grid-template-rows: auto; padding-top: 36px; }
+  .hh-shade { background: linear-gradient(180deg, rgba(11,13,12,.94) 0%, rgba(11,13,12,.78) 50%, rgba(11,13,12,.55) 75%, rgba(11,13,12,.96) 100%); }
+  .hh-in { display: flex; flex-direction: column; padding-top: 30px; padding-bottom: 8px; }
+  .hh-copy { display: contents; }
+  .hh-k { order: 1; align-self: flex-start; }
+  .hh-title { order: 2; margin-top: 18px; }
   .hh-l2 { font-size: clamp(64px, 22vw, 120px); }
-  .hh-what { margin: 22px 0 26px; min-height: 0; font-size: 16px; }
-  .hh-fig { justify-self: center; width: min(76vw, 320px); margin: 44px 0 36px; }
-  .hh-bar { grid-template-columns: repeat(5, minmax(118px, 1fr)); overflow-x: auto; margin: 0 -24px; padding: 0 24px; scrollbar-width: none; }
-  .hh-bar::-webkit-scrollbar { display: none; }
-  .hh-tab { padding: 18px 12px 24px 0; }
-  .hh-tab b { font-size: 21px; }
+  .hh-bar { order: 3; margin: 22px 0 0; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid rgba(232,236,233,.12); border-bottom: 1px solid rgba(232,236,233,.12); }
+  .hh-tab { display: flex; justify-content: center; padding: 14px 0 13px; }
+  .hh-tab .hh-tn, .hh-tab .hh-tp { display: none; }
+  .hh-tab b { font-size: 15px; opacity: .55; letter-spacing: -.01em; }
+  .hh-prog { right: 6px; left: 6px; }
+  .hh-what { order: 4; margin: 20px 0 24px; min-height: 6.2em; font-size: 16px; }
+  .hh-cta { order: 5; flex-direction: column; align-items: stretch; gap: 16px; }
+  .hh-mint { justify-content: center; }
+  .hh-go { align-self: center; }
+  .hh-fig { order: 6; justify-self: auto; align-self: center; width: min(64vw, 260px); margin: 40px 0 34px; }
 }

@@ -388,7 +388,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
 
 /* ----------------------------------------------------------------------------------------------- check an agent */
 
-const SAMPLE_REPORT: Report = { enrolled: true, isBacker: false, defaulted: false, frozen: false, backer: 9001n, line: 5n * 10n ** 16n, available: 0n, principalOut: 5n * 10n ** 16n, activeLoans: 1, loansRepaid: 9, volumeRepaid: 31n * 10n ** 16n, feesPaid: 26n * 10n ** 14n, seasonedRepaid: 7, ethSecondsRepaid: 31n * 10n ** 16n * 9n * 86400n, enrolledAt: Date.now() / 1000 - 41 * 86400, score: 512 };
+const SAMPLE_REPORT: Report = { enrolled: true, isBacker: false, defaulted: false, frozen: false, backer: 9001n, line: 5n * 10n ** 16n, available: 0n, principalOut: 5n * 10n ** 16n, activeLoans: 1, loansRepaid: 9, volumeRepaid: 31n * 10n ** 16n, feesPaid: 26n * 10n ** 14n, seasonedRepaid: 7, ethSecondsRepaid: 31n * 10n ** 16n * 9n * 86400n, enrolledAt: Date.now() / 1000 - 41 * 86400, score: 747 };
 
 function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
   const [idTxt, setIdTxt] = useState("");

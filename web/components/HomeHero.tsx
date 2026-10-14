@@ -15,6 +15,8 @@ const HEROES: Record<string, number[]> = {
 };
 const TONE: Record<string, string> = { green: "57,255,136", amber: "255,176,32", violet: "183,156,255", ice: "110,200,255", gold: "242,211,107" };
 const verbOf = (v: string) => v.replace(/^Make it /i, "");
+/** The name shown here; the credit layer is called Agentic Credit on this screen. */
+const nameOf = (x: { key: string; product: string }) => (x.key === "borrow" ? "Agentic Credit" : x.product);
 const GLYPHS = "▓▒░#$%&@*+=";
 
 /** The wall of all 2,000, the torch and the wake-ups. */
@@ -179,10 +181,10 @@ export function HomeHero() {
             <span className="hh-l2"><Verb text={verbOf(s.verb)} /><span className="hh-dot">.</span></span>
             <span className="sr-only">Make it trade, think, talk, launch and borrow.</span>
           </h1>
-          <p className="hh-what" aria-live="polite"><b>{s.product}.</b> {s.what}</p>
+          <p className="hh-what" aria-live="polite"><b>{nameOf(s)}.</b> {s.what}</p>
           <div className="hh-cta">
-            <a href={ROUTES.mint} className="hh-mint">Mint a Trencher <span className="mono">{LIST_PRICE_ETH} ETH</span></a>
-            <a href={s.home} className="hh-go">Open {s.product.replace(/^The /, "the ")}</a>
+            <a href={ROUTES.mint} className="hh-mint"><span className="hh-mint-t">Mint a Trencher</span><span className="hh-mint-p mono">{LIST_PRICE_ETH} ETH</span></a>
+            <a href={s.home} className="hh-go">Open {nameOf(s).replace(/^The /, "the ")}</a>
           </div>
         </div>
         <figure className="hh-fig">
@@ -196,7 +198,7 @@ export function HomeHero() {
               <span className="hh-prog" aria-hidden="true"><i key={i === on ? `${turn}-${paused}` : "off"} /></span>
               <span className="hh-tn mono">{x.n}</span>
               <b>{verbOf(x.verb)}</b>
-              <span className="hh-tp">{x.product}</span>
+              <span className="hh-tp">{nameOf(x)}</span>
             </button>
           ))}
         </nav>
