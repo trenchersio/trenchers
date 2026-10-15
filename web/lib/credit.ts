@@ -15,12 +15,13 @@ import { chain, TRENCHERS_TOKEN } from "@/lib/constants";
 import art from "@/lib/credit/artifacts.json";
 
 /** Mainnet addresses, filled in after the launch page deploys Trenchers Credit. */
+/** The live deployment on Robinhood Chain. (NEXT_PUBLIC_CREDIT_* can point a test build at another deployment.) */
 export const CREDIT_MAINNET = {
-  pool: "0xde33e4d977d56ba7133e8dae7b30844183c46570" as Address | "",
-  record: "0xf2f4d3611923828b8c65d41f53c285b3d1c90314" as Address | "",
-  lines: "0xa39651667bae1809f903e9a22b8f42c7d88e7c2e" as Address | "",
-  timelock: "0x4fec868c7848bc6dfe00a9556e710240e7344a79" as Address | "",
-  block: 89420119,
+  pool: (process.env.NEXT_PUBLIC_CREDIT_POOL || "0xde33e4d977d56ba7133e8dae7b30844183c46570") as Address | "",
+  record: (process.env.NEXT_PUBLIC_CREDIT_RECORD || "0xf2f4d3611923828b8c65d41f53c285b3d1c90314") as Address | "",
+  lines: (process.env.NEXT_PUBLIC_CREDIT_LINES || "0xa39651667bae1809f903e9a22b8f42c7d88e7c2e") as Address | "",
+  timelock: (process.env.NEXT_PUBLIC_CREDIT_TIMELOCK || "0x4fec868c7848bc6dfe00a9556e710240e7344a79") as Address | "",
+  block: Number(process.env.NEXT_PUBLIC_CREDIT_BLOCK || 89420119),
 };
 
 /** What the launch page deploys with. The owner of every setting is a 48-hour timelock run by the team Safe. */
@@ -63,7 +64,50 @@ type Art = { abi: Abi; bytecode: `0x${string}`; linkReferences: Record<string, R
 export const CREDIT_ART = art as unknown as Record<"TrenchersCreditPool" | "CreditCalls" | "CreditRecord" | "TrenchersStakeLines" | "CreditTimelock", Art>;
 export const POOL_ABI = CREDIT_ART.TrenchersCreditPool.abi;
 export const RECORD_ABI = CREDIT_ART.CreditRecord.abi;
-export const LINES_ABI = CREDIT_ART.TrenchersStakeLines.abi;
+/** The stake lines' ABI plus the pool's errors, so a revert that comes up from the pool can be named. */
+export const LINES_ABI = [
+  ...CREDIT_ART.TrenchersStakeLines.abi,
+  ...(CREDIT_ART.TrenchersCreditPool.abi as unknown as { type: string; name?: string }[]).filter((x) => x.type === "error" && !(CREDIT_ART.TrenchersStakeLines.abi as unknown as { type: string; name?: string }[]).some((y) => y.type === "error" && y.name === x.name)),
+] as Abi;
+
+/** Plain words for the reverts people can actually run into. */
+const CREDIT_REASONS: Record<string, string> = {
+  ConsentExpired: "Your signed consent expired. Try again and confirm a little faster.",
+  BadConsent: "The signed consent didn't match. Try again.",
+  InsufficientBacking: "Not enough free backing behind the lines right now. Try a smaller amount, or back the lines.",
+  InsufficientLiquidity: "Not enough ETH free in the pool right now. Try a smaller amount.",
+  InsufficientLine: "That's more than the line has free.",
+  WeeklyCapReached: "This week's new lines are used up. Try again next week.",
+  LineTooSmall: "Stake a bit more: the line would be below the smallest loan.",
+  NotAgentOwner: "That agent isn't owned by the connected wallet.",
+  NotOwnerOf: "That agent isn't owned by the connected wallet.",
+  HasStake: "This agent already has a line here (or had one burnt).",
+  StakeBurnt: "This agent's stake was burnt after a default.",
+  NoStake: "There is no stake for this agent.",
+  NotStaker: "Only the wallet that staked can do this.",
+  LoanOpen: "Repay the open loan first.",
+  IsPaused: "New lines and loans are paused right now. Repaying and leaving still work.",
+  Paused: "New deposits, lines and loans are paused right now. Repaying and withdrawing still work.",
+  IsFrozen: "This line is frozen: no new loans on it.",
+  BorrowBlockedByBacker: "This line can't borrow right now (check the term, and that the agent is still owned by the staker).",
+  TermOutOfRange: "Pick a term the line allows.",
+  LoanSizeOutOfRange: "That loan size is outside the limits.",
+  AgentDefaulted: "This agent has defaulted and can't borrow.",
+  OwnerDefaulted: "This wallet has a default on record and can't borrow.",
+  NotReady: "Your 7 days' notice isn't up yet.",
+  NoShares: "You don't have that many shares (or nothing asked to leave).",
+  BelowMinBacking: "The first backing must be at least 0.01 ETH.",
+  NothingToHarvest: "There are no fees waiting right now.",
+  SlippageShares: "The share price moved. Try again.",
+  UtilizationTooHigh: "Too much of the pool is lent out right now.",
+  ZeroAmount: "Enter an amount.",
+};
+export function creditReason(e: unknown, fallback: (e: unknown) => string): string {
+  const t = String((e as { shortMessage?: string; message?: string })?.shortMessage ?? (e as Error)?.message ?? e) + " " + String((e as Error)?.message ?? "");
+  for (const [k, v] of Object.entries(CREDIT_REASONS)) if (new RegExp(`\\b${k}\\b`).test(t)) return v;
+  if (/reverted with the following signature/i.test(t)) return "The transaction would fail. Refresh the page and try again.";
+  return fallback(e);
+}
 export const ERC20_ABI = parseAbi([
   "function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)",
   "function approve(address,uint256) returns (bool)", "function symbol() view returns (string)",
@@ -89,7 +133,7 @@ export type Params = { minLoan: bigint; maxLoan: bigint; minTerm: number; maxTer
 export type LinesInfo = { tokensPerEth: bigint; maxLine: bigint; maxTerm: number; weeklyRoom: bigint; backing: bigint; backingUsed: bigint; backingFree: bigint; feesWaiting: bigint; backingValue: bigint; totalShares: bigint; exitDelay: number; totalStaked: bigint; totalBurnt: bigint; linesOpened: number; backerId: bigint; paused: boolean };
 export type LoanRow = { id: number; agentId: bigint; principal: bigint; fee: bigint; issuedAt: number; dueAt: number; defaultableAt: number; status: "active" | "repaid" | "defaulted"; backerId: bigint };
 export type Report = { enrolled: boolean; isBacker: boolean; defaulted: boolean; frozen: boolean; backer: bigint; line: bigint; available: bigint; principalOut: bigint; activeLoans: number; loansRepaid: number; volumeRepaid: bigint; feesPaid: bigint; seasonedRepaid: number; ethSecondsRepaid: bigint; enrolledAt: number; score: number };
-export type Overview = { stats: PoolStats; params: Params; lines: LinesInfo; recent: LoanRow[]; preview: boolean };
+export type Overview = { stats: PoolStats; params: Params; lines: LinesInfo; recent: LoanRow[]; preview: boolean; loading?: boolean };
 
 const STATUS = ["none", "active", "repaid", "defaulted"] as const;
 const n = (x: unknown) => Number(x as bigint);
@@ -110,6 +154,19 @@ export const PREVIEW: Overview = {
     { id: 59, agentId: 8812n, principal: E(0.04), fee: E(0.000373), issuedAt: Date.now() / 1000 - 22 * 86400, dueAt: Date.now() / 1000 - 8 * 86400, defaultableAt: 0, status: "repaid", backerId: 9001n },
   ],
 };
+
+/** Shown while the live figures load: no sample numbers, just empty values (the terms are the real launch terms). */
+const zeroed = <T extends Record<string, unknown>>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? 0n : typeof v === "number" ? 0 : typeof v === "boolean" ? false : v])) as T;
+export const LOADING: Overview = {
+  preview: false,
+  loading: true,
+  stats: zeroed(PREVIEW.stats),
+  params: PREVIEW.params,
+  lines: { ...zeroed(PREVIEW.lines), maxLine: PREVIEW.lines.maxLine, maxTerm: PREVIEW.lines.maxTerm },
+  recent: [],
+};
+/** Credit is deployed on mainnet: the site is live, never a preview. */
+export const CREDIT_IS_LIVE = !!(CREDIT_MAINNET.pool && CREDIT_MAINNET.record && CREDIT_MAINNET.lines);
 
 /** A sample backer for the preview: backing worth 0.25 ETH, a third of it asked to leave, 2 days and 5 hours to go. */
 export const PREVIEW_BACKER: Backer = (() => {

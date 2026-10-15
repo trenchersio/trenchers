@@ -8,7 +8,7 @@ import { reader, reason } from "@/lib/chain";
 import { ROUTES, TRENCHERS_TOKEN } from "@/lib/constants";
 import { VideoButton } from "@/components/docs/VideoButton";
 import {
-  PREVIEW, PREVIEW_BACKER, creditAddrs, readOverview, readReport, readLoansOf, readPosition, readLender, readBacker, ownerOfAgent, lineFor, feeFor,
+  PREVIEW, PREVIEW_BACKER, LOADING, CREDIT_IS_LIVE, creditReason, creditAddrs, readOverview, readReport, readLoansOf, readPosition, readLender, readBacker, ownerOfAgent, lineFor, feeFor,
   backingSharesFor, sharesForFraction, lend, withdraw, openLine, addStake, closeLine, borrow, repay, harvest, sweepReserve,
   backLines, requestExit, cancelExit, exitBacking, ERC20_ABI, eth, tok, days,
   type CreditAddrs, type Overview, type Report, type LoanRow, type Position, type Lender, type Backer,
@@ -29,9 +29,9 @@ function Stat({ k, v, sub, tone }: { k: string; v: string; sub?: string; tone?: 
   return <div className={`cr-stat${tone ? ` t-${tone}` : ""}`}><span className="mono">{k}</span><b>{v}</b>{sub && <em className="mono">{sub}</em>}</div>;
 }
 
-function Score({ v, size = 168 }: { v: number; size?: number }) {
+function Score({ v, size = 168, known = false, defaulted = false }: { v: number; size?: number; known?: boolean; defaulted?: boolean }) {
   const r = 70, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, v / 1000));
-  const tier = v >= 700 ? "Strong" : v >= 400 ? "Trusted" : v >= 150 ? "Building" : v > 0 ? "New" : "No record";
+  const tier = defaulted ? "Defaulted" : v >= 700 ? "Strong" : v >= 400 ? "Trusted" : v >= 150 ? "Building" : v > 0 || known ? "New" : "No record";
   return (
     <div className="cr-score" style={{ width: size, height: size }}>
       <svg viewBox="0 0 160 160" aria-hidden="true">
@@ -67,23 +67,23 @@ export function Credit() {
   useEffect(() => { const t = setInterval(reload, 30_000); return () => clearInterval(t); }, [reload]);
 
   const live = !!addrs && !!ov && !ov.preview;
-  const o = ov ?? PREVIEW;
+  const o = ov ?? (addrs || CREDIT_IS_LIVE ? LOADING : PREVIEW);
 
   return (
     <main id="top" className="cr">
-      {!addrs && (
+      {!addrs && !CREDIT_IS_LIVE && (
         <div className="cr-preview mono" role="status">
           <i aria-hidden="true" />Launching soon. This is a preview of Trenchers Credit with sample figures; nothing here moves money yet.
         </div>
       )}
-      {addrs && failed && <div className="cr-preview mono" role="status"><i aria-hidden="true" />Can&apos;t reach Robinhood Chain right now. Showing the last figures seen.</div>}
+      {addrs && failed && <div className="cr-preview mono" role="status"><i aria-hidden="true" />Can&apos;t reach Robinhood Chain right now. {ov ? "Showing the last figures seen." : "Retrying every 30 seconds."}</div>}
 
       <Hero o={o} />
       <How o={o} />
 
       <div className="cr-act">
         <Lend addrs={live ? addrs : null} me={me} o={o} onDone={reload} />
-        <BackPanel addrs={live ? addrs : null} me={me} o={o} sample={!addrs} onDone={reload} />
+        <BackPanel addrs={live ? addrs : null} me={me} o={o} sample={!addrs && !CREDIT_IS_LIVE} onDone={reload} />
         <BorrowPanel addrs={live ? addrs : null} me={me} o={o} onDone={reload} />
       </div>
 
@@ -125,7 +125,7 @@ function Hero({ o }: { o: Overview }) {
         <ul className="cr-who mono" aria-label="Who can use it"><li><i className="h" />Humans</li><li><i className="a" />AI agents and bots</li><li><i className="t" />Trenchers</li></ul>
       </div>
       <div className="cr-pool" aria-label="The pool right now">
-        <div className="cr-pool-h"><span className="mono">The pool{o.preview ? " · sample" : " · live"}</span><b>{eth(s.totalAssets, 3)} ETH</b></div>
+        <div className="cr-pool-h"><span className="mono">The pool{o.preview ? " · sample" : o.loading ? " · loading" : " · live"}</span><b>{eth(s.totalAssets, 3)} ETH</b></div>
         <div className="cr-meter" aria-label={`${util}% lent out`}><i style={{ width: `${Math.min(100, util)}%` }} /></div>
         <p className="cr-meter-l mono"><span><i className="d" />Lent out {eth(s.lent, 3)} ETH</span><span><i className="f" />Free {eth(s.liquidity, 3)} ETH</span></p>
         <div className="cr-stats">
@@ -219,7 +219,7 @@ function Lend({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: Address
   const sharesFor = o.stats.sharePrice > 0n ? (wei * 10n ** 18n) / o.stats.sharePrice : 0n;
   const run = async (what: string, f: () => Promise<unknown>, done: string) => {
     setMsg(null); setBusy({ what, phase: "sign" });
-    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: reason(e) }); }
+    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: creditReason(e, reason) }); }
     setBusy(null);
   };
 
@@ -236,7 +236,7 @@ function Lend({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: Address
         <div><dt>One share is worth</dt><dd className="mono">{eth(o.stats.sharePrice, 6)} ETH</dd></div>
         <div><dt>Leave early</dt><dd className="mono">0.5% within 7 days, then free</dd></div>
       </dl>
-      {!addrs ? <button type="button" className="nav-mint cr-go" disabled>Opens at launch</button>
+      {!addrs ? <button type="button" className="nav-mint cr-go" disabled>{CREDIT_IS_LIVE ? "Loading…" : "Opens at launch"}</button>
         : !me ? <button type="button" className="nav-mint cr-go" onClick={w.openModal}>Connect a wallet to lend</button>
         : <button type="button" className="nav-mint cr-go" disabled={!!busy || wei === 0n} onClick={() => run("lend", () => lend(addrs, me, wei, (p) => setBusy({ what: "lend", phase: p })), `Lent ${amt} ETH. Your shares are in.`)}>{busy?.what === "lend" ? PHASE[busy.phase] : `Lend ${amt || 0} ETH`}</button>}
       {pos && pos.shares > 0n && (
@@ -294,7 +294,7 @@ function BackPanel({ addrs, me, o, sample, onDone }: { addrs: CreditAddrs | null
 
   const run = async (what: string, f: () => Promise<unknown>, done: string) => {
     setMsg(null); setBusy({ what, phase: "sign" });
-    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: reason(e) }); }
+    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: creditReason(e, reason) }); }
     setBusy(null);
   };
   const ph = (what: string) => (p: string) => setBusy({ what, phase: p });
@@ -363,7 +363,7 @@ function BackPanel({ addrs, me, o, sample, onDone }: { addrs: CreditAddrs | null
         <div><dt>1,000 shares are worth</dt><dd className="mono">{first ? "–" : `${eth(shareWorth * 1000n, 6)} ETH`}</dd></div>
         <div><dt>Leaving</dt><dd className="mono">Ask, then wait {days(L.exitDelay)}</dd></div>
       </dl>
-      {!addrs ? <button type="button" className="nav-mint cr-go cr-go-violet" disabled>Opens at launch</button>
+      {!addrs ? <button type="button" className="nav-mint cr-go cr-go-violet" disabled>{CREDIT_IS_LIVE ? "Loading…" : "Opens at launch"}</button>
         : !me ? <button type="button" className="nav-mint cr-go cr-go-violet" onClick={w.openModal}>Connect a wallet to back the lines</button>
         : <button type="button" className="nav-mint cr-go cr-go-violet" disabled={!!busy || wei === 0n || tooSmall} onClick={() => run("back", () => backLines(addrs, me, wei, ph("back")), `Backed the lines with ${amt} ETH. Your shares are in.`)}>{btn("back", tooSmall ? "The first backing must be at least 0.01 ETH" : `Back the lines with ${amt || 0} ETH`)}</button>}
 
@@ -420,7 +420,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
 
   const run = async (what: string, f: () => Promise<unknown>, done: string) => {
     setMsg(null); setBusy({ what, phase: "sign" });
-    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: reason(e) }); }
+    try { await f(); setMsg({ ok: true, t: done }); onDone(); } catch (e) { setMsg({ ok: false, t: creditReason(e, reason) }); }
     setBusy(null);
   };
   const ph = (what: string) => (p: string) => setBusy({ what, phase: p });
@@ -473,7 +473,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
           </>
         )}
       </div>
-      {!hasStake && (!addrs ? <button type="button" className="nav-mint cr-go cr-go-gold" disabled>Opens at launch</button>
+      {!hasStake && (!addrs ? <button type="button" className="nav-mint cr-go cr-go-gold" disabled>{CREDIT_IS_LIVE ? "Loading…" : "Opens at launch"}</button>
         : !me ? <button type="button" className="nav-mint cr-go cr-go-gold" onClick={w.openModal}>Connect a wallet</button>
         : <button type="button" className="nav-mint cr-go cr-go-gold" disabled={!!busy || !mine || lineNew < P.minLoan} onClick={() => agentId !== null && run("open", () => openLine(addrs, me, agentId, stakeWei, L.backerId, ph("open")), `Line of ${eth(lineNew)} ETH open for agent #${idTxt}.`)}>{btn("open", lineNew < P.minLoan ? `Stake more: the smallest line is ${eth(P.minLoan)} ETH` : `Stake and open a ${eth(lineNew)} ETH line`)}</button>)}
       {!hasStake && <p className="cr-small mono">Three steps in your wallet: approve $TRENCHERS, sign your consent (free, no gas), open the line.</p>}
@@ -525,7 +525,8 @@ function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
   const [rep, setRep] = useState<Report | null>(null);
   const [loans, setLoans] = useState<LoanRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const shown = addrs ? rep : SAMPLE_REPORT;
+  const demo = !addrs && !CREDIT_IS_LIVE; // only before launch: a sample agent
+  const shown = addrs ? rep : demo ? SAMPLE_REPORT : null;
   const sampleLoans = useMemo(() => PREVIEW.recent.filter((l) => l.agentId === 8812n), []);
 
   const look = () => {
@@ -547,14 +548,14 @@ function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
       </div>
       <div className="cr-rec">
         <div className="cr-rec-q">
-          <span className="cr-in"><input inputMode="numeric" placeholder={addrs ? "Agent id" : "8812 (sample)"} value={idTxt} onChange={(e) => setIdTxt(e.target.value.replace(/[^\d]/g, ""))} onKeyDown={(e) => e.key === "Enter" && look()} aria-label="Agent id to check" /><b className="mono">#</b></span>
+          <span className="cr-in"><input inputMode="numeric" placeholder={demo ? "8812 (sample)" : "Agent id"} value={idTxt} onChange={(e) => setIdTxt(e.target.value.replace(/[^\d]/g, ""))} onKeyDown={(e) => e.key === "Enter" && look()} aria-label="Agent id to check" /><b className="mono">#</b></span>
           <button type="button" className="tbtn" onClick={look} disabled={!addrs}>Check</button>
           {err && <Notice>{err}</Notice>}
-          {!addrs && <p className="cr-small mono">Preview: a sample agent&apos;s record.</p>}
+          {demo && <p className="cr-small mono">Preview: a sample agent&apos;s record.</p>}
         </div>
         {shown && (
           <div className="cr-rec-card">
-            <Score v={shown.defaulted ? 0 : shown.score} />
+            <Score v={shown.defaulted ? 0 : shown.score} known={shown.enrolled} defaulted={shown.defaulted} />
             <div className="cr-rec-facts">
               <p className="cr-rec-title"><b>Agent #{addrs ? idTxt : "8812"}</b>{shown.defaulted ? <span className="cr-tag red mono">Defaulted</span> : shown.activeLoans ? <span className="cr-tag mono">Loan open</span> : shown.enrolled ? <span className="cr-tag ok mono">Clean record</span> : <span className="cr-tag mono">No record yet</span>}</p>
               <dl className="cr-grid">
@@ -570,9 +571,9 @@ function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
             </div>
           </div>
         )}
-        {(addrs ? loans : sampleLoans).length > 0 && (
+        {(addrs ? loans : demo ? sampleLoans : []).length > 0 && (
           <ul className="cr-rec-loans">
-            {(addrs ? loans : sampleLoans).map((l) => (
+            {(addrs ? loans : demo ? sampleLoans : []).map((l) => (
               <li key={l.id} className={l.status}><span className="mono">#{l.id}</span><b>{eth(l.principal)} ETH</b><em className="mono" suppressHydrationWarning>{l.status === "active" ? left(l.dueAt) : l.status}</em></li>
             ))}
           </ul>
