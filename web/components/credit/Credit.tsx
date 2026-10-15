@@ -230,7 +230,7 @@ function Lend({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: Address
         <div className="cr-mine">
           <span className="mono cr-mine-k">Your lending</span>
           <div className="cr-mine-row"><b>{eth(pos.value, 5)} ETH</b><span className="mono">{tok(pos.shares)} shares</span></div>
-          <p className="mono">{pos.unlocksAt * 1000 > Date.now() ? `Free to take out from ${when(pos.unlocksAt)} (0.5% stays before that)` : "Free to take out, no fee"}</p>
+          <p className="mono" suppressHydrationWarning>{pos.unlocksAt * 1000 > Date.now() ? `Free to take out from ${when(pos.unlocksAt)} (0.5% stays before that)` : "Free to take out, no fee"}</p>
           <button type="button" className="tbtn" disabled={!!busy} onClick={() => addrs && me && run("withdraw", () => withdraw(addrs, me, pos.shares, (p) => setBusy({ what: "withdraw", phase: p })), "Withdrawn to your wallet.")}>{busy?.what === "withdraw" ? PHASE[busy.phase] : "Take it all out"}</button>
         </div>
       )}
@@ -357,7 +357,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
         </div>
         <dl className="cr-dl">
           <div><dt>Fee</dt><dd className="mono">{eth(fee, 6)} ETH ({pct(P.feeBps)} per 30 days)</dd></div>
-          <div><dt>You repay</dt><dd className="mono">{eth(wei + fee, 6)} ETH by {when(Date.now() / 1000 + term * 86400)}</dd></div>
+          <div><dt>You repay</dt><dd className="mono" suppressHydrationWarning>{eth(wei + fee, 6)} ETH by {when(Date.now() / 1000 + term * 86400)}</dd></div>
           <div><dt>Counts toward the score</dt><dd className="mono">{term * 86400 >= P.minScoreTerm ? "Yes, held 7 days or more" : "Repays fine, but only loans held 7+ days build the score"}</dd></div>
         </dl>
         <label className="cr-field cr-to"><span className="mono">Send the ETH to</span><input className="mono" placeholder={me ? `${short(me)} (you)` : "0x…"} value={to} onChange={(e) => setTo(e.target.value.trim())} aria-label="Recipient" /></label>
@@ -373,7 +373,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
           <ul className="cr-open">
             {active.map((l) => (
               <li key={l.id}>
-                <span><b>{eth(l.principal + l.fee, 6)} ETH</b><em className="mono">loan #{l.id} · {left(l.dueAt)}</em></span>
+                <span><b>{eth(l.principal + l.fee, 6)} ETH</b><em className="mono" suppressHydrationWarning>loan #{l.id} · {left(l.dueAt)}</em></span>
                 {addrs && me ? <button type="button" className="tbtn" disabled={!!busy} onClick={() => run(`repay${l.id}`, () => repay(addrs, me, l, ph(`repay${l.id}`)), `Loan #${l.id} repaid.`)}>{btn(`repay${l.id}`, "Repay")}</button> : null}
               </li>
             ))}
@@ -435,7 +435,7 @@ function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
                 <div><dt>Fees paid</dt><dd>{eth(shown.feesPaid, 5)}</dd></div>
                 <div><dt>Line</dt><dd>{eth(shown.line)} ETH</dd></div>
                 <div><dt>Drawn now</dt><dd>{eth(shown.principalOut)} ETH</dd></div>
-                <div><dt>On record since</dt><dd>{shown.enrolledAt ? new Date(shown.enrolledAt * 1000).toLocaleDateString() : "–"}</dd></div>
+                <div><dt>On record since</dt><dd suppressHydrationWarning>{shown.enrolledAt ? new Date(shown.enrolledAt * 1000).toLocaleDateString() : "–"}</dd></div>
               </dl>
             </div>
           </div>
@@ -443,7 +443,7 @@ function RecordPanel({ addrs }: { addrs: CreditAddrs | null }) {
         {(addrs ? loans : sampleLoans).length > 0 && (
           <ul className="cr-rec-loans">
             {(addrs ? loans : sampleLoans).map((l) => (
-              <li key={l.id} className={l.status}><span className="mono">#{l.id}</span><b>{eth(l.principal)} ETH</b><em className="mono">{l.status === "active" ? left(l.dueAt) : l.status}</em></li>
+              <li key={l.id} className={l.status}><span className="mono">#{l.id}</span><b>{eth(l.principal)} ETH</b><em className="mono" suppressHydrationWarning>{l.status === "active" ? left(l.dueAt) : l.status}</em></li>
             ))}
           </ul>
         )}
@@ -477,8 +477,8 @@ function Loans({ o, addrs, me, onDone }: { o: Overview; addrs: CreditAddrs | nul
               <span className="mono">#{l.agentId.toString()}</span>
               <span><b>{eth(l.principal)}</b> ETH</span>
               <span className="mono">{eth(l.fee, 6)}</span>
-              <span className="mono">{new Date(l.issuedAt * 1000).toLocaleDateString()}</span>
-              <span className={`cr-st mono ${l.status}`}>{l.status === "active" ? left(l.dueAt) : l.status}</span>
+              <span className="mono" suppressHydrationWarning>{new Date(l.issuedAt * 1000).toLocaleDateString()}</span>
+              <span className={`cr-st mono ${l.status}`} suppressHydrationWarning>{l.status === "active" ? left(l.dueAt) : l.status}</span>
             </div>
           ))}
         </div>
