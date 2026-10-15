@@ -2239,7 +2239,8 @@ html.menu-open, html.menu-open body { overflow: hidden; }
 .doc-videos-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
 .video-btn.video-btn-sm { margin: 0; padding: 8px 12px 8px 8px; gap: 10px; border-color: var(--line); background: var(--panel); width: 100%; }
 .video-btn.video-btn-sm:hover { border-color: rgba(57,255,136,.5); }
-.video-btn-sm .video-play { transform: scale(.72); }
+.video-btn-sm .video-play { width: 32px; height: 32px; box-shadow: 0 0 16px rgba(57,255,136,.3); }
+.video-btn-sm .video-play::after { left: 12px; top: 9px; border-width: 7px 0 7px 11px; }
 .video-btn-sm b { font-size: 13px; }
 .docs .video-btn + h2, .docs .doc-videos + h2 { margin-top: 32px; }
 .nd-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: 6px; vertical-align: 2px; box-shadow: 0 0 8px rgba(57,255,136,.8); }
@@ -2803,8 +2804,8 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .hh-what { margin: 26px 0 30px; max-width: 31em; min-height: 4.65em; color: var(--quiet); font-size: 17px; line-height: 1.55; }
 .hh-what b { color: var(--fog); font-weight: 600; }
 .hh-cta { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.hh-mint { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 24px; border-radius: 999px; background: var(--green); color: #04130A; font: 700 14px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; box-shadow: 0 8px 30px -10px rgba(57,255,136,.6); transition: transform .2s ease, box-shadow .2s ease; }
-.hh-mint:hover { transform: translateY(-1px); box-shadow: 0 14px 50px -10px rgba(57,255,136,.8); }
+.hh-mint { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 22px; border-radius: 7px; background: var(--green); color: #0B0D0C; font: 600 14px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+.hh-mint:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(57,255,136,.35); }
 .hh-mint:focus-visible { outline: 2px dashed var(--green); outline-offset: 4px; }
 .hh-go { color: var(--tone); font: 500 14px var(--mono); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; transition: color .4s ease; }
 .hh-go:focus-visible { outline: 2px dashed var(--tone); outline-offset: 4px; }
@@ -2845,3 +2846,12 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
   .hh-cta { order: 5; gap: 20px; }
   .hh-fig { order: 6; justify-self: auto; align-self: center; width: min(64vw, 260px); margin: 40px 0 34px; }
 }
+
+/* Credit is not open yet: small "coming soon" marks */
+.hh-soon { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent); color: var(--gold); font-size: 11px; }
+.hh-soon-s { font-style: normal; color: var(--gold); }
+.oa-soon { margin-left: 8px; padding: 2px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent); color: var(--gold); font-style: normal; font-size: 10px; }
+
+/* Green buttons: no white browser focus ring (it showed after the wallet window closed); keyboard focus gets a green glow */
+.nav-mint:focus, .hh-mint:focus, .ibtn:focus, .ibuy-go:focus, .tn-primary:focus, .mint-go:focus { outline: none; }
+.nav-mint:focus-visible, .hh-mint:focus-visible, .ibtn:focus-visible, .ibuy-go:focus-visible, .tn-primary:focus-visible, .mint-go:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(57,255,136,.35); }

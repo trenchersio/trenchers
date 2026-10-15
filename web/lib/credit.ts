@@ -3,7 +3,9 @@
  *
  *   Pool          TrenchersCreditPool: lenders' ETH, lines, loans, fees, defaults
  *   Record        CreditRecord: an agent's record and score, the pool's figures
- *   Stake lines   TrenchersStakeLines: stake $TRENCHERS, get an ETH line (the backer behind every line it opens)
+ *   Stake lines   TrenchersStakeLines: stake $TRENCHERS, get an ETH line. Its ETH backing is a shared vault: anyone
+ *                 can back the lines for shares, earn the backers' 25% of fees, carry defaults pro rata, and leave
+ *                 with a 7-day notice. Nobody else, the owner included, can move that backing.
  *
  * Until the contracts are deployed (addresses empty) the page shows a preview with sample figures.
  */
@@ -84,7 +86,7 @@ export function linkedPoolBytecode(calls: Address): `0x${string}` {
 
 export type PoolStats = { totalAssets: bigint; liquidity: bigint; lent: bigint; lendersEarned: bigint; sharePrice: bigint; loans: number; toBuyback: bigint; reserve: bigint };
 export type Params = { minLoan: bigint; maxLoan: bigint; minTerm: number; maxTerm: number; grace: number; minScoreTerm: number; feeBps: number; backerFeeBps: number; reserveFeeBps: number };
-export type LinesInfo = { tokensPerEth: bigint; maxLine: bigint; maxTerm: number; weeklyRoom: bigint; backing: bigint; backingUsed: bigint; backingFree: bigint; feesWaiting: bigint; totalStaked: bigint; totalBurnt: bigint; linesOpened: number; backerId: bigint; paused: boolean };
+export type LinesInfo = { tokensPerEth: bigint; maxLine: bigint; maxTerm: number; weeklyRoom: bigint; backing: bigint; backingUsed: bigint; backingFree: bigint; feesWaiting: bigint; backingValue: bigint; totalShares: bigint; exitDelay: number; totalStaked: bigint; totalBurnt: bigint; linesOpened: number; backerId: bigint; paused: boolean };
 export type LoanRow = { id: number; agentId: bigint; principal: bigint; fee: bigint; issuedAt: number; dueAt: number; defaultableAt: number; status: "active" | "repaid" | "defaulted"; backerId: bigint };
 export type Report = { enrolled: boolean; isBacker: boolean; defaulted: boolean; frozen: boolean; backer: bigint; line: bigint; available: bigint; principalOut: bigint; activeLoans: number; loansRepaid: number; volumeRepaid: bigint; feesPaid: bigint; seasonedRepaid: number; ethSecondsRepaid: bigint; enrolledAt: number; score: number };
 export type Overview = { stats: PoolStats; params: Params; lines: LinesInfo; recent: LoanRow[]; preview: boolean };
@@ -98,7 +100,7 @@ export const PREVIEW: Overview = {
   preview: true,
   stats: { totalAssets: E(12.4), liquidity: E(9.65), lent: E(2.75), lendersEarned: E(0.0412), sharePrice: E(1.0033), loans: 64, toBuyback: E(0.0206), reserve: E(0.006) },
   params: { minLoan: E(0.001), maxLoan: E(0.25), minTerm: 86400, maxTerm: 30 * 86400, grace: 3 * 86400, minScoreTerm: 7 * 86400, feeBps: 200, backerFeeBps: 2500, reserveFeeBps: 2500 },
-  lines: { tokensPerEth: E(2_000_000), maxLine: E(0.05), maxTerm: 14 * 86400, weeklyRoom: E(0.62), backing: E(3.2), backingUsed: E(1.38), backingFree: E(1.82), feesWaiting: E(0.0061), totalStaked: E(2_760_000), totalBurnt: E(40_000), linesOpened: 31, backerId: 9001n, paused: false },
+  lines: { tokensPerEth: E(2_000_000), maxLine: E(0.05), maxTerm: 14 * 86400, weeklyRoom: E(0.62), backing: E(3.2), backingUsed: E(1.38), backingFree: E(1.82), feesWaiting: E(0.0061), backingValue: E(3.2061), totalShares: E(3.18) * 1000n, exitDelay: 7 * 86400, totalStaked: E(2_760_000), totalBurnt: E(40_000), linesOpened: 31, backerId: 9001n, paused: false },
   recent: [
     { id: 64, agentId: 8812n, principal: E(0.05), fee: E(0.000466), issuedAt: Date.now() / 1000 - 3600, dueAt: Date.now() / 1000 + 13 * 86400, defaultableAt: 0, status: "active", backerId: 9001n },
     { id: 63, agentId: 7710n, principal: E(0.02), fee: E(0.000093), issuedAt: Date.now() / 1000 - 4 * 3600, dueAt: Date.now() / 1000 + 6 * 86400, defaultableAt: 0, status: "active", backerId: 9001n },
@@ -108,6 +110,12 @@ export const PREVIEW: Overview = {
     { id: 59, agentId: 8812n, principal: E(0.04), fee: E(0.000373), issuedAt: Date.now() / 1000 - 22 * 86400, dueAt: Date.now() / 1000 - 8 * 86400, defaultableAt: 0, status: "repaid", backerId: 9001n },
   ],
 };
+
+/** A sample backer for the preview: backing worth 0.25 ETH, a third of it asked to leave, 2 days and 5 hours to go. */
+export const PREVIEW_BACKER: Backer = (() => {
+  const shares = E(0.248) * 1000n, value = (PREVIEW.lines.backingValue * shares) / PREVIEW.lines.totalShares;
+  return { shares, value, exitShares: shares / 3n, exitValue: value / 3n, exitReadyAt: Math.floor(Date.now() / 1000) + 2 * 86400 + 5 * 3600, exitNow: shares / 3n };
+})();
 
 export async function readOverview(a: CreditAddrs): Promise<Overview> {
   const c = reader();
@@ -132,11 +140,11 @@ export async function readLoan(a: CreditAddrs, id: number): Promise<LoanRow> {
 async function readLines(a: CreditAddrs): Promise<LinesInfo> {
   const c = reader();
   const r = (fn: string) => c.readContract({ address: a.lines, abi: LINES_ABI, functionName: fn }) as Promise<unknown>;
-  const [tpe, maxLine, maxTerm, room, info, staked, burnt, opened, backerId, paused] = await Promise.all([
-    r("tokensPerEth"), r("maxLine"), r("maxTerm"), r("weeklyRoom"), r("backingInfo"), r("totalStaked"), r("totalBurnt"), r("linesOpened"), r("backerId"), r("paused"),
+  const [tpe, maxLine, maxTerm, room, info, value, supply, delay, staked, burnt, opened, backerId, paused] = await Promise.all([
+    r("tokensPerEth"), r("maxLine"), r("maxTerm"), r("weeklyRoom"), r("backingInfo"), r("backingValue"), r("totalShares"), r("EXIT_DELAY"), r("totalStaked"), r("totalBurnt"), r("linesOpened"), r("backerId"), r("paused"),
   ]);
   const bi = info as readonly bigint[];
-  return { tokensPerEth: tpe as bigint, maxLine: maxLine as bigint, maxTerm: n(maxTerm), weeklyRoom: room as bigint, backing: bi[0], backingUsed: bi[1], backingFree: bi[2], feesWaiting: bi[3], totalStaked: staked as bigint, totalBurnt: burnt as bigint, linesOpened: n(opened), backerId: backerId as bigint, paused: paused as boolean };
+  return { tokensPerEth: tpe as bigint, maxLine: maxLine as bigint, maxTerm: n(maxTerm), weeklyRoom: room as bigint, backing: bi[0], backingUsed: bi[1], backingFree: bi[2], feesWaiting: bi[3], backingValue: value as bigint, totalShares: supply as bigint, exitDelay: n(delay), totalStaked: staked as bigint, totalBurnt: burnt as bigint, linesOpened: n(opened), backerId: backerId as bigint, paused: paused as boolean };
 }
 
 export async function readReport(a: CreditAddrs, agentId: bigint): Promise<Report> {
@@ -164,6 +172,27 @@ export async function readLender(a: CreditAddrs, who: Address): Promise<Lender> 
   ]);
   const value = shares ? await c.readContract({ address: a.pool, abi: POOL_ABI, functionName: "convertToAssets", args: [shares] }) as bigint : 0n;
   return { shares, value, unlocksAt: last ? Number(last) + 7 * 86400 : 0 };
+}
+
+/** One backer's place in the shared backing vault. `exitNow` is how many of the asked-for shares can leave right
+ *  now: only backing that stands behind no open line can go, so when lines are using it, part leaves now and the
+ *  rest later. */
+export type Backer = { shares: bigint; value: bigint; exitShares: bigint; exitValue: bigint; exitReadyAt: number; exitNow: bigint };
+export async function readBacker(a: CreditAddrs, who: Address): Promise<Backer> {
+  const c = reader();
+  const [p, info] = await Promise.all([
+    c.readContract({ address: a.lines, abi: LINES_ABI, functionName: "backerPosition", args: [who] }) as Promise<readonly [bigint, bigint, bigint, bigint | number]>,
+    c.readContract({ address: a.lines, abi: LINES_ABI, functionName: "backingInfo" }) as Promise<readonly bigint[]>,
+  ]);
+  const [shares, value, exitShares] = p;
+  const exitValue = shares ? (value * exitShares) / shares : 0n;
+  const free = info[2] + info[3]; // free backing, plus fees the exit collects on the way
+  const exitNow = exitValue <= free ? exitShares : exitValue ? (exitShares * free * 999n) / (exitValue * 1000n) : 0n; // a hair under, for rounding
+  return { shares, value, exitShares, exitValue, exitReadyAt: Number(p[3]), exitNow };
+}
+/** The backing shares `wei` of new backing would get (the contract's own sum, with its virtual shares). */
+export function backingSharesFor(wei: bigint, l: LinesInfo): bigint {
+  return (wei * (l.totalShares + 1000n)) / ((l.totalShares ? l.backingValue : 0n) + 1n);
 }
 
 export async function ownerOfAgent(agentId: bigint): Promise<Address | null> {
@@ -226,6 +255,25 @@ export async function repay(a: CreditAddrs, from: Address, loan: LoanRow, onPhas
 }
 export async function harvest(a: CreditAddrs, from: Address, onPhase?: Phase): Promise<Hash> {
   return sendCall(from, { address: a.lines, abi: LINES_ABI as unknown as readonly unknown[], functionName: "harvest" }, onPhase);
+}
+/** Back the lines: ETH in, backing shares out. */
+export async function backLines(a: CreditAddrs, from: Address, wei: bigint, onPhase?: Phase): Promise<Hash> {
+  return sendCall(from, { address: a.lines, abi: LINES_ABI as unknown as readonly unknown[], functionName: "fund", value: wei }, onPhase);
+}
+/** Ask to take `shares` of backing out. They can leave after the 7-day notice; asking again restarts it. */
+export async function requestExit(a: CreditAddrs, from: Address, shares: bigint, onPhase?: Phase): Promise<Hash> {
+  return sendCall(from, { address: a.lines, abi: LINES_ABI as unknown as readonly unknown[], functionName: "requestExit", args: [shares] }, onPhase);
+}
+/** Shares worth `bps` (of 10,000) of what this backer holds and hasn't asked to take out yet. */
+export function sharesForFraction(b: Backer, bps: number): bigint {
+  return ((b.shares - b.exitShares) * BigInt(Math.round(bps))) / 10_000n;
+}
+export async function cancelExit(a: CreditAddrs, from: Address, onPhase?: Phase): Promise<Hash> {
+  return sendCall(from, { address: a.lines, abi: LINES_ABI as unknown as readonly unknown[], functionName: "cancelExit" }, onPhase);
+}
+/** Takes out `shares` of a ready request, as plain ETH to `to`. */
+export async function exitBacking(a: CreditAddrs, from: Address, shares: bigint, to: Address, onPhase?: Phase): Promise<Hash> {
+  return sendCall(from, { address: a.lines, abi: LINES_ABI as unknown as readonly unknown[], functionName: "exit", args: [shares, to] }, onPhase);
 }
 export async function sweepReserve(a: CreditAddrs, from: Address, onPhase?: Phase): Promise<Hash> {
   return sendCall(from, { address: a.pool, abi: POOL_ABI as unknown as readonly unknown[], functionName: "reserveToBuyback" }, onPhase);

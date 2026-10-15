@@ -74,16 +74,16 @@ export function CreditLaunch({ sendTx, pub, chain, account, chainOk, explorer, e
       : <TextButton disabled={off || !d.pool} onClick={() => run(async () => { await sendTx("Seed the pool", (w, from) => w.writeContract({ address: d.pool!, abi: POOL_ABI, functionName: "seed", value: CL.seed, account: from, chain })); return { seeded: true }; })}>Seed</TextButton> },
     { k: "record", label: "5. Credit record (scores and figures, read-only)", done: !!d.record, node: d.record ? link(d.record)
       : <TextButton disabled={off || !d.seeded} onClick={() => run(async () => ({ record: await deploy("Credit record", CREDIT_ART.CreditRecord.abi, CREDIT_ART.CreditRecord.bytecode, [d.pool]) }))}>Deploy record</TextButton> },
-    { k: "lines", label: "6. Stake lines (the backer: stake $TRENCHERS, get an ETH line)", done: !!d.lines, node: d.lines ? link(d.lines) : (
+    { k: "lines", label: "6. Stake lines (stake $TRENCHERS, get an ETH line; its backing is a shared vault anyone can join)", done: !!d.lines, node: d.lines ? link(d.lines) : (
       <span className="launch-inline">
         <input className="tn-input mono" placeholder={suggest ? `${Number(suggest).toLocaleString()} (2× market)` : "$TRENCHERS per 1 ETH of line"} value={perEth} onChange={(e) => setPerEth(e.target.value.replace(/[^\d.]/g, ""))} style={{ width: 240 }} />
         {suggest && !perEth && <button type="button" className="tbtn" onClick={() => setPerEth(suggest)}>Use {Number(suggest).toLocaleString()}</button>}
         <TextButton disabled={off || !d.record || tokensPerEth === 0n} onClick={() => run(async () => ({ lines: await deploy("Stake lines", LINES_ABI, CREDIT_ART.TrenchersStakeLines.bytecode, [d.pool, TRENCHERS_TOKEN, d.timelock, R.safe, tokensPerEth, CL.lines.maxLine, CL.lines.maxTerm, CL.lines.weeklyCap, CL.lines.uri]) }))}>Deploy stake lines</TextButton>
       </span>) },
-    { k: "fund", label: "7. ETH backing behind the lines (anyone can add more later)", done: !!d.funded, node: d.funded ? <span className="mono up">✓ {d.funded} ETH backing</span> : (
+    { k: "fund", label: "7. Back the lines (optional): you can add the first backing now, or let anyone add it from /credit; the first backing must be at least 0.01 ETH", done: !!d.funded, node: d.funded ? <span className="mono up">✓ {d.funded} ETH backing</span> : (
       <span className="launch-inline">
         <input className="tn-input mono" value={fund} onChange={(e) => setFund(e.target.value.replace(/[^\d.]/g, ""))} style={{ width: 110 }} /> <span className="mono">ETH</span>
-        <TextButton disabled={off || !d.lines || !(Number(fund) >= 0.01)} onClick={() => run(async () => { await sendTx("Fund the backing", (w, from) => w.writeContract({ address: d.lines!, abi: LINES_ABI, functionName: "fund", value: parseEther(fund), account: from, chain })); return { funded: fund }; })}>Fund backing</TextButton>
+        <TextButton disabled={off || !d.lines || !(Number(fund) >= 0.01)} onClick={() => run(async () => { await sendTx("Back the lines", (w, from) => w.writeContract({ address: d.lines!, abi: LINES_ABI, functionName: "fund", value: parseEther(fund), account: from, chain })); return { funded: fund }; })}>Back the lines</TextButton>
       </span>) },
   ];
 
@@ -93,15 +93,16 @@ export function CreditLaunch({ sendTx, pub, chain, account, chainOk, explorer, e
       <h2>10 · Trenchers Credit</h2>
       <p>
         The fifth part, behind <span className="mono">/credit</span>: an ETH <b>credit pool</b> for ERC-8004 agents, a read-only <b>credit record</b>,
-        and <b>stake lines</b>, the backer that opens an ETH line for anyone who stakes $TRENCHERS behind their agent. Every setting is owned by a
-        <b> 48-hour timelock</b> that only the team Safe can drive; the Safe is also the guardian (it can stop new loans for up to 14 days, never
-        exits). A quarter of every loan fee is sent to the buyback wallet ({CL.buyback.slice(0, 6)}…{CL.buyback.slice(-4)}). Deploy in order from the
+        and <b>stake lines</b>, which open an ETH line for anyone who stakes $TRENCHERS behind their agent. The ETH behind the lines is a
+        shared vault owned by whoever backs it: anyone can add backing from <span className="mono">/credit</span>, and only they can take it out.
+        Every setting is owned by a <b>48-hour timelock</b> that only the team Safe can drive; the Safe is also the guardian (it can stop new loans
+        for up to 14 days, never exits). Neither can move lenders&apos; ETH or the backing. A quarter of every loan fee is sent to the buyback wallet ({CL.buyback.slice(0, 6)}…{CL.buyback.slice(-4)}). Deploy in order from the
         Deployer wallet.
       </p>
       <ol className="launch-safe">{steps.map((s) => <li key={s.k}><b>{s.label}</b>{s.node}</li>)}</ol>
       {err && <p className="notice">{err}</p>}
       {env && (<>
-        <p><b>Then</b> send these addresses to be filled into the site, so <span className="mono">/credit</span> goes live for everyone (until then it shows a preview).</p>
+        <p><b>Then</b> (step 7 can wait) send these addresses to be filled into the site, so <span className="mono">/credit</span> goes live for everyone (until then it shows a preview).</p>
         <pre className="mono launch-env">{env}</pre>
         <button type="button" className="tbtn" onClick={() => navigator.clipboard.writeText(env)}>Copy</button>
       </>)}

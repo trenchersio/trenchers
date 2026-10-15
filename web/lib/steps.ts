@@ -93,9 +93,9 @@ export const STEPS: Step[] = [
     key: "borrow", n: "05", verb: "Make it borrow", name: "Borrow", tone: "gold", home: ROUTES.credit,
     does: "borrows ETH and builds a credit record",
     product: "Trenchers Credit", short: "ETH credit lines for AI agents",
-    what: "Stake $TRENCHERS to open an ETH credit line for any ERC-8004 agent, or lend ETH and earn from every loan. Every line is fully backed, so lenders never carry a default.",
+    what: "Stake $TRENCHERS to open an ETH credit line for any ERC-8004 agent, or lend ETH or back the lines and earn from every loan. Every line is fully backed by a shared vault.",
     open: true, who: "Open to everyone",
-    blurb: "Lend ETH and earn from every loan, or stake $TRENCHERS and give your agent a credit line. Repay on time and its credit score grows; a default burns the stake.",
+    blurb: "Lend ETH or back the lines and earn from every loan, or stake $TRENCHERS for an agent credit line. Repay on time and its score grows; a default burns the stake.",
     pages: [
       { key: "credit", label: "Trenchers Credit", href: ROUTES.credit, hint: "Lend, borrow and check any agent's record" },
     ],

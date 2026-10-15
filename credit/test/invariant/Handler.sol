@@ -8,8 +8,8 @@ import {MockWETH} from "../mocks/MockWETH.sol";
 import {MockToken} from "../mocks/MockToken.sol";
 import {MockAgentRegistry} from "../mocks/MockAgentRegistry.sol";
 
-/// @notice Drives the pool with random lenders, stake-line agents, a plain EOA backer, borrows, repays, time,
-///         and defaults. Tracks every agent it creates and every loan it opens.
+/// @notice Drives the pool with random lenders, stake-line agents, vault backers (funding, asking to leave, leaving),
+///         a plain EOA backer, borrows, repays, time, and defaults. Tracks every agent it creates and every loan it opens.
 contract Handler is Test {
     Pool public pool;
     TrenchersStakeLines public vault;
@@ -18,6 +18,10 @@ contract Handler is Test {
     MockAgentRegistry public registry;
 
     address[] public lenders;
+    address[] public backers; // vault backers
+    uint256 public funded;
+    uint256 public exited;
+    uint256 public exitsDone;
     uint256[] public agents;
     mapping(uint256 => address) public ownerOfAgent;
     mapping(uint256 => uint256) public pkOf;
@@ -43,6 +47,8 @@ contract Handler is Test {
         token = token_;
         registry = registry_;
         for (uint256 i; i < 4; i++) lenders.push(makeAddr(string(abi.encodePacked("lender", vm.toString(i)))));
+        for (uint256 i; i < 3; i++) backers.push(makeAddr(string(abi.encodePacked("backer", vm.toString(i)))));
+        backers.push(makeAddr("funder")); // the one BaseTest funds the vault with
         lastPrice = pool.convertToAssets(1e18);
 
         // a plain EOA-owned backer that lends with a premium
@@ -160,12 +166,64 @@ contract Handler is Test {
         } catch {}
     }
 
-    function fundVault(uint256 amount) external tracked("fundVault") {
+    // ------------------------------------------------------------------ vault backers
+
+    function backerCount() external view returns (uint256) {
+        return backers.length;
+    }
+
+    function fundVault(uint256 who, uint256 amount) external tracked("fundVault") {
+        address f = backers[who % backers.length];
         amount = _bound(amount, 0.01 ether, 1 ether);
-        address f = makeAddr("vault-funder");
         vm.deal(f, f.balance + amount);
         vm.prank(f);
         vault.fund{value: amount}();
+        funded += amount;
+    }
+
+    function requestExit(uint256 who, uint256 frac) external tracked("requestExit") {
+        address b = backers[who % backers.length];
+        (uint256 pending,) = vault.exits(b);
+        uint256 room = vault.sharesOf(b) - pending;
+        uint256 s = room * _bound(frac, 1, 100) / 100;
+        if (s == 0) return;
+        vm.prank(b);
+        vault.requestExit(s);
+    }
+
+    function cancelExit(uint256 who) external tracked("cancelExit") {
+        address b = backers[who % backers.length];
+        (uint256 pending,) = vault.exits(b);
+        if (pending == 0) return;
+        vm.prank(b);
+        vault.cancelExit();
+    }
+
+    function exitVault(uint256 who, uint256 frac) external tracked("exitVault") {
+        address b = backers[who % backers.length];
+        (uint256 pending, uint64 readyAt) = vault.exits(b);
+        if (pending == 0) return;
+        if (_now() < readyAt) vm.warp(readyAt); // wait out the notice (loans keep running meanwhile)
+        uint256 s = pending * _bound(frac, 1, 100) / 100;
+        if (s == 0) return;
+        vm.prank(b);
+        // may wait for backing standing behind open lines, or for lent-out liquidity
+        try vault.exit(s, b) returns (uint256 assets) {
+            exited += assets;
+            exitsDone++;
+        } catch {
+            // take the free part now, the rest later
+            uint256 bs = pool.backing(vault.backerId());
+            if (bs == 0) return;
+            s = vault.totalShares() * pool.freeBacking(vault.backerId()) / bs * 99 / 100;
+            if (s > pending) s = pending;
+            if (s == 0) return;
+            vm.prank(b);
+            try vault.exit(s, b) returns (uint256 assets) {
+                exited += assets;
+                exitsDone++;
+            } catch {}
+        }
     }
 
     function addStake(uint256 agentSeed, uint256 tokens) external tracked("addStake") {

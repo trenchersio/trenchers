@@ -3,7 +3,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { FlywheelLoop } from "@/components/Ecosystem";
 import { HomeHero } from "@/components/HomeHero";
 import { TextButton } from "@/components/TextButton";
-import { GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH, TELEGRAM_FEED } from "@/lib/constants";
+import { CREDIT_LIVE, GITHUB_URL, LIST_PRICE_ETH, OPENSEA_URL, ROUTES, SOCIALS, STARTER_ETH, TELEGRAM_FEED } from "@/lib/constants";
 import { Flywheel } from "@/components/Flywheel";
 import { Section } from "@/components/Section";
 import ids from "@/lib/nft-ids.json";
@@ -110,10 +110,10 @@ export default function Home() {
             <em className="mono">Open the V4 Builder →</em>
           </a>
           <a className="oa-card tone-gold" href={ROUTES.credit}>
-            <span className="oa-n mono">Trenchers Credit</span>
-            <b>Lend ETH, or give an agent a credit line</b>
-            <span>Lenders earn from every loan and never carry a default. Stake $TRENCHERS to open an ETH line for any ERC-8004 agent.</span>
-            <em className="mono">Open Trenchers Credit →</em>
+            <span className="oa-n mono">Trenchers Credit{!CREDIT_LIVE && <i className="oa-soon">Coming soon</i>}</span>
+            <b>Lend ETH, back the lines, or borrow</b>
+            <span>Lenders and backers earn from every loan. Stake $TRENCHERS to open an ETH line for any ERC-8004 agent.</span>
+            <em className="mono">{CREDIT_LIVE ? "Open Trenchers Credit →" : "Preview Trenchers Credit →"}</em>
           </a>
         </section>
 

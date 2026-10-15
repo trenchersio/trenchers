@@ -19,10 +19,11 @@ export function CreditHeader() {
         </a>
         <nav>
           <a href="?#lend" className="nav-mint cr-cta">Lend ETH</a>
+          <a href="?#back" className="tbtn">Back the lines</a>
           <a href="?#borrow" className="tbtn">Open a line</a>
           <a href="?#record" className="tbtn">Check an agent</a>
           <NavDropdown label="More" items={[
-            { label: "How it works", href: "?#how", hint: "Where the ETH goes, and why lenders are safe" },
+            { label: "How it works", href: "?#how", hint: "Three roles, where the ETH goes, and why lenders are safe" },
             { label: "Terms", href: "?#terms", hint: "Fees, sizes, terms, what a default costs" },
             { label: "Loans", href: "?#loans", hint: "Every recent loan" },
             { label: "Docs", href: `${ROUTES.docs}#trenchers-credit`, hint: "The full technical write-up" },

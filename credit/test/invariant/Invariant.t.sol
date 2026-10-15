@@ -70,12 +70,43 @@ contract PoolInvariantTest is BaseTest {
         assertEq(token.balanceOf(0x000000000000000000000000000000000000dEaD), vault.totalBurnt());
     }
 
+    function invariant_vaultSharesAddUp() public view {
+        uint256 sum;
+        uint256 n = handler.backerCount();
+        for (uint256 i; i < n; i++) {
+            address b = handler.backers(i);
+            sum += vault.sharesOf(b);
+            (uint256 pending,) = vault.exits(b);
+            assertLe(pending, vault.sharesOf(b), "exit request within shares");
+        }
+        assertEq(sum, vault.totalShares());
+    }
+
+    function invariant_vaultValuesWithinBacking() public view {
+        uint256 sum;
+        uint256 n = handler.backerCount();
+        for (uint256 i; i < n; i++) {
+            (, uint256 value,,) = vault.backerPosition(handler.backers(i));
+            sum += value;
+        }
+        assertLe(sum, vault.backingValue());
+        if (vault.totalShares() == 0) assertEq(sum, 0);
+    }
+
+    function invariant_vaultEthOnlyFees() public view {
+        // the vault only ever holds fees it collected, and they are counted in its value
+        assertLe(address(vault).balance, vault.backingValue());
+    }
+
     function afterInvariant() external view {
         console.log("calls", handler.calls());
         console.log("agents", handler.agentCount());
         console.log("borrows", handler.count("borrow"));
         console.log("repays", handler.count("repay"));
         console.log("defaults", handler.defaults());
+        console.log("vault funds", handler.count("fundVault"));
+        console.log("vault exits", handler.exitsDone());
+        console.log("vault exited", handler.exited());
         console.log("loans", pool.loanCount());
         console.log("slashed", pool.totalSlashed());
         console.log("share price", pool.convertToAssets(1e18));

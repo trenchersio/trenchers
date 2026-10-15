@@ -32,7 +32,7 @@ export function MobileMenu({ page }: { page: Page }) {
     ["b-top", "Overview", "?#top"], ["b-launch", "Launch a coin", "?#launch"], ["b-explore", "Explore coins", "?#explore"], ["b-modules", "Modules", "?#modules"],
     ["b-how", "How it works", "?#how"],
   ] : credit ? [
-    ["c-top", "Overview", "?#top"], ["c-lend", "Lend ETH", "?#lend"], ["c-borrow", "Open a line", "?#borrow"], ["c-record", "Check an agent", "?#record"],
+    ["c-top", "Overview", "?#top"], ["c-lend", "Lend ETH", "?#lend"], ["c-back", "Back the lines", "?#back"], ["c-borrow", "Open a line", "?#borrow"], ["c-record", "Check an agent", "?#record"],
     ["c-how", "How it works", "?#how"], ["c-terms", "Terms", "?#terms"],
   ] : inference ? [
     ["inf-top", "Overview", "#top"], ["inf-buy", "Buy credit", "#buy"], ["inf-trencher", "Inference for a Trencher", "#trencher"], ["inf-models", "Models", "#models"], ["inf-p2p", "P2P Marketplace", "#p2p"],

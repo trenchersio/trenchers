@@ -534,39 +534,11 @@ contract TrenchersStakeLinesTest is BaseTest {
         assertEq(vault.weeklyCap(), 0.2 ether);
     }
 
-    function test_unlockBacking_onlyOwner() public {
-        vm.warp(_now() + 7 days); // past the backing hold: no exit fee
-        uint256 s = pool.backerShares(vb) / 2;
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
-        vault.unlockBacking(s, alice);
-        address to = makeAddr("treasury");
-        vm.prank(timelock);
-        vault.unlockBacking(s, to);
-        assertEq(to.balance, 0.5 ether);
-    }
-
-    function test_unlockBacking_earlyFee() public {
-        uint256 s = pool.backerShares(vb) / 2;
-        address to = makeAddr("treasury");
-        vm.prank(timelock);
-        vault.unlockBacking(s, to);
-        assertEq(to.balance, 0.5 ether - 0.0025 ether);
-    }
-
     function test_harvestAndFund_moveTheBackingClock() public {
         uint256 t0 = pool.lastBackingAt(vb);
         vm.warp(_now() + 6 days);
         fundVault(1 ether); // equal amount: halfway
         assertApproxEqAbs(pool.lastBackingAt(vb), t0 + 3 days, 1);
-    }
-
-    function test_unlockBacking_cannotTakeWhatBacksLines() public {
-        stakeOpen(agentId, agentOwner, agentPk, 100_000 ether);
-        uint256 s = pool.backerShares(vb);
-        vm.prank(timelock);
-        vm.expectPartialRevert(Pool.InsufficientBacking.selector);
-        vault.unlockBacking(s, timelock);
     }
 
     function test_freeze_onlyOwner() public {
@@ -606,7 +578,8 @@ contract TrenchersStakeLinesTest is BaseTest {
         repayEth(id);
         vm.prank(guardian);
         pool.pause();
-        vm.expectRevert(Pool.Paused.selector);
+        // fees can still be collected while paused, but they can't go back into the pool as backing
+        vm.expectRevert(TrenchersStakeLines.NothingToHarvest.selector);
         vault.harvest();
     }
 

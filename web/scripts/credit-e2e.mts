@@ -2,9 +2,11 @@
  * Trenchers Credit end to end, on a local chain, with the site's own code.
  *
  * Starts anvil (with the site's chain id), puts Multicall3 and an ERC-8004 registry at their real addresses, deploys
- * Trenchers Credit exactly as the launch page does (timelock, library, linked pool, seed, record, stake lines, backing),
- * then plays it through: a lender deposits, an agent owner stakes $TRENCHERS with a signed consent and opens a line,
- * borrows ETH, repays after a week, the backing harvests its fees; a second agent defaults and its stake is burnt.
+ * Trenchers Credit exactly as the launch page does (timelock, library, linked pool, seed, record, stake lines), then
+ * plays it through: two wallets back the lines and get shares, a lender deposits, an agent owner stakes $TRENCHERS with
+ * a signed consent and opens a line, borrows ETH, repays after a week (each backing share is worth more), anyone
+ * harvests the fees; a backer asks to leave and can't leave early; a second agent defaults (the backers carry it pro
+ * rata, its stake is burnt); after the 7-day notice the backer takes the ETH out; the owner has no way to take backing.
  * Every figure the page shows is read back with the page's own readers. Run from web/:  npx tsx scripts/credit-e2e.mts
  * (needs the credit contracts built: cd credit && forge build)
  */
@@ -26,8 +28,10 @@ const KEYS = [
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d", // lender
   "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a", // agent owner A
   "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6", // agent owner B
+  "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a", // backer 1
+  "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba", // backer 2
 ] as const;
-const [team, lender, ownerA, ownerB] = KEYS.map((k) => privateKeyToAccount(k));
+const [team, lender, ownerA, ownerB, backer1, backer2] = KEYS.map((k) => privateKeyToAccount(k));
 const pub = createPublicClient({ chain: local, transport: http(RPC) });
 const W = (acc: typeof team) => createWalletClient({ chain: local, transport: http(RPC), account: acc });
 let failures = 0;
@@ -48,6 +52,10 @@ async function call(w: ReturnType<typeof W>, address: Address, abi: Abi, functio
   if (r.status !== "success") throw new Error(`${functionName} reverted`);
   return r;
 }
+const reverts = async (address: Address, abi: Abi, functionName: string, args: unknown[], from: Address) => {
+  try { await pub.simulateContract({ address, abi, functionName, args, account: from } as never); return false; } catch { return true; }
+};
+const near = (a: bigint, b: bigint, tol = 10n ** 6n) => (a > b ? a - b : b - a) <= tol;
 
 const anvil = spawn(`${process.env.HOME}/.foundry/bin/anvil`, ["--port", String(PORT), "--silent", "--chain-id", String(CHAIN_ID), "--gas-limit", "60000000"], { stdio: "ignore" });
 const stop = () => { try { anvil.kill(); } catch {} };
@@ -81,13 +89,31 @@ try {
   const record = await deployRaw(encodeDeployData({ abi: C.RECORD_ABI, bytecode: C.CREDIT_ART.CreditRecord.bytecode, args: [pool] }));
   const TPE = parseEther("2000000"); // 2M $TRENCHERS per 1 ETH of line
   const lines = await deployRaw(encodeDeployData({ abi: C.LINES_ABI, bytecode: C.CREDIT_ART.TrenchersStakeLines.bytecode, args: [pool, token, timelock, team.address, TPE, CL.lines.maxLine, CL.lines.maxTerm, CL.lines.weeklyCap, CL.lines.uri] }));
-  await call(W(team), lines, C.LINES_ABI, "fund", [], parseEther("0.5"));
   const A = { pool, record, lines, timelock };
+  const LA = C.LINES_ABI;
+  const sharesOf = async (who: Address) => pub.readContract({ address: lines, abi: LA, functionName: "sharesOf", args: [who] }) as Promise<bigint>;
+
+  // ---------------------------------------------------------------- two wallets back the lines
+  let ov = await C.readOverview(A);
+  ok(ov.lines.totalShares === 0n && ov.lines.exitDelay === 7 * 86400, "the vault starts empty, with a 7-day exit notice");
+  try { await pub.simulateContract({ address: lines, abi: LA, functionName: "fund", value: parseEther("0.005"), account: backer1.address } as never); ok(false, "a first backing under 0.01 ETH is refused"); } catch { ok(true, "a first backing under 0.01 ETH is refused"); }
+  const sim1 = await pub.simulateContract({ address: lines, abi: LA, functionName: "fund", value: parseEther("0.3"), account: backer1.address } as never);
+  const predicted1 = C.backingSharesFor(parseEther("0.3"), ov.lines);
+  await call(W(backer1), lines, LA, "fund", [], parseEther("0.3"));
+  const s1 = await sharesOf(backer1.address);
+  ok(s1 > 0n && s1 === (sim1.result as bigint) && s1 === predicted1, `backer 1 put in 0.3 ETH and got ${s1} shares, as fund() returned and the page predicted`);
+  ov = await C.readOverview(A);
+  const predicted2 = C.backingSharesFor(parseEther("0.2"), ov.lines);
+  await call(W(backer2), lines, LA, "fund", [], parseEther("0.2"));
+  const s2 = await sharesOf(backer2.address);
+  ok(s2 === predicted2 && near(s2 * 3n, s1 * 2n, s1 / 10n ** 6n), `backer 2 put in 0.2 ETH and got ${s2} shares (two thirds of backer 1's)`);
+  let b1 = await C.readBacker(A, backer1.address), b2 = await C.readBacker(A, backer2.address);
+  ok(near(b1.value, parseEther("0.3")) && near(b2.value, parseEther("0.2")), `the page reads their backing back: ${formatEther(b1.value)} and ${formatEther(b2.value)} ETH`);
   ok(String(await pub.readContract({ address: pool, abi: C.POOL_ABI, functionName: "owner" })).toLowerCase() === timelock.toLowerCase(), "pool is owned by the 48 h timelock");
   ok(Number(await pub.readContract({ address: timelock, abi: C.CREDIT_ART.CreditTimelock.abi, functionName: "getMinDelay" })) === 48 * 3600, "timelock delay is 48 hours");
 
-  let ov = await C.readOverview(A);
-  ok(ov.lines.backing === parseEther("0.5"), `stake lines has 0.5 ETH of backing (${formatEther(ov.lines.backing)})`);
+  ov = await C.readOverview(A);
+  ok(ov.lines.backing === parseEther("0.5") && ov.lines.totalShares === s1 + s2, `stake lines has 0.5 ETH of backing (${formatEther(ov.lines.backing)}) and ${ov.lines.totalShares} shares`);
   ok(ov.params.feeBps === 200 && ov.params.reserveFeeBps === 2500, "the page reads the launch terms (2% / 30 days, 25% buyback)");
   ok(ov.stats.totalAssets === parseEther("0.5") + CL.seed, "pool total = backing + seed");
 
@@ -127,17 +153,29 @@ try {
   ok(rep.score > 0, `agent #${idA} now has a credit score: ${rep.score}`);
   ov = await C.readOverview(A);
   ok(ov.stats.lendersEarned > 0n && ov.stats.sharePrice > 10n ** 18n, `lenders earned ${formatEther(ov.stats.lendersEarned)} ETH; a share is worth ${formatEther(ov.stats.sharePrice)} ETH`);
-  ok(ov.lines.feesWaiting > 0n, "the backing has its share of the fee waiting");
-  const before = ov.lines.backing;
-  await call(W(lender), lines, C.LINES_ABI, "harvest");
+  ok(ov.lines.feesWaiting > 0n, "the backers have their share of the fee waiting");
+  const perShare = (l: typeof ov.lines) => (l.backingValue * 10n ** 18n) / l.totalShares;
+  ok(perShare(ov.lines) > (parseEther("0.5") * 10n ** 18n) / (s1 + s2), "each backing share is worth more after the repaid loan");
+  b1 = await C.readBacker(A, backer1.address);
+  ok(b1.value > parseEther("0.3"), `backer 1's 0.3 ETH is now worth ${formatEther(b1.value)} ETH`);
+  const before = ov.lines.backing, valueBefore = ov.lines.backingValue;
+  await call(W(lender), lines, LA, "harvest");
   ov = await C.readOverview(A);
-  ok(ov.lines.feesWaiting === 0n && ov.lines.backing > before, "anyone can add the backing's fees to the backing (harvest)");
+  ok(ov.lines.feesWaiting === 0n && ov.lines.backing > before && near(ov.lines.backingValue, valueBefore, 10n), "anyone can add the backers' fees to the backing (harvest); what the vault is worth stays the same");
 
   // close the line: the whole stake comes back
   const balBefore = await pub.readContract({ address: token, abi: TOKEN_ABI, functionName: "balanceOf", args: [ownerA.address] }) as bigint;
   await call(W(ownerA), lines, C.LINES_ABI, "close", [idA]);
   const balAfter = await pub.readContract({ address: token, abi: TOKEN_ABI, functionName: "balanceOf", args: [ownerA.address] }) as bigint;
   ok(balAfter - balBefore === stake, "closing the line gives the whole stake back");
+
+  // ---------------------------------------------------------------- backer 2 asks to leave, and can't leave early
+  await call(W(backer2), lines, LA, "requestExit", [s2]);
+  b2 = await C.readBacker(A, backer2.address);
+  const askedAt = Number((await pub.getBlock()).timestamp);
+  ok(b2.exitShares === s2 && b2.exitReadyAt === askedAt + 7 * 86400, "backer 2 asked to leave with all its shares: ready in 7 days");
+  ok(await reverts(lines, LA, "exit", [s2, backer2.address], backer2.address), "taking it out before the 7 days are up reverts");
+  ok(await reverts(lines, LA, "requestExit", [1n], backer2.address), "nobody can ask to take out more shares than they have");
 
   // ---------------------------------------------------------------- agent B: borrows and never repays
   await call(W(ownerB), REGISTRY, REG_ABI, "register", ["ipfs://agent-b"]);
@@ -150,9 +188,18 @@ try {
   const priceBefore = (await C.readOverview(A)).stats.sharePrice;
   const feeB = C.feeFor(parseEther("0.03"), 7 * 86400, ov.params);
   await call(W(ownerB), pool, C.POOL_ABI, "borrow", [idB, parseEther("0.03"), BigInt(7 * 86400), ownerB.address, feeB + 1n, true]);
+  ok(await reverts(lines, LA, "exit", [s2, backer2.address], backer2.address), "still too early while the loan is out");
+  b1 = await C.readBacker(A, backer1.address); b2 = await C.readBacker(A, backer2.address);
+  const vBefore = (await C.readOverview(A)).lines.backingValue;
   await warp(11 * 86400);
   const lB = (await C.readLoansOf(A, idB))[0];
   await call(W(lender), pool, C.POOL_ABI, "markDefault", [BigInt(lB.id)]);
+  const a1 = await C.readBacker(A, backer1.address), a2 = await C.readBacker(A, backer2.address);
+  const loss1 = b1.value - a1.value, loss2 = b2.value - a2.value;
+  const vAfter = (await C.readOverview(A)).lines.backingValue;
+  // the pool burns backing worth principal + fee; the backers get their own quarter of that fee back, and the backing (pool shares) gains with lenders
+  ok(vBefore - vAfter > lB.principal && vBefore - vAfter <= lB.principal + lB.fee, `the default cost the backing about the principal and fee (${formatEther(vBefore - vAfter)} ETH)`);
+  ok(loss1 > 0n && loss2 > 0n && near(loss1 * s2, loss2 * s1, (s1 * s2) / 10n ** 9n), `backers carried it pro rata: ${formatEther(loss1)} and ${formatEther(loss2)} ETH (backer 2 too, while waiting to leave)`);
   const repB = await C.readReport(A, idB);
   const posB = await C.readPosition(A, idB);
   ov = await C.readOverview(A);
@@ -163,6 +210,29 @@ try {
   const lp2 = await C.readLender(A, lender.address);
   ok(lp2.value > parseEther("2"), `the lender's 2 ETH is now worth ${formatEther(lp2.value)} ETH`);
   ok(ov.recent.length === 2 && ov.recent[0].status === "defaulted" && ov.recent[1].status === "repaid", "recent loans: newest first, one defaulted, one repaid");
+
+  // ---------------------------------------------------------------- after the notice, backer 2 takes it out
+  const exitTo = "0x00000000000000000000000000000000000e0170" as Address;
+  b2 = await C.readBacker(A, backer2.address);
+  ok(b2.exitReadyAt <= Number((await pub.getBlock()).timestamp) && b2.exitNow === s2, "the 7 days are up and all of it is free to leave");
+  await call(W(backer2), lines, LA, "exit", [s2, exitTo]);
+  const got = await pub.getBalance({ address: exitTo });
+  ok(got > 0n && near(got, b2.value, b2.value / 200n + 1n), `backer 2 took out ${formatEther(got)} ETH as plain ETH (its share was worth ${formatEther(b2.value)})`);
+  ok((await sharesOf(backer2.address)) === 0n && (await C.readBacker(A, backer2.address)).exitShares === 0n, "its shares and its request are gone");
+  b1 = await C.readBacker(A, backer1.address);
+  ok(near(b1.value, a1.value, 10n ** 9n), "backer 1's backing is untouched by backer 2 leaving");
+
+  // backer 1: ask, cancel
+  await call(W(backer1), lines, LA, "requestExit", [s1 / 2n]);
+  await call(W(backer1), lines, LA, "cancelExit");
+  ok((await C.readBacker(A, backer1.address)).exitShares === 0n, "a backer can cancel a request to leave");
+
+  // ---------------------------------------------------------------- the owner has no way to take backing
+  const names = (C.LINES_ABI as readonly { type: string; name?: string }[]).filter((x) => x.type === "function").map((x) => x.name!);
+  ok(!names.some((x) => /unlock|withdraw|sweep|rescue|drain/i.test(x)), "the stake-lines contract has no owner function that moves backing");
+  ok(await reverts(pool, C.POOL_ABI, "unlockBacking", [ov.lines.backerId, 1n, team.address, true], team.address), "the team can't unlock the backing from the pool directly");
+  ok(await reverts(pool, C.POOL_ABI, "unlockBacking", [ov.lines.backerId, 1n, timelock, true], timelock), "neither can the timelock");
+  ok(await reverts(lines, LA, "exit", [1n, team.address], team.address), "and the owner holds no shares to exit with");
 
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll credit checks passed");
 } catch (e) {

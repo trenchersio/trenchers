@@ -13,14 +13,21 @@ import {TrenchersCreditPool as Pool} from "./TrenchersCreditPool.sol";
 /// @notice Stake $TRENCHERS, get an ETH credit line for your agent.
 ///
 ///         This contract is a backer in the Trenchers Credit pool, with its own ERC-8004 identity. Its ETH backing
-///         (put in by anyone with `fund`, and grown by its share of loan fees) stands behind every line it opens,
-///         one for one, so lenders never carry a loss.
+///         stands behind every line it opens, one for one, so lenders never carry a loss.
+///
+///         The backing is a shared vault that belongs to the people who put it in. Anyone can `fund` it and gets
+///         backing shares; the shares earn the backer's 25% of every loan fee and carry any default, pro rata. To take
+///         ETH out, a backer asks to leave (`requestExit`) and, 7 days later, takes their share (`exit`), as far as it
+///         isn't standing behind open lines. The wait is longer than the 3-day grace before a default, so nobody can
+///         slip out ahead of a loan going bad and leave the others to carry it. Nobody else, the owner included, can
+///         take a backer's ETH.
 ///
 ///         An agent's owner stakes $TRENCHERS and gets a line of `stake / tokensPerEth` ETH, up to `maxLine`. The
 ///         owner borrows from the pool, and anyone can repay. If a loan defaults, this contract's backing pays the
 ///         pool and the whole stake is burnt. Closing the line with no loan open gives the whole stake back.
 ///
 ///         The owner (a timelock) sets the terms; the guardian can stop new lines and borrows, never exits.
+///         Neither can move the backing.
 contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -57,7 +64,24 @@ contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, Reentr
     uint256 public totalBurnt;
     uint256 public linesOpened;
 
-    event Funded(address indexed by, uint256 amount);
+    // ------------------------------------------------------------------ the shared backing vault
+    uint256 public constant EXIT_DELAY = 7 days; // longer than the pool's 3-day grace before a default
+    uint256 internal constant VIRTUAL = 1e3; // virtual shares: rounding can never be turned against a backer
+
+    mapping(address => uint256) public sharesOf; // backing shares
+    uint256 public totalShares;
+
+    struct Exit {
+        uint256 shares; // asked to leave; still earns fees and still carries defaults until taken out
+        uint64 readyAt;
+    }
+
+    mapping(address => Exit) public exits;
+
+    event Funded(address indexed by, uint256 amount, uint256 shares);
+    event ExitRequested(address indexed by, uint256 shares, uint64 readyAt);
+    event ExitCancelled(address indexed by);
+    event Exited(address indexed by, address indexed to, uint256 shares, uint256 assets);
     event Opened(uint256 indexed agentId, address indexed staker, uint256 tokens, uint256 line);
     event Added(uint256 indexed agentId, uint256 tokens, uint256 line);
     event Closed(uint256 indexed agentId, address indexed staker, uint256 tokensBack);
@@ -81,6 +105,10 @@ contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, Reentr
     error BadTerms();
     error NothingToHarvest();
     error Renounce();
+    error NoShares();
+    error NotReady(uint64 readyAt);
+    error ZeroAddress();
+    error SendFailed();
 
     constructor(
         Pool pool_,
@@ -122,26 +150,85 @@ contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, Reentr
 
     // ------------------------------------------------------------------ backing
 
-    /// @notice Adds ETH backing. Anyone can; only the owner can take free backing out again.
-    function fund() external payable nonReentrant {
+    /// @notice The vault's ETH: backing in the pool, its fees waiting there, and fees collected here.
+    function backingValue() public view returns (uint256) {
+        return pool.backing(backerId) + pool.backerFees(backerId) + address(this).balance;
+    }
+
+    /// @notice Back the lines: adds ETH backing and gives you backing shares for it. The first backing ever must be
+    ///         at least the pool's `minBacking`.
+    function fund() external payable nonReentrant returns (uint256 minted) {
         if (msg.value == 0) revert BadTerms();
         Pool.Agent memory me = pool.getAgent(backerId);
+        // `msg.value` is already in this contract's balance, so it is taken out of the value the shares are priced at
+        uint256 value = me.isBacker ? backingValue() - msg.value : 0;
+        minted = msg.value * (totalShares + VIRTUAL) / (value + 1);
+        if (minted == 0) revert NoShares();
         if (!me.isBacker) {
             pool.registerBacker{value: msg.value}(backerId, msg.value);
             pool.setHook(backerId, address(this));
         } else {
             pool.addBacking{value: msg.value}(backerId, msg.value);
         }
-        emit Funded(msg.sender, msg.value);
+        sharesOf[msg.sender] += minted;
+        totalShares += minted;
+        emit Funded(msg.sender, msg.value, minted);
     }
 
-    /// @notice Turns this backer's share of loan fees into more backing. Anyone can call it.
+    /// @notice Turns the backers' share of loan fees into more backing. Anyone can call it.
     function harvest() external nonReentrant returns (uint256 amount) {
-        amount = pool.backerFees(backerId);
-        if (amount == 0) revert NothingToHarvest();
-        pool.claimBackerFees(backerId, address(this), true);
+        _collect();
+        amount = address(this).balance;
+        if (amount == 0 || block.timestamp < pool.pausedUntil()) revert NothingToHarvest();
         pool.addBacking{value: amount}(backerId, amount);
         emit Harvested(amount);
+    }
+
+    /// @dev Brings the fees waiting in the pool here (works even while the pool is paused).
+    function _collect() internal {
+        if (pool.backerFees(backerId) > 0) pool.claimBackerFees(backerId, address(this), true);
+    }
+
+    /// @notice Ask to take `shares` out. After `EXIT_DELAY` you can `exit`. Until then the shares still earn fees
+    ///         and still carry defaults. Asking again adds to the request and restarts the wait.
+    function requestExit(uint256 shares) external nonReentrant {
+        Exit storage e = exits[msg.sender];
+        if (shares == 0 || e.shares + shares > sharesOf[msg.sender]) revert NoShares();
+        e.shares += shares;
+        e.readyAt = uint64(block.timestamp + EXIT_DELAY);
+        emit ExitRequested(msg.sender, e.shares, e.readyAt);
+    }
+
+    function cancelExit() external nonReentrant {
+        if (exits[msg.sender].shares == 0) revert NoShares();
+        delete exits[msg.sender];
+        emit ExitCancelled(msg.sender);
+    }
+
+    /// @notice Takes out up to `shares` of a ready request as ETH to `to`: your share of the backing and of the fees.
+    ///         Only backing that stands behind no open line can leave; if not enough is free, take part now and the
+    ///         rest later. Within 7 days of the vault's last new backing, the pool keeps 0.5% (as it does for lenders).
+    function exit(uint256 shares, address to) external nonReentrant returns (uint256 assets) {
+        if (to == address(0)) revert ZeroAddress();
+        Exit storage e = exits[msg.sender];
+        if (shares == 0 || shares > e.shares) revert NoShares();
+        if (block.timestamp < e.readyAt) revert NotReady(e.readyAt);
+        _collect();
+        uint256 supply = totalShares;
+        uint256 poolPart = pool.backerShares(backerId) * shares / supply;
+        uint256 cashPart = address(this).balance * shares / supply;
+        e.shares -= shares;
+        if (e.shares == 0) delete exits[msg.sender];
+        sharesOf[msg.sender] -= shares;
+        totalShares = supply - shares;
+        if (poolPart > 0) assets = pool.unlockBacking(backerId, poolPart, to, true);
+        if (cashPart > 0) {
+            assets += cashPart;
+            (bool ok,) = to.call{value: cashPart}("");
+            if (!ok) revert SendFailed();
+        }
+        if (assets == 0) revert NoShares();
+        emit Exited(msg.sender, to, shares, assets);
     }
 
     // ------------------------------------------------------------------ lines
@@ -306,11 +393,6 @@ contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, Reentr
         emit TermsSet(tokensPerEth_, maxLine_, maxTerm_, weeklyCap_);
     }
 
-    /// @notice Owner: takes backing that stands behind nothing out of the pool, as ETH.
-    function unlockBacking(uint256 shares, address to) external onlyOwner nonReentrant {
-        pool.unlockBacking(backerId, shares, to, true);
-    }
-
     /// @notice Owner: stops new borrowing on one line (open loans run to term).
     function freeze(uint256 agentId, bool frozen) external onlyOwner nonReentrant {
         pool.freezeLine(agentId, frozen);
@@ -341,6 +423,18 @@ contract TrenchersStakeLines is ILineHook, IERC721Receiver, Ownable2Step, Reentr
         lineInPool = backedHere ? a.line : 0;
         drawn = a.principalOut;
         activeLoans = a.activeLoans;
+    }
+
+    /// @notice One backer's stake in the vault: shares, what they are worth now, and any exit request.
+    function backerPosition(address who)
+        external
+        view
+        returns (uint256 shares, uint256 value, uint256 exitShares, uint64 exitReadyAt)
+    {
+        shares = sharesOf[who];
+        value = totalShares == 0 ? 0 : backingValue() * shares / totalShares;
+        exitShares = exits[who].shares;
+        exitReadyAt = exits[who].readyAt;
     }
 
     /// @notice This backer's ETH: all of it, what stands behind lines, and what is free.

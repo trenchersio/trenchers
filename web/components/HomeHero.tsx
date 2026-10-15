@@ -5,7 +5,7 @@
 // with every part (pixel by pixel), and a bar along the bottom with the five parts.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STEPS } from "@/lib/steps";
-import { ROUTES, LIST_PRICE_ETH } from "@/lib/constants";
+import { ROUTES, LIST_PRICE_ETH, CREDIT_LIVE } from "@/lib/constants";
 import { drawArt, loadArt } from "@/lib/art-vector";
 
 const CYCLE = 5200; // ms each part stays on show
@@ -174,17 +174,18 @@ export function HomeHero() {
       <div className="hh-shade" aria-hidden="true" />
       <div className="hh-in">
         <div className="hh-copy">
-          <p className="hh-k mono"><span className="live-dot" />2,000 AI agents on Robinhood Chain</p>
+          <p className="hh-k mono"><span className="live-dot" />Trenchers Agentic Finance Ecosystem</p>
           <h1 className="hh-title">
-            <span className="hh-l1">One NFT Agent.</span>
-            <span className="hh-l1 hh-l1b">Make it</span>
+            <span className="hh-l1">Protocols to</span>
+            <span className="hh-l1 hh-l1b">Make Agents</span>
             <span className="hh-l2"><Verb text={verbOf(s.verb)} /><span className="hh-dot">.</span></span>
-            <span className="sr-only">Make it trade, think, talk, launch and borrow.</span>
+            <span className="sr-only">Protocols to make agents trade, think, talk, launch and borrow.</span>
           </h1>
           <p className="hh-what" aria-live="polite"><b>{nameOf(s)}.</b> {s.what}</p>
           <div className="hh-cta">
             <a href={ROUTES.mint} className="hh-mint mono" aria-label={`Mint a Trencher for ${LIST_PRICE_ETH} ETH`}>Mint</a>
-            <a href={s.home} className="hh-go">Open {nameOf(s).replace(/^The /, "the ")}</a>
+            <a href={s.home} className="hh-go">{s.key === "borrow" && !CREDIT_LIVE ? "Preview" : "Open"} {nameOf(s).replace(/^The /, "the ")}</a>
+            {s.key === "borrow" && !CREDIT_LIVE && <span className="hh-soon mono">Coming soon</span>}
           </div>
         </div>
         <figure className="hh-fig">
@@ -198,7 +199,7 @@ export function HomeHero() {
               <span className="hh-prog" aria-hidden="true"><i key={i === on ? `${turn}-${paused}` : "off"} /></span>
               <span className="hh-tn mono">{x.n}</span>
               <b>{verbOf(x.verb)}</b>
-              <span className="hh-tp">{nameOf(x)}</span>
+              <span className="hh-tp">{nameOf(x)}{x.key === "borrow" && !CREDIT_LIVE && <em className="hh-soon-s mono"> · soon</em>}</span>
             </button>
           ))}
         </nav>
