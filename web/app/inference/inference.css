@@ -586,4 +586,4 @@
 /* The "How it works" video button inside a section intro */
 .isec-lede .howto-btn { display: flex; margin: 14px 0 0; width: auto; max-width: 260px; }
 @media (min-width: 1001px) { .isec-lede .howto-btn { margin-left: auto; } }
-.ihero-pitch .howto-btn { width: auto; max-width: 260px; margin: 0; }
+.ihero-pitch .howto-btn { width: auto; max-width: 260px; margin: 0 0 22px; }
