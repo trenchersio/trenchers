@@ -183,7 +183,7 @@ export function HomeHero() {
           </h1>
           <p className="hh-what" aria-live="polite"><b>{nameOf(s)}.</b> {s.what}</p>
           <div className="hh-cta">
-            <a href={ROUTES.mint} className="hh-mint"><span className="hh-mint-t">Mint a Trencher</span><span className="hh-mint-p mono">{LIST_PRICE_ETH} ETH</span></a>
+            <a href={ROUTES.mint} className="hh-mint mono" aria-label={`Mint a Trencher for ${LIST_PRICE_ETH} ETH`}>Mint</a>
             <a href={s.home} className="hh-go">Open {nameOf(s).replace(/^The /, "the ")}</a>
           </div>
         </div>

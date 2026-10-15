@@ -2803,9 +2803,7 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .hh-what { margin: 26px 0 30px; max-width: 31em; min-height: 4.65em; color: var(--quiet); font-size: 17px; line-height: 1.55; }
 .hh-what b { color: var(--fog); font-weight: 600; }
 .hh-cta { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.hh-mint { display: inline-flex; align-items: center; gap: 12px; height: 52px; padding: 0 26px; border-radius: 999px; background: var(--green); color: #04130A; font: 600 16px var(--sans); text-decoration: none; box-shadow: 0 10px 40px -10px rgba(57,255,136,.6); transition: transform .2s ease, box-shadow .2s ease; }
-.hh-mint-t { line-height: 1; }
-.hh-mint-p { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; background: rgba(4,19,10,.14); font-size: 12px; line-height: 1; }
+.hh-mint { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 24px; border-radius: 999px; background: var(--green); color: #04130A; font: 700 14px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; box-shadow: 0 8px 30px -10px rgba(57,255,136,.6); transition: transform .2s ease, box-shadow .2s ease; }
 .hh-mint:hover { transform: translateY(-1px); box-shadow: 0 14px 50px -10px rgba(57,255,136,.8); }
 .hh-mint:focus-visible { outline: 2px dashed var(--green); outline-offset: 4px; }
 .hh-go { color: var(--tone); font: 500 14px var(--mono); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; transition: color .4s ease; }
@@ -2844,8 +2842,6 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
   .hh-tab b { font-size: 15px; opacity: .55; letter-spacing: -.01em; }
   .hh-prog { right: 6px; left: 6px; }
   .hh-what { order: 4; margin: 20px 0 24px; min-height: 6.2em; font-size: 16px; }
-  .hh-cta { order: 5; flex-direction: column; align-items: stretch; gap: 16px; }
-  .hh-mint { justify-content: center; }
-  .hh-go { align-self: center; }
+  .hh-cta { order: 5; gap: 20px; }
   .hh-fig { order: 6; justify-self: auto; align-self: center; width: min(64vw, 260px); margin: 40px 0 34px; }
 }
