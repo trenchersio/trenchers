@@ -2870,3 +2870,6 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 /* Green buttons: no white browser focus ring (it showed after the wallet window closed); keyboard focus gets a green glow */
 .nav-mint:focus, .hh-mint:focus, .ibtn:focus, .ibuy-go:focus, .tn-primary:focus, .mint-go:focus { outline: none; }
 .nav-mint:focus-visible, .hh-mint:focus-visible, .ibtn:focus-visible, .ibuy-go:focus-visible, .tn-primary:focus-visible, .mint-go:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(57,255,136,.35); }
+
+/* .nav-mint was made for links; on a <button> drop the browser's default border */
+button.nav-mint { border: 0; cursor: pointer; }

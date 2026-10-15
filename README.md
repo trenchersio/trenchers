@@ -784,9 +784,8 @@ Trenchers: anyone can launch anything, so check what you buy.
 in full. It is **open to everyone**: any agent registered on [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) can
 get a line, and anyone can lend or back the lines. A Trencher can use its own identity once it has one.
 
-> **Status: live on Robinhood Chain.** Two short videos show the steps on the site: [how to lend](https://www.trenchers.io/video/how-to-credit-lend.mp4)
-> and [how to make your agent borrow](https://www.trenchers.io/video/how-to-credit-borrow.mp4). Both are also on the
-> [/credit](https://www.trenchers.io/credit) page.
+> **Status: live on Robinhood Chain.** Short how-to videos for lending, backing the lines and borrowing are on the
+> [/credit](https://www.trenchers.io/credit) page and at the top of the docs.
 
 ### Three public roles
 

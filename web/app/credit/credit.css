@@ -108,7 +108,7 @@
 .cr-dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .cr-dl dt { color: var(--quiet); } .cr-dl dd { margin: 0; text-align: right; color: var(--fog); }
 .cr-dl dd.gold { color: var(--gold); font-weight: 700; font-size: 15px; }
-.cr-go { height: 48px; justify-content: center; font-size: 14px; width: 100%; }
+.cr-go { display: inline-flex; align-items: center; height: 48px; justify-content: center; font: 600 14px/1 var(--mono); letter-spacing: .02em; width: 100%; border: 0; border-radius: 9px; cursor: pointer; }
 .cr-go:disabled { background: #1C2320 !important; color: #6F7873 !important; box-shadow: none !important; cursor: default; }
 .cr-go-gold { background: var(--gold); color: #1A1406; box-shadow: 0 0 22px rgba(242,211,107,.22); }
 .cr-go-violet { background: var(--violet); color: #140E24; box-shadow: 0 0 22px rgba(183,156,255,.22); }
@@ -228,6 +228,6 @@
 }
 
 /* How-to videos */
-.cr-howto { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 4px; }
+.cr-howto { display: flex; gap: 10px; flex-wrap: wrap; margin: -6px 0 18px; }
 .cr-howto .howto-btn { width: auto; }
 .cr-panel-h .cr-panel-video { width: auto; margin-top: 12px; }

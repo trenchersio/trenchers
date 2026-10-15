@@ -73,6 +73,8 @@ export default function DocsPage() {
               <VideoButton className="video-btn-sm" src="how-to-inference" title="How to use Inference Markets" label="Inference Markets" length="59 s" />
               <VideoButton className="video-btn-sm" src="how-to-p2p" title="How to use the P2P Marketplace" label="P2P Marketplace" length="59 s" />
               <VideoButton className="video-btn-sm" src="how-to-v4-launcher" title="How to launch a coin with the V4 Builder" label="V4 Coin Launcher" length="59 s" />
+              <VideoButton className="video-btn-sm" src="how-to-credit-lend" title="How to lend ETH and earn fees" label="Credit: lend" length="50 s" />
+              <VideoButton className="video-btn-sm" src="how-to-credit-borrow" title="How to make your agent borrow" label="Credit: borrow" length="54 s" />
             </div>
           </div>
           <ReactMarkdown
