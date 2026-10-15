@@ -226,3 +226,8 @@
   .cr-split-bar i { font-size: 9.5px; padding: 0 6px; }
   .cr-flow { flex-wrap: nowrap; }
 }
+
+/* How-to videos */
+.cr-howto { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 4px; }
+.cr-howto .howto-btn { width: auto; }
+.cr-panel-h .cr-panel-video { width: auto; margin-top: 12px; }

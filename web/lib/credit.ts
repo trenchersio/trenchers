@@ -16,11 +16,11 @@ import art from "@/lib/credit/artifacts.json";
 
 /** Mainnet addresses, filled in after the launch page deploys Trenchers Credit. */
 export const CREDIT_MAINNET = {
-  pool: "" as Address | "",
-  record: "" as Address | "",
-  lines: "" as Address | "",
-  timelock: "" as Address | "",
-  block: 0,
+  pool: "0xde33e4d977d56ba7133e8dae7b30844183c46570" as Address | "",
+  record: "0xf2f4d3611923828b8c65d41f53c285b3d1c90314" as Address | "",
+  lines: "0xa39651667bae1809f903e9a22b8f42c7d88e7c2e" as Address | "",
+  timelock: "0x4fec868c7848bc6dfe00a9556e710240e7344a79" as Address | "",
+  block: 89420119,
 };
 
 /** What the launch page deploys with. The owner of every setting is a 48-hour timelock run by the team Safe. */

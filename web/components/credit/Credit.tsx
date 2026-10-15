@@ -6,6 +6,7 @@ import type { Address } from "viem";
 import { useWallet, short } from "@/lib/wallet";
 import { reader, reason } from "@/lib/chain";
 import { ROUTES, TRENCHERS_TOKEN } from "@/lib/constants";
+import { VideoButton } from "@/components/docs/VideoButton";
 import {
   PREVIEW, PREVIEW_BACKER, creditAddrs, readOverview, readReport, readLoansOf, readPosition, readLender, readBacker, ownerOfAgent, lineFor, feeFor,
   backingSharesFor, sharesForFraction, lend, withdraw, openLine, addStake, closeLine, borrow, repay, harvest, sweepReserve,
@@ -116,6 +117,10 @@ function Hero({ o }: { o: Overview }) {
           <a href="#borrow" className="tbtn">Open a credit line</a>
           <a href="#record" className="tbtn">Check an agent</a>
         </div>
+        <div className="cr-howto">
+          <VideoButton className="video-btn-sm howto-btn" src="how-to-credit-lend" title="How to lend ETH and earn fees" label="How to lend" length="50 s" />
+          <VideoButton className="video-btn-sm howto-btn" src="how-to-credit-borrow" title="How to make your agent borrow" label="How to borrow" length="54 s" />
+        </div>
         <ul className="cr-who mono" aria-label="Who can use it"><li><i className="h" />Humans</li><li><i className="a" />AI agents and bots</li><li><i className="t" />Trenchers</li></ul>
       </div>
       <div className="cr-pool" aria-label="The pool right now">
@@ -219,7 +224,7 @@ function Lend({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: Address
 
   return (
     <section className="cr-panel tone-green" id="lend" aria-label="Lend ETH">
-      <div className="cr-panel-h"><span className="cr-k mono"><i>A</i>Lend</span><h2>Lend ETH</h2><p>Earn {pct(10_000 - o.params.backerFeeBps - o.params.reserveFeeBps)} of every loan fee. Lenders never pay for a default.</p></div>
+      <div className="cr-panel-h"><span className="cr-k mono"><i>A</i>Lend</span><h2>Lend ETH</h2><p>Earn {pct(10_000 - o.params.backerFeeBps - o.params.reserveFeeBps)} of every loan fee. Lenders never pay for a default.</p><VideoButton className="video-btn-sm howto-btn cr-panel-video" src="how-to-credit-lend" title="How to lend ETH and earn fees" label="How to lend" length="50 s" /></div>
       <label className="cr-field">
         <span className="mono">Amount{bal !== null ? <em>Wallet: {eth(bal)} ETH</em> : null}</span>
         <span className="cr-in"><input inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label="ETH to lend" /><b className="mono">ETH</b></span>
@@ -422,7 +427,7 @@ function BorrowPanel({ addrs, me, o, onDone }: { addrs: CreditAddrs | null; me: 
 
   return (
     <section className="cr-panel tone-gold" id="borrow" aria-label="Open a credit line">
-      <div className="cr-panel-h"><span className="cr-k mono"><i>B</i>Borrow</span><h2>Give an agent a credit line</h2><p>Stake $TRENCHERS behind any ERC-8004 agent you own, then borrow ETH against it.</p></div>
+      <div className="cr-panel-h"><span className="cr-k mono"><i>B</i>Borrow</span><h2>Give an agent a credit line</h2><p>Stake $TRENCHERS behind any ERC-8004 agent you own, then borrow ETH against it.</p><VideoButton className="video-btn-sm howto-btn cr-panel-video" src="how-to-credit-borrow" title="How to make your agent borrow" label="How to borrow" length="54 s" /></div>
 
       <ol className="cr-steps">
         <li className={agentId !== null ? "done" : ""}><span className="mono">1</span>Your agent</li>

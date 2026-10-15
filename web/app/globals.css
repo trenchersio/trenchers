@@ -2785,7 +2785,22 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 
 /* ---- Homepage first screen: the wall of 2,000 ---- */
 .hh { position: relative; isolation: isolate; width: 100vw; margin-left: calc(50% - 50vw); height: clamp(660px, calc(100svh - 150px), 900px); overflow: hidden; border-bottom: 1px solid var(--line); scroll-margin-top: 80px; }
-.hh-wall { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: -2; }
+.hh-wall { position: absolute; inset: 0; overflow: hidden; z-index: -2; contain: strict; }
+.hh-drift { position: absolute; left: 50%; top: 50%; width: 2300px; height: 1840px; margin: -920px 0 0 -1150px; opacity: 0; transition: opacity 1.2s ease; animation: hhdx 52s ease-in-out infinite alternate; will-change: transform; }
+.hh-drift.in { opacity: 1; }
+.hh-drift-y { position: absolute; inset: 0; animation: hhdy 62s ease-in-out infinite alternate; will-change: transform; }
+.hh-drift-y img { display: block; width: 2300px; height: 1840px; max-width: none; user-select: none; }
+@keyframes hhdx { from { transform: translate3d(-240px, 0, 0); } to { transform: translate3d(240px, 0, 0); } }
+@keyframes hhdy { from { transform: translate3d(0, -120px, 0); } to { transform: translate3d(0, 120px, 0); } }
+.hh-torch { position: absolute; left: 0; top: 0; width: 600px; height: 600px; border-radius: 50%; pointer-events: none; will-change: transform; transform: translate3d(-9999px, 0, 0);
+  -webkit-backdrop-filter: brightness(4.2) saturate(1.15); backdrop-filter: brightness(4.2) saturate(1.15);
+  -webkit-mask-image: radial-gradient(closest-side, #000 35%, rgba(0,0,0,.55) 65%, transparent 100%); mask-image: radial-gradient(closest-side, #000 35%, rgba(0,0,0,.55) 65%, transparent 100%); }
+.hh-wake { position: absolute; left: 0; top: 0; width: 40px; height: 40px; border-radius: 6px; pointer-events: none; opacity: 0;
+  -webkit-backdrop-filter: brightness(4.6); backdrop-filter: brightness(4.6); box-shadow: 0 0 0 1.5px var(--tone), 0 0 16px color-mix(in srgb, var(--tone) 70%, transparent);
+  animation: hhwake 1.8s ease-in-out forwards; transition: box-shadow .4s ease; }
+@keyframes hhwake { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@media (max-width: 900px) { .hh-torch { width: 420px; height: 420px; } }
+@media (prefers-reduced-motion: reduce) { .hh-drift, .hh-drift-y { animation: none; } }
 .hh-shade { position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:
     linear-gradient(90deg, rgba(11,13,12,.96) 0%, rgba(11,13,12,.86) 30%, rgba(11,13,12,.35) 58%, rgba(11,13,12,0) 75%),
@@ -2811,7 +2826,7 @@ button.eco-part:focus-visible, button.eco-core:focus-visible { outline: 2px soli
 .hh-go:focus-visible { outline: 2px dashed var(--tone); outline-offset: 4px; }
 .hh-fig { position: relative; align-self: center; justify-self: end; width: min(100%, 380px); margin: 0; animation: hhfloat 7s ease-in-out infinite; }
 @keyframes hhfloat { 50% { transform: translateY(-10px); } }
-.hh-halo { position: absolute; inset: -22%; z-index: -1; background: radial-gradient(closest-side, color-mix(in srgb, var(--tone) 30%, transparent), transparent); filter: blur(24px); transition: background .6s ease; }
+.hh-halo { position: absolute; inset: -30%; z-index: -1; background: radial-gradient(closest-side, color-mix(in srgb, var(--tone) 26%, transparent), color-mix(in srgb, var(--tone) 8%, transparent) 55%, transparent); }
 .hh-art { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 30px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 55%, transparent), 0 50px 120px -40px color-mix(in srgb, var(--tone) 60%, transparent); transition: box-shadow .6s ease; }
 .hh-fig figcaption { display: flex; justify-content: space-between; margin-top: 16px; font-size: 12px; color: var(--quiet); }
 .hh-fig figcaption span:last-child { color: var(--tone); }

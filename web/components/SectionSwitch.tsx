@@ -5,6 +5,9 @@ import { STEPS, type Where } from "@/lib/steps";
 export type Section = Where;
 
 /** The strip above every header: the Trencher (home) first, then the five things you make it do, then Mint. */
+/** What each part is called in the strip: the product, not the verb. */
+const STRIP: Record<string, string> = { trade: "arena", think: "inference", talk: "playground", launch: "launch", borrow: "credit" };
+
 export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where; wide?: boolean; mintOn?: boolean }) {
   return (
     <div className={`secsw${wide ? " secsw-wide" : ""}`}>
@@ -13,10 +16,10 @@ export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where;
         <a href={ROUTES.home} className={`secsw-hub${on === "hub" ? " on" : ""}`} aria-current={on === "hub" ? "page" : undefined}>
           <span className="secsw-core" aria-hidden="true" />Trenchers
         </a>
-        <span className="secsw-make" aria-hidden="true">make it</span>
+        
         {STEPS.map((s) => (
           <a key={s.key} href={s.home} className={`secsw-step tone-${s.tone}${on === s.key ? " on" : ""}`} aria-current={on === s.key ? "page" : undefined}>
-            <i className="secsw-n" aria-hidden="true">{s.n}</i>{s.name.toLowerCase()}
+            <i className="secsw-n" aria-hidden="true">{s.n}</i>{STRIP[s.key]}
           </a>
         ))}
       </nav>

@@ -687,8 +687,9 @@ Trenchers: anyone can launch anything, so check what you buy.
 in full. It is **open to everyone**: any agent registered on [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) can
 get a line, and anyone can lend or back the lines. A Trencher can use its own identity once it has one.
 
-> **Status: launching soon.** The contracts are written and tested (see [Tests](#tests)); the page shows a preview with
-> sample figures until they are deployed from the launch page.
+> **Status: live on Robinhood Chain.** Two short videos show the steps on the site: [how to lend](https://www.trenchers.io/video/how-to-credit-lend.mp4)
+> and [how to make your agent borrow](https://www.trenchers.io/video/how-to-credit-borrow.mp4). Both are also on the
+> [/credit](https://www.trenchers.io/credit) page.
 
 ### Three public roles
 
@@ -793,7 +794,16 @@ The cheapest way to a high score is the honest one: borrow a real amount, hold i
 | `CreditTimelock` | The owner: a 48-hour timelock run by the team Safe |
 
 The code is in [`credit/`](https://github.com/trenchersio/trenchers/tree/main/credit) (Foundry). Parts of the pool are adapted from MIT-licensed open-source code; the
-notice is in [`credit/NOTICE.md`](https://github.com/trenchersio/trenchers/blob/main/credit/NOTICE.md). Addresses go here once deployed.
+notice is in [`credit/NOTICE.md`](https://github.com/trenchersio/trenchers/blob/main/credit/NOTICE.md).
+
+**Deployed on Robinhood Chain** (from block 89,420,119):
+
+| Contract | Address |
+| --- | --- |
+| `TrenchersCreditPool` | `0xde33e4d977d56ba7133e8dae7b30844183c46570` |
+| `CreditRecord` | `0xf2f4d3611923828b8c65d41f53c285b3d1c90314` |
+| `TrenchersStakeLines` (and the backing vault) | `0xa39651667bae1809f903e9a22b8f42c7d88e7c2e` |
+| `CreditTimelock` (owner of both, 48 hours) | `0x4fec868c7848bc6dfe00a9556e710240e7344a79` |
 
 | Part | Where |
 | --- | --- |
@@ -1016,7 +1026,7 @@ cd engine && npm run test:icm && npm run test:inference
 | 7. Trenchers Inference Markets | Every frontier model through one key, paid in $TRENCHERS and burned; the P2P Marketplace for $TRENCHERS | Live on mainnet |
 | 8. Trenchers V4 Builder | Uniswap v4 hook coins with their own rules, fees and games, launched in one transaction; 0.3% of every trade to the $TRENCHERS buyback | Live on mainnet, open to everyone |
 | 9. One NFT Agent, endless possibilities | The site rebuilt around the Trencher: make it trade, think, talk and launch (and now borrow); Inference Markets and the V4 Coin Launcher open to everyone; send inference to a Trencher to make it its own NFT-identified AI model | Live |
-| 10. Trenchers Credit | Make it borrow: ETH credit lines for any ERC-8004 agent, backed in full; lend ETH or back the lines and earn from every loan; stake $TRENCHERS to open a line; a public credit score; 25% of every fee to the $TRENCHERS buyback | Built and tested; launching soon |
+| 10. Trenchers Credit | Make it borrow: ETH credit lines for any ERC-8004 agent, backed in full; lend ETH or back the lines and earn from every loan; stake $TRENCHERS to open a line; a public credit score; 25% of every fee to the $TRENCHERS buyback | Live |
 
 
 ## Risk
