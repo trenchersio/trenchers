@@ -119,6 +119,7 @@ function Hero({ o }: { o: Overview }) {
         </div>
         <div className="cr-howto">
           <VideoButton className="video-btn-sm howto-btn" src="how-to-credit-lend" title="How to lend ETH and earn fees" label="How to lend" length="50 s" />
+          <VideoButton className="video-btn-sm howto-btn" src="how-to-credit-back" title="How to back the lines" label="How to back" length="50 s" />
           <VideoButton className="video-btn-sm howto-btn" src="how-to-credit-borrow" title="How to make your agent borrow" label="How to borrow" length="54 s" />
         </div>
         <ul className="cr-who mono" aria-label="Who can use it"><li><i className="h" />Humans</li><li><i className="a" />AI agents and bots</li><li><i className="t" />Trenchers</li></ul>
@@ -302,7 +303,7 @@ function BackPanel({ addrs, me, o, sample, onDone }: { addrs: CreditAddrs | null
 
   return (
     <section className="cr-panel tone-violet" id="back" aria-label="Back the lines">
-      <div className="cr-panel-h"><span className="cr-k mono"><i>C</i>Back</span><h2>Back the lines</h2><p>Put ETH behind every stake line. It belongs to the backers, and nobody else can move it.</p></div>
+      <div className="cr-panel-h"><span className="cr-k mono"><i>C</i>Back</span><h2>Back the lines</h2><p>Put ETH behind every stake line. It belongs to the backers, and nobody else can move it.</p><VideoButton className="video-btn-sm howto-btn cr-panel-video" src="how-to-credit-back" title="How to back the lines" label="How to back" length="50 s" /></div>
 
       <div className="cr-back-cols">
       <div className="cr-back-l">
