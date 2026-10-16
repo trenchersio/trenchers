@@ -228,7 +228,7 @@ h3 { font-size: 19px; margin: 0 0 8px; font-weight: 600; }
 /* Desktop: stats strip on top, then board and detail side by side, both exactly as tall as
    the space left in the window, so their bottoms line up. Each column scrolls inside itself. */
 .bar-wide, .arena-main, .agents-main { max-width: 1440px; }
-.arena-main { padding-bottom: 24px; }
+.arena-main { padding-top: 16px; padding-bottom: 24px; }
 .arena-loading { color: var(--green); padding: 120px 0; text-align: center; }
 .arena { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - 96px); min-height: 720px; }
 
