@@ -90,12 +90,17 @@ a { color: inherit; }
 .step-tag { color: var(--tone) !important; }
 .tone-green { --tone: var(--green) !important; } .tone-ice { --tone: var(--ice) !important; } .tone-violet { --tone: var(--violet) !important; } .tone-amber { --tone: var(--amber) !important; } .tone-gold { --tone: var(--gold) !important; }
 .secsw-mint { flex: none; align-self: center; display: inline-flex; align-items: center; height: 26px; padding: 0 16px; margin-left: 12px; border-radius: 6px; background: var(--green); color: #07130C; font: 700 12.5px/1 var(--mono); letter-spacing: .02em; text-decoration: none; box-shadow: 0 0 18px rgba(57,255,136,.25); transition: box-shadow .15s ease, transform .15s ease; }
+.secsw-trenchies { flex: none; align-self: center; display: inline-flex; align-items: center; margin-left: 10px; padding: 0 2px; border-radius: 6px; transition: transform .15s ease, filter .15s ease; }
+.secsw-trenchies img { display: block; height: 28px; width: auto; filter: drop-shadow(0 0 10px rgba(57,255,136,.25)); }
+.secsw-trenchies:hover { transform: translateY(-1px) rotate(-2deg); }
+.secsw-trenchies:hover img { filter: drop-shadow(0 0 14px rgba(57,255,136,.55)); }
+.secsw-trenchies:focus-visible { outline: 2px dashed var(--green); outline-offset: 3px; }
 .secsw-mint:hover { box-shadow: 0 0 26px rgba(57,255,136,.5); transform: translateY(-1px); }
 .secsw-mint.on { outline: 2px solid rgba(57,255,136,.45); outline-offset: 2px; }
 .secsw-note { margin-left: 16px; align-self: center; color: #5E6762; font: 400 11px/1 var(--mono); letter-spacing: .03em; white-space: nowrap; }
 .secsw-wide .secsw-in { max-width: 1440px; }
 @media (max-width: 900px) { .secsw-note { display: none; } }
-@media (max-width: 640px) { .secsw-in { padding: 0 0 0 12px; height: 38px; } .secsw-path { gap: 2px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; } .secsw-path::-webkit-scrollbar { display: none; } .secsw-path a { padding: 0 7px; } .secsw-mint { height: 24px; padding: 0 12px; margin: 0 12px 0 6px; box-shadow: -14px 0 14px #070908, 0 0 14px rgba(57,255,136,.25); } }
+@media (max-width: 640px) { .secsw-trenchies { margin-left: 4px; } .secsw-trenchies img { height: 24px; } .secsw-in { padding: 0 0 0 12px; height: 38px; } .secsw-path { gap: 2px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; } .secsw-path::-webkit-scrollbar { display: none; } .secsw-path a { padding: 0 7px; } .secsw-mint { height: 24px; padding: 0 12px; margin: 0 12px 0 6px; box-shadow: -14px 0 14px #070908, 0 0 14px rgba(57,255,136,.25); } }
 
 .site { opacity: 0; }
 .site-in { opacity: 1; transition: opacity .6s ease; }

@@ -1,0 +1,76 @@
+/* trenchers.io/trenchies: the waitlist page */
+.tw { position: relative; min-height: 100svh; overflow: hidden; background: radial-gradient(70% 60% at 50% 45%, #0F1D16 0%, #0B0D0C 70%); display: grid; place-items: center; padding: 72px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+
+/* the game layer, shaded behind everything */
+.tw-bg { position: absolute; inset: 0; pointer-events: none; opacity: .32; filter: blur(1.2px) saturate(.85); animation: twdrift 40s ease-in-out infinite alternate; }
+@keyframes twdrift { from { transform: translate3d(-14px, -8px, 0) scale(1.02); } to { transform: translate3d(14px, 10px, 0) scale(1.04); } }
+.tw-shade { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(42% 46% at 50% 48%, rgba(11,13,12,.94) 0%, rgba(11,13,12,.72) 55%, rgba(11,13,12,.25) 100%); }
+.tw-card { position: absolute; border: 1px solid #232826; border-radius: 18px; background: rgba(17,21,20,.92); padding: 18px 20px; color: var(--fog); font: 500 14px/1.4 var(--sans, system-ui), system-ui, sans-serif; box-shadow: 0 30px 80px -30px rgba(0,0,0,.8); }
+.tw-k { margin: 0 0 12px; color: var(--quiet); font: 500 11px/1 var(--mono); letter-spacing: .12em; }
+.tw-card img { display: block; border-radius: 10px; }
+
+.tw-profile { left: 4%; top: 9%; width: 360px; display: grid; grid-template-columns: 84px 1fr; gap: 14px 16px; transform: rotate(-4deg); }
+.tw-profile img { width: 84px; height: 84px; }
+.tw-profile b { display: block; font-size: 20px; }
+.tw-lvl { color: var(--violet); font: 600 12px/1 var(--mono); letter-spacing: .12em; }
+.tw-xp { grid-column: 1 / -1; height: 12px; border-radius: 6px; background: rgba(232,236,233,.08); overflow: hidden; }
+.tw-xp i { display: block; height: 100%; width: 72%; border-radius: 6px; background: var(--violet); box-shadow: 0 0 16px var(--violet); animation: twxp 6s ease-in-out infinite; }
+@keyframes twxp { 0% { width: 38%; } 70%, 100% { width: 94%; } }
+.tw-badges { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.tw-badges span { padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--tone); color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); font: 700 11px/1 var(--mono); letter-spacing: .06em; }
+
+.tw-quests { right: 4%; top: 7%; width: 400px; transform: rotate(3deg); }
+.tw-q { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 12px; padding: 11px 12px; margin-top: 8px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent); }
+.tw-q i { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--tone); }
+.tw-q.done i { background: var(--tone); }
+.tw-q b { color: var(--tone); font: 700 13px/1 var(--mono); }
+
+.tw-board { left: 6%; bottom: 6%; width: 420px; transform: rotate(2.5deg); }
+.tw-row { display: grid; grid-template-columns: 28px 36px 1fr auto; align-items: center; gap: 12px; padding: 8px 10px; margin-top: 6px; border-radius: 10px; border: 1px solid #1F2422; }
+.tw-row img { width: 36px; height: 36px; border-radius: 8px; }
+.tw-row.me { border-color: var(--gold); box-shadow: 0 0 24px -6px rgba(242,211,107,.5); }
+.tw-rank { color: var(--quiet); font: 700 14px/1 var(--mono); }
+.tw-row.me .tw-rank, .tw-row.me b { color: var(--gold); }
+.tw-row b { font: 700 13px/1 var(--mono); }
+
+.tw-post { right: 6%; bottom: 9%; width: 400px; display: grid; grid-template-columns: 64px 1fr; gap: 14px; transform: rotate(-3deg); }
+.tw-post img { width: 64px; height: 64px; }
+.tw-post p { margin: 4px 0 8px; color: #C9D0CC; }
+.tw-react { color: var(--quiet); font: 500 12px/1 var(--mono); }
+
+.tw-pop { position: absolute; color: var(--green); font: 700 26px/1 var(--mono); text-shadow: 0 0 18px rgba(57,255,136,.6); opacity: 0; animation: twpop 6s ease-out infinite; }
+@keyframes twpop { 0% { opacity: 0; transform: translateY(14px); } 10% { opacity: 1; } 40% { opacity: 0; transform: translateY(-36px); } 100% { opacity: 0; } }
+
+/* the front */
+.tw-back { position: absolute; top: max(18px, env(safe-area-inset-top, 0px)); left: max(20px, env(safe-area-inset-left, 0px)); z-index: 2; color: var(--quiet); font-size: 13px; text-decoration: none; }
+.tw-back:hover { color: var(--fog); }
+.tw-back:focus-visible { outline: 2px dashed var(--green); outline-offset: 4px; }
+.tw-in { position: relative; z-index: 1; display: grid; justify-items: center; gap: 22px; width: min(100%, 460px); text-align: center; }
+.tw-symbol { width: clamp(170px, 34vw, 256px); height: auto; animation: twfloat 5s ease-in-out infinite; filter: drop-shadow(0 0 40px rgba(57,255,136,.18)); }
+@keyframes twfloat { 50% { transform: translateY(-10px) rotate(2deg); } }
+.tw-title { margin: 6px 0 0; color: var(--fog); font: 700 clamp(26px, 5vw, 34px)/1.15 var(--sans, system-ui), system-ui, sans-serif; letter-spacing: -.02em; text-wrap: balance; }
+.tw-form { display: flex; gap: 10px; width: 100%; }
+.tw-form input[type=email] { flex: 1 1 auto; min-width: 0; height: 50px; padding: 0 16px; border-radius: 10px; border: 1px solid #2A302D; background: rgba(17,21,20,.95); color: var(--fog); font: 500 16px var(--sans, system-ui), system-ui, sans-serif; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+.tw-form input[type=email]::placeholder { color: #5E6762; }
+.tw-form input[type=email]:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(57,255,136,.18); }
+.tw-form button { flex: none; height: 50px; padding: 0 24px; border: 0; border-radius: 10px; background: var(--green); color: #07130C; font-weight: 700; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 22px rgba(57,255,136,.3); transition: box-shadow .15s ease, transform .15s ease; }
+.tw-form button:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(57,255,136,.5); }
+.tw-form button:focus { outline: none; }
+.tw-form button:focus-visible { box-shadow: 0 0 0 3px rgba(57,255,136,.4); }
+.tw-form button:disabled, .tw-form input:disabled { opacity: .7; cursor: default; }
+.tw-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.tw-done { margin: 0; padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(57,255,136,.4); background: rgba(57,255,136,.08); color: var(--green); font: 600 15px/1.4 var(--sans, system-ui), system-ui, sans-serif; }
+.tw-err { margin: -8px 0 0; color: #FF8A8A; font-size: 14px; }
+
+@media (max-width: 900px) {
+  .tw-bg { opacity: .26; }
+  .tw-profile { left: -60px; top: 7%; }
+  .tw-quests { right: -120px; top: 30%; }
+  .tw-board { left: -90px; bottom: 4%; }
+  .tw-post { display: none; }
+}
+@media (max-width: 520px) {
+  .tw-form { flex-direction: column; }
+  .tw-form button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .tw-bg, .tw-symbol, .tw-xp i, .tw-pop { animation: none; } }

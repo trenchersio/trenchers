@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { explain, mainnetRpcs, rpcStats, scrub } from "./rpc";
 import { Engine } from "./engine";
 import { Chat } from "./chat";
+import { Waitlist } from "./waitlist";
 import { ENV, PROBLEMS } from "./env";
 import { liveCheck } from "./selfcheck";
 import { verifyDeployment } from "./verify";
@@ -76,6 +77,7 @@ async function loop() {
 }
 
 const chat = new Chat();
+const waitlist = new Waitlist();
 
 // Trenchers Inference Markets. Runs whatever state the trading engine is in: a desk with settings missing says
 // which ones on /icm and /health, and keeps answering.
@@ -108,6 +110,7 @@ const server = createServer(async (req, res) => {
   const path = (req.url ?? "/").split("?")[0];
   try {
     if (await chat.handle(req, res, path)) return;
+    if (await waitlist.handle(req, res, path)) return;
     if (await inference.handle(req, res, path)) return;
     if (await builder.handle(req, res, path)) return;
     if (path === "/health" || path === "/") {

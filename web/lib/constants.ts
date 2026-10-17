@@ -62,6 +62,7 @@ export const ROUTES = {
 
   credit: PREVIEW ? "credit.html" : "/credit",
   launcher: PREVIEW ? "launcher.html" : "/launcher",
+  trenchies: PREVIEW ? "trenchies.html" : "/trenchies",
 };
 /** The holders' chat opens to the public once NEXT_PUBLIC_CHAT_OPEN=1 (until then it's greyed out in the menu). */
 export const CHAT_OPEN = (process.env.NEXT_PUBLIC_CHAT_OPEN || "").trim() === "1";
