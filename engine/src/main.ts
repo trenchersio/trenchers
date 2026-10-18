@@ -139,7 +139,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ items: engine.activityFeed(), feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return null; } })(), now: Date.now() }));
     } else if (path === "/burns") {
       if (!engine) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
-      if (Date.now() - engine.burns.updatedAt > 6 * 3_600_000) { // the burn count: at most 4 times a day const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
+      if (Date.now() - engine.burns.updatedAt > 6 * 3_600_000) { /* the burn count: at most 4 times a day */ const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
       res.end(JSON.stringify(engine.burns.view()));
     } else if (path === "/token") {
       // A coin for a specific-token strategy: ticker, name, logo and market cap, or why it can't be traded.
