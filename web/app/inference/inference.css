@@ -588,24 +588,34 @@
 @media (min-width: 1001px) { .isec-lede .howto-btn { margin-left: auto; } }
 .ihero-pitch .howto-btn { width: auto; max-width: 260px; margin: 0 0 22px; }
 
-/* Optional: smart routing through Raeto */
-.iraeto { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(17,21,20,.9); overflow: hidden; }
-.iraeto.open { border-color: rgba(78,140,100,.6); }
-.iraeto-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; color: var(--fog); text-align: left; cursor: pointer; font: inherit; }
+/* Optional: smart routing through Raeto (a button that opens a popup) */
+.iraeto { margin-top: 12px; }
+.iraeto-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(17,21,20,.9); color: var(--fog); text-align: left; cursor: pointer; font: inherit; transition: border-color .15s ease; }
+.iraeto-btn:hover { border-color: rgba(78,140,100,.7); }
 .iraeto-btn img { flex: none; width: 34px; height: 34px; border-radius: 8px; }
 .iraeto-btn span { display: grid; gap: 2px; min-width: 0; }
 .iraeto-btn b { font-size: 14px; }
 .iraeto-btn em { font-style: normal; color: var(--quiet); font-size: 12.5px; }
-.iraeto-btn i { margin-left: auto; font-style: normal; color: var(--quiet); font-size: 18px; }
-.iraeto-btn:hover b { color: #7BC99A; }
+.iraeto-btn i { margin-left: auto; font-style: normal; color: var(--quiet); font-size: 15px; }
+.iraeto-btn:hover b, .iraeto-btn:hover i { color: #7BC99A; }
 .iraeto-btn:focus { outline: none; }
-.iraeto-btn:focus-visible { box-shadow: inset 0 0 0 2px rgba(57,255,136,.4); }
-.iraeto-body { padding: 0 14px 14px; color: var(--quiet); font-size: 13.5px; line-height: 1.55; }
-.iraeto-body p { margin: 0 0 10px; }
+.iraeto-btn:focus-visible { box-shadow: 0 0 0 3px rgba(57,255,136,.35); }
+.iraeto-back { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); background: rgba(5,7,6,.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: iraetoIn .18s ease; }
+@keyframes iraetoIn { from { opacity: 0; } }
+.iraeto-modal { width: min(100%, 640px); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid #2A302D; border-radius: 16px; background: #0F1312; box-shadow: 0 40px 120px -20px rgba(0,0,0,.8); }
+.iraeto-head { position: sticky; top: 0; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); background: #0F1312; }
+.iraeto-head img { flex: none; width: 40px; height: 40px; border-radius: 10px; }
+.iraeto-head h3 { margin: 0; font-size: 18px; color: var(--fog); }
+.iraeto-head p { margin: 2px 0 0; color: var(--quiet); font-size: 13px; }
+.iraeto-x { margin-left: auto; flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--quiet); cursor: pointer; font-size: 14px; }
+.iraeto-x:hover { color: var(--fog); border-color: #3A423E; }
+.iraeto-x:focus { outline: none; } .iraeto-x:focus-visible { box-shadow: 0 0 0 3px rgba(57,255,136,.35); }
+.iraeto-body { padding: 18px 20px 20px; color: var(--quiet); font-size: 14px; line-height: 1.6; }
+.iraeto-body p { margin: 0 0 12px; }
 .iraeto-body a { color: #7BC99A; }
-.iraeto-body code { color: var(--fog); font-size: 12.5px; }
-.iraeto-body ul { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 6px; }
-.iraeto-code { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.iraeto-body code { color: var(--fog); font-size: 13px; }
+.iraeto-body ul { margin: 0 0 14px; padding-left: 18px; display: grid; gap: 6px; }
+.iraeto-code { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
 .iraeto-copy { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--quiet); }
 .iraeto-copy:first-child { border-top: 0; }
-.iraeto-code pre { margin: 0; padding: 10px 12px; overflow-x: auto; font-size: 11.5px; line-height: 1.5; color: var(--fog); background: rgba(6,8,7,.6); }
+.iraeto-code pre { margin: 0; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; font-size: 12px; line-height: 1.55; color: var(--fog); background: rgba(6,8,7,.6); }
