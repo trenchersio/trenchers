@@ -101,9 +101,9 @@ const every = (ms: number, f: () => Promise<unknown> | unknown) => { const run =
 every(60_000, () => inference.poll());
 every(600_000, () => inference.burn());
 every(300_000, () => { const swept = inference.sweep(); if (swept.length) console.warn(`[inference] swept ${swept.length} stale hold(s)`); });
-every(60_000, () => inference.updateBook());
+every(300_000, () => inference.updateBook()); // the P2P book: every 5 minutes
 const builder = new BuilderIndex();
-every(60_000, () => builder.update());
+every(6 * 3_600_000, () => builder.update()); // the V4 Builder coin list: 4 times a day
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
@@ -139,7 +139,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ items: engine.activityFeed(), feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return null; } })(), now: Date.now() }));
     } else if (path === "/burns") {
       if (!engine) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
-      if (Date.now() - engine.burns.updatedAt > 300_000) { const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
+      if (Date.now() - engine.burns.updatedAt > 6 * 3_600_000) { // the burn count: at most 4 times a day const p = engine.burns.update(); if (!engine.burns.updatedAt) await Promise.race([p, new Promise((r) => setTimeout(r, 20_000))]); }
       res.end(JSON.stringify(engine.burns.view()));
     } else if (path === "/token") {
       // A coin for a specific-token strategy: ticker, name, logo and market cap, or why it can't be traded.
