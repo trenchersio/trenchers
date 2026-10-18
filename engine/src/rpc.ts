@@ -24,16 +24,64 @@ export function rpcStats() {
   const last10 = recent.filter((x) => Date.now() - x.t < 600_000);
   const by10 = new Map<string, number>(); for (const x of last10) by10.set(x.m, (by10.get(x.m) ?? 0) + 1);
   const minutes = Math.min(10, (Date.now() - since) / 60_000);
-  return { requestsLastMinute: recent.filter((x) => Date.now() - x.t < 60_000).length, perDayAtLast10MinRate: Math.round((last10.length / Math.max(1, minutes)) * 1440),
+  // Alchemy's published compute units per method (approximate), so the bill can be read straight off /health.
+  const CU: Record<string, number> = { eth_getLogs: 75, eth_call: 26, eth_getBlockByNumber: 16, eth_blockNumber: 10, eth_getCode: 19, eth_getBalance: 19, eth_estimateGas: 87, eth_sendRawTransaction: 250, eth_getTransactionReceipt: 15, eth_chainId: 0, eth_gasPrice: 19, eth_maxPriorityFeePerGas: 10, eth_getTransactionCount: 26, eth_feeHistory: 10 };
+  const cu = (m: Map<string, number>) => [...m].reduce((a, [k, v]) => a + v * (CU[k] ?? 26), 0);
+  const cuPerDayNow = Math.round((cu(by10) / Math.max(1, minutes)) * 1440);
+  return { budget: budget.view(), estimatedComputeUnitsPerDayAtLast10MinRate: cuPerDayNow, estimatedComputeUnitsSinceStart: cu(counts), requestsLastMinute: recent.filter((x) => Date.now() - x.t < 60_000).length, perDayAtLast10MinRate: Math.round((last10.length / Math.max(1, minutes)) * 1440),
     last10MinByMethod: Object.fromEntries([...by10].sort((a, b) => b[1] - a[1])),
     sinceStart: { since: new Date(since).toISOString(), total, perDayIncludingStartup: Math.round((total / hours) * 24), byMethod: Object.fromEntries([...counts].sort((a, b) => b[1] - a[1])) } };
 }
 
 export function transport(list: string[], opts: { retryCount?: number; retryDelay?: number; timeout?: number } = {}): Transport {
-  const ts = list.map((u) => http(u, { retryCount: opts.retryCount ?? 2, retryDelay: opts.retryDelay ?? 400, timeout: opts.timeout ?? 20_000,
+  const ts = list.map((u) => http(u, { retryCount: opts.retryCount ?? 1, retryDelay: opts.retryDelay ?? 1_000, timeout: opts.timeout ?? 20_000,
     onFetchRequest: async (req) => { try { count(await req.clone().json()); } catch { count(null); } } }));
-  return ts.length === 1 ? ts[0] : fallback(ts, { rank: false, retryCount: 1 });
+  const inner = ts.length === 1 ? ts[0] : fallback(ts, { rank: false, retryCount: 1 });
+  // Every request waits its turn in the shared budget below, before it is sent (so the wait never counts
+  // against the request's own timeout).
+  return ((cfg: Parameters<Transport>[0]) => {
+    const t = inner(cfg);
+    return { ...t, request: (async (args: unknown) => { await budget.take(); return (t.request as (a: unknown) => Promise<unknown>)(args); }) as typeof t.request };
+  }) as Transport;
 }
+
+/**
+ * A hard ceiling on RPC use, for the whole process (engine, inference desk, builder index, everything).
+ * - RPC_MAX_PER_DAY (default 100,000): the day's budget, per UTC day.
+ * - RPC_MAX_PER_MIN (default 400): a burst allowance, so trades in a busy minute are never slowed.
+ * - Once the day's budget is spent, RPC_SLOW_PER_MIN (default 20) a minute until the day ends: the Arena and
+ *   trading keep going, slowly, and the bill stays bounded (at most ~129,000 requests a day with the defaults).
+ * A bug or a restart loop can therefore never run up the RPC bill again. /health shows the budget.
+ */
+const num = (v: string | undefined, d: number) => { const n = Number((v ?? "").trim()); return Number.isFinite(n) && n > 0 ? n : d; };
+export const budget = new (class Budget {
+  readonly perMin = num(process.env.RPC_MAX_PER_MIN, 400);
+  readonly perDay = num(process.env.RPC_MAX_PER_DAY, 100_000);
+  readonly slowPerMin = num(process.env.RPC_SLOW_PER_MIN, 20);
+  private times: number[] = [];
+  private day = new Date().toISOString().slice(0, 10);
+  usedToday = 0;
+  waitedMs = 0;
+  private chain: Promise<void> = Promise.resolve();
+  take(): Promise<void> {
+    // one at a time, in order, so a burst is spread out instead of all waking together
+    const turn = this.chain.then(() => this.next());
+    this.chain = turn.catch(() => undefined);
+    return turn;
+  }
+  private async next() {
+    for (;;) {
+      const now = Date.now(), today = new Date(now).toISOString().slice(0, 10);
+      if (today !== this.day) { this.day = today; this.usedToday = 0; }
+      const cap = this.usedToday >= this.perDay ? this.slowPerMin : this.perMin;
+      this.times = this.times.filter((t) => now - t < 60_000);
+      if (this.times.length >= cap) { const wait = 60_000 - (now - this.times[this.times.length - cap]) + 5; this.waitedMs += wait; await new Promise((r) => setTimeout(r, Math.max(50, wait))); continue; }
+      this.times.push(now); this.usedToday++;
+      return;
+    }
+  }
+  view() { return { perDayBudget: this.perDay, usedToday: this.usedToday, burstPerMinute: this.perMin, slowPerMinuteOnceSpent: this.slowPerMin, lastMinute: this.times.filter((t) => Date.now() - t < 60_000).length, dayBudgetSpent: this.usedToday >= this.perDay, secondsWaitedSinceStart: Math.round(this.waitedMs / 1000) }; }
+})();
 
 /** The mainnet endpoints for /verify and /livecheck: MAINNET_RPC_URL, else the engine's own RPC_URL when it is mainnet, else public. */
 export function mainnetRpcs(): string[] {
