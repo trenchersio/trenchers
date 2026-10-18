@@ -587,3 +587,25 @@
 .isec-lede .howto-btn { display: flex; margin: 14px 0 0; width: auto; max-width: 260px; }
 @media (min-width: 1001px) { .isec-lede .howto-btn { margin-left: auto; } }
 .ihero-pitch .howto-btn { width: auto; max-width: 260px; margin: 0 0 22px; }
+
+/* Optional: smart routing through Raeto */
+.iraeto { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(17,21,20,.9); overflow: hidden; }
+.iraeto.open { border-color: rgba(78,140,100,.6); }
+.iraeto-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; color: var(--fog); text-align: left; cursor: pointer; font: inherit; }
+.iraeto-btn img { flex: none; width: 34px; height: 34px; border-radius: 8px; }
+.iraeto-btn span { display: grid; gap: 2px; min-width: 0; }
+.iraeto-btn b { font-size: 14px; }
+.iraeto-btn em { font-style: normal; color: var(--quiet); font-size: 12.5px; }
+.iraeto-btn i { margin-left: auto; font-style: normal; color: var(--quiet); font-size: 18px; }
+.iraeto-btn:hover b { color: #7BC99A; }
+.iraeto-btn:focus { outline: none; }
+.iraeto-btn:focus-visible { box-shadow: inset 0 0 0 2px rgba(57,255,136,.4); }
+.iraeto-body { padding: 0 14px 14px; color: var(--quiet); font-size: 13.5px; line-height: 1.55; }
+.iraeto-body p { margin: 0 0 10px; }
+.iraeto-body a { color: #7BC99A; }
+.iraeto-body code { color: var(--fog); font-size: 12.5px; }
+.iraeto-body ul { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 6px; }
+.iraeto-code { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.iraeto-copy { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--quiet); }
+.iraeto-copy:first-child { border-top: 0; }
+.iraeto-code pre { margin: 0; padding: 10px 12px; overflow-x: auto; font-size: 11.5px; line-height: 1.5; color: var(--fog); background: rgba(6,8,7,.6); }
