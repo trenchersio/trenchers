@@ -31,7 +31,7 @@ import {
   type CollectionName, type ConfirmedPayment, type IcmConfig, type IcmRequest, type IcmResponse, type PaymentSource, type Row,
   type Upstream, type UpstreamModel,
 } from "./icm/index.ts";
-import { transport, urls } from "./rpc";
+import { transport, urls, Span } from "./rpc";
 
 // ------------------------------------------------------------------------------------------------ settings
 
@@ -244,6 +244,7 @@ class OtcIndex {
   orders = new Map<number, OtcOrder>();
   fills: OtcFill[] = [];
   cursor: number;
+  private span = new Span(50_000n);
   private symbols = new Map<string, string>();
   constructor(private readonly pub: PublicClient, private readonly otc: Address, start: number, private readonly range: number,
     private readonly desk: string | null, private readonly verify: (token: string) => { verified: boolean; agent: number | null }) { this.cursor = start - 1; }
@@ -259,8 +260,11 @@ class OtcIndex {
     const head = Number(await this.pub.getBlockNumber());
     if (this.cursor < 0) this.cursor = Math.max(0, head - 50_000);
     while (this.cursor < head) {
-      const from = this.cursor + 1, to = Math.min(head, from + this.range);
-      const logs = await this.pub.getLogs({ address: this.otc, events: OTC_EVENTS, fromBlock: BigInt(from), toBlock: BigInt(to) });
+      const from = this.cursor + 1, to = Math.min(head, from + Number(this.span.size) - 1);
+      let logs;
+      try { logs = await this.pub.getLogs({ address: this.otc, events: OTC_EVENTS, fromBlock: BigInt(from), toBlock: BigInt(to) }); }
+      catch (e) { this.span.fail(e); continue; }
+      this.span.ok(logs.length);
       const times = new Map<bigint, number>();
       for (const l of logs) {
         if (!times.has(l.blockNumber!)) times.set(l.blockNumber!, Number((await this.pub.getBlock({ blockNumber: l.blockNumber! })).timestamp) * 1000);

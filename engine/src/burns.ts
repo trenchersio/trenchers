@@ -1,4 +1,5 @@
 import { formatUnits, parseAbi, type Address, type PublicClient } from "viem";
+import { Span } from "./rpc";
 
 /**
  * $TRENCHERS buyback and burn tracker for the site: how many tokens the buyback wallet has received
@@ -22,7 +23,8 @@ export class BurnTracker {
   updatedAt = 0;
   error: string | null = null;
 
-  constructor(private pub: PublicClient, private range: bigint) {}
+  private span: Span;
+  constructor(private pub: PublicClient, max: bigint) { this.span = new Span(max); }
 
   /** Finds the token's first block once (bisection on its code), then reads Transfer logs forward. */
   private async start(head: bigint) {
@@ -39,11 +41,15 @@ export class BurnTracker {
         const head = await this.pub.getBlockNumber();
         if (this.cursor === null) await this.start(head);
         while (this.cursor! < head) {
-          const from = this.cursor! + 1n, to = from + this.range - 1n < head ? from + this.range - 1n : head;
-          const [burns, buys] = await Promise.all([
-            this.pub.getLogs({ address: this.token, event: TRANSFER, args: { to: BURN }, fromBlock: from, toBlock: to }),
-            this.pub.getLogs({ address: this.token, event: TRANSFER, args: { to: this.buyback }, fromBlock: from, toBlock: to }),
-          ]);
+          const from = this.cursor! + 1n, to = from + this.span.size - 1n < head ? from + this.span.size - 1n : head;
+          let burns, buys;
+          try {
+            [burns, buys] = await Promise.all([
+              this.pub.getLogs({ address: this.token, event: TRANSFER, args: { to: BURN }, fromBlock: from, toBlock: to }),
+              this.pub.getLogs({ address: this.token, event: TRANSFER, args: { to: this.buyback }, fromBlock: from, toBlock: to }),
+            ]);
+          } catch (e) { this.span.fail(e); continue; }
+          this.span.ok(burns.length + buys.length);
           for (const l of burns) this.burnt += l.args.value ?? 0n;
           for (const l of buys) this.bought += l.args.value ?? 0n;
           this.cursor = to;

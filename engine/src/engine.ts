@@ -1,4 +1,4 @@
-import { transport, urls } from "./rpc";
+import { transport, urls, rateLimited } from "./rpc";
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11" as const;
 const MC3_ABI = [{ type: "function", name: "getEthBalance", stateMutability: "view", inputs: [{ name: "addr", type: "address" }], outputs: [{ name: "balance", type: "uint256" }] }] as const;
 import {
@@ -108,7 +108,7 @@ export class Engine {
       this.engineAddress = account.address;
     } else { this.wallet = null; this.engineAddress = null; }
     this.log = log;
-    this.burns = new BurnTracker(this.pub, ENV.LOG_RANGE);
+    this.burns = new BurnTracker(this.pub, ENV.LOG_RANGE_MAX);
     if (ENV.TELEGRAM_BOT_TOKEN && ENV.TELEGRAM_CHAT) {
       this.telegram = new TelegramFeed(
         { api: process.env.TELEGRAM_API, token: ENV.TELEGRAM_BOT_TOKEN, chat: ENV.TELEGRAM_CHAT, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, imageBase: ENV.IMAGE_BASE, nft: ENV.NFT },
@@ -225,7 +225,7 @@ export class Engine {
 
   private headTime = 0;
   /** Blocks read per log query: halves on failure, grows back on success. */
-  private range = ENV.LOG_RANGE;
+  private range = ENV.LOG_RANGE_MAX;
   head = 0n;
   syncError: string | null = null;
   private async blockTime(n: bigint) {
@@ -277,10 +277,10 @@ export class Engine {
       } catch (e) {
         const m = (e as Error).message;
         // A rate limit: smaller windows only make more calls; wait it out (the caller pauses).
-        if (/rate ?limit|too many|429|capacity|exceeded your|compute units/i.test(m)) throw e;
+        if (rateLimited(e)) throw e;
         // Too many logs in one window (busy blocks) or a flaky RPC: read a smaller window instead of retrying the
         // same one forever, which would freeze awakenings, rules and trades behind it.
-        if (this.range > 1n) { this.range = this.range / 2n > 0n ? this.range / 2n : 1n; this.log(`Reading blocks ${from}-${to} failed (${m.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
+        if (this.range > 1_000n) { this.range = this.range / 2n > 1_000n ? this.range / 2n : 1_000n; this.log(`Reading blocks ${from}-${to} failed (${m.split("\n")[0].slice(0, 100)}); retrying ${this.range} blocks at a time`); continue; }
         throw e;
       }
       if (this.interp) this.lastWindow = { b: to, tb: this.interp.tb };

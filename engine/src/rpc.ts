@@ -53,3 +53,26 @@ export function explain(e: unknown): string {
 
 /** Hides API keys in RPC URLs (e.g. Alchemy's /v2/KEY) before anything is shown on a public page. */
 export const scrub = (s: string) => s.replace(/(\/v[23]\/)[A-Za-z0-9_-]{8,}/g, "$1…").replace(/(quiknode\.pro\/)[A-Za-z0-9_-]+/g, "$1…").replace(/(chainstack\.com\/)[A-Za-z0-9_-]+/g, "$1…");
+
+/** True when an RPC error means "slow down" (rate limit, compute units, monthly capacity), not "this query was too
+ *  big". viem often reports these as a bare "RPC Request failed.", with the real reason in `details` or the status. */
+export function rateLimited(e: unknown): boolean {
+  const x = e as { message?: string; details?: string; status?: number; code?: number; cause?: { status?: number; details?: string; code?: number } } | null;
+  const status = x?.status ?? x?.cause?.status, code = x?.code ?? x?.cause?.code;
+  const text = `${x?.message ?? ""} ${x?.details ?? ""} ${x?.cause?.details ?? ""}`;
+  return status === 429 || code === 429 || code === -32005 || /rate ?limit|too many requests|429|capacity|compute units|exceeded your|monthly|quota|throughput/i.test(text);
+}
+
+/**
+ * The block window for a history scan: starts big (fewer calls), halves when a query is too large, grows back while
+ * results are small. A rate-limit error is never answered by shrinking (smaller windows only mean more calls): it is
+ * passed on, so the scan stops and resumes from where it was on its next run.
+ */
+export class Span {
+  size: bigint;
+  constructor(private readonly max: bigint, private readonly min = 1_000n) { this.size = max; }
+  /** After a successful query with `n` results. */
+  ok(n: number) { if (n < 2_000 && this.size < this.max) this.size = this.size * 2n < this.max ? this.size * 2n : this.max; else if (n > 8_000 && this.size > this.min) this.size = this.size / 2n; }
+  /** After a failed query: throws if the scan should stop (rate limit, or already at the smallest window). */
+  fail(e: unknown) { if (rateLimited(e) || this.size <= this.min) throw e; this.size = this.size / 2n > this.min ? this.size / 2n : this.min; }
+}

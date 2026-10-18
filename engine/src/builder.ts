@@ -14,7 +14,7 @@ import {
   createPublicClient, defineChain, encodeAbiParameters, getContractAddress, keccak256, parseAbi, parseAbiParameters,
   type Address, type Hex, type PublicClient,
 } from "viem";
-import { transport, urls } from "./rpc";
+import { transport, urls, Span } from "./rpc";
 
 const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
 const isAddr = (v: string) => /^0x[0-9a-fA-F]{40}$/.test(v);
@@ -70,7 +70,7 @@ export class BuilderIndex {
   private coins = new Map<string, Coin>();
   private byPool = new Map<string, string>();
   private cursor = -1;
-  private range: number;
+  private span = new Span(50_000n);
   private times = new Map<bigint, number>();
   private manager: Address;
   private weth: string;
@@ -96,7 +96,6 @@ export class BuilderIndex {
     // Only the local end-to-end test points these elsewhere.
     this.manager = (isAddr(clean(env.V4_POOL_MANAGER)) ? clean(env.V4_POOL_MANAGER) : ROBINHOOD_POOL_MANAGER) as Address;
     this.weth = (isAddr(clean(env.V4_WETH)) ? clean(env.V4_WETH) : ROBINHOOD_WETH).toLowerCase();
-    this.range = Math.max(1, Number(clean(env.LOG_RANGE) || "5000") || 5000);
     const rpc = clean(env.RPC_URL);
     const chainId = Number(clean(env.CHAIN_ID) || "4663");
     const chain = defineChain({ id: chainId, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [urls(rpc)[0] ?? rpc] } } });
@@ -187,9 +186,12 @@ export class BuilderIndex {
       if (this.cursor < 0) this.cursor = this.startBlock - 1;
       const touched = new Set<string>();
       while (this.cursor < head) {
-        const from = this.cursor + 1, to = Math.min(head, from + this.range - 1);
+        const from = this.cursor + 1, to = Math.min(head, from + Number(this.span.size) - 1);
         // Everything for this range is read first and applied together, so a failure halfway never counts anything twice.
-        const launches = (await this.pub.getLogs({ address: this.factory, event: LAUNCHED as never, fromBlock: BigInt(from), toBlock: BigInt(to) })) as unknown as Log[];
+        let launches: Log[];
+        try { launches = (await this.pub.getLogs({ address: this.factory, event: LAUNCHED as never, fromBlock: BigInt(from), toBlock: BigInt(to) })) as unknown as Log[]; }
+        catch (e) { this.span.fail(e); continue; }
+        this.span.ok(launches.length);
         const fresh = new Map<string, Coin>();
         for (const l of launches) {
           const c = await this.coinFrom(l);
