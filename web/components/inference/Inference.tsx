@@ -2,7 +2,6 @@
 // Trenchers Inference Markets: every frontier model through one key, paid in $TRENCHERS, every token spent burned.
 import type { ReactNode } from "react";
 import { VideoButton } from "@/components/docs/VideoButton";
-import { compact, tokens, type Stats } from "@/lib/inference";
 import { GITHUB_URL, ROUTES, SOCIALS, TRENCHERS_PONS } from "@/lib/constants";
 import { TokenLine } from "@/components/TokenLine";
 import { useDesk } from "./useDesk";
@@ -40,48 +39,6 @@ const FAQ = [
   { q: "What does sending inference to a Trencher do?", a: "It gives the Trencher a balance of its own on the desk, held by its agent wallet. Its holder can then make keys for it and call it as its own model, trencher-<number>: it knows its identity, its wallet and the rule it was trained with, and answers as itself, paid from its own balance. The balance stays with the Trencher when it is sold; the old holder's keys stop working." },
   { q: "What are the risks?", a: "Credit lives on the desk's ledger, not in a contract, so only top up what you intend to use. The router and P2P contracts are small, open source and reviewed before launch. Nothing here is financial advice." },
 ];
-
-/** Digits on their own tiles, like a departures board: a number you read, not a box with a number in it. */
-function Flaps({ value }: { value: string }) {
-  return <span className="iflap" aria-label={value}>{[...value].map((c, i) => <i key={i} className={/[0-9]/.test(c) ? "" : "sep"}>{c}</i>)}</span>;
-}
-
-/** The furnace: every day's burn as a column of pixels, the total underneath, and three counters beside it. */
-function Live({ stats }: { stats: Stats | null }) {
-  const days = (stats?.burnedByDay ?? Array(14).fill("0")).map((d) => Number(BigInt(d) / 10n ** 18n));
-  const peak = Math.max(1, ...days);
-  const ROWS = 9;
-  return (
-    <section className="ifurnace" aria-label="The desk, live">
-      <div className="ifurn-main">
-        <div className="ifurn-read">
-          <span className="ifurn-k mono"><span className="ibuy-flame" aria-hidden="true" />burned by inference</span>
-          <b className="mono">{stats ? tokens(stats.burnedTokens) : "–"}</b>
-          <span className="ifurn-u mono">$TRENCHERS gone for good · last 14 days above</span>
-        </div>
-        <div className="ifurn-grid" aria-hidden="true">
-          {days.map((d, i) => {
-            const lit = Math.max(d > 0 ? 1 : 0, Math.round((d / peak) * ROWS));
-            return (
-              <span key={i} className="ifurn-col" style={{ ["--i" as string]: i }}>
-                {Array.from({ length: ROWS }, (_, r) => {
-                  const on = ROWS - r <= lit;
-                  const top = on && ROWS - r === lit;
-                  return <i key={r} className={top ? "top" : on ? "on" : ""} />;
-                })}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-      <ul className="ifurn-side">
-        <li><span>calls served</span><Flaps value={stats ? compact(stats.calls) : "--"} /></li>
-        <li><span>wallets with credit</span><Flaps value={stats ? compact(stats.accounts) : "--"} /></li>
-        <li><span>models live</span><Flaps value={stats ? String(stats.models) : "--"} /></li>
-      </ul>
-    </section>
-  );
-}
 
 export function Inference() {
   const d = useDesk();
@@ -137,8 +94,6 @@ export function Inference() {
           {d.rateFailed && <p className="inf-warn">The desk could not be reached just now. Try again in a moment.</p>}
         </div>
       </section>
-
-      <Live stats={d.stats} />
 
       <section className="iflow" aria-label="How it works">
         {[
