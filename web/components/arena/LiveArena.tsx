@@ -129,7 +129,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
         ) : (
           <div className="stat"><span className="stat-label">Network</span><span className="stat-value mono">{testnet ? "Testnet" : "Mainnet"}</span><span className="stat-sub">Robinhood Chain</span></div>
         )}
-        <div className="stat"><span className="stat-label">Updated</span><span className="stat-value mono">{ago(now - feed.updatedAt)}</span><span className="stat-sub">every 5 seconds</span></div>
+        <div className="stat"><span className="stat-label">Updated</span><span className="stat-value mono">{ago(now - feed.updatedAt)}</span><span className="stat-sub">every minute</span></div>
       </section>
 
       <div className="arena-grid">

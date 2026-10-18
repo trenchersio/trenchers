@@ -101,7 +101,7 @@ export class Engine {
     const chain = defineChain({ id: ENV.CHAIN_ID, name: "Robinhood Chain", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [ENV.RPC_URL] } } });
     // Public RPCs throttle bursts: retry with backoff, and fall back to a second endpoint if one is set.
     this.chainDef = chain;
-    this.pub = createPublicClient({ chain, transport: transport(urls(ENV.RPC_URL)), batch: { multicall: { wait: 16 } } }) as PublicClient;
+    this.pub = createPublicClient({ chain, transport: transport(urls(ENV.RPC_URL)), batch: { multicall: { wait: 16, batchSize: 16_384 } } }) as PublicClient;
     if (ENV.ENGINE_KEY) {
       const account = privateKeyToAccount(ENV.ENGINE_KEY);
       this.wallet = createWalletClient({ account, chain, transport: transport(urls(ENV.RPC_URL)) });
@@ -172,7 +172,7 @@ export class Engine {
     const head = latest.number!;
     this.headTime = Number(latest.timestamp);
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
-    // The team's emergency stop: one cheap read every 15 s (agents themselves are re-read every minute or on their events).
+    // The team's emergency stop: one cheap read every 15 s (agents themselves are re-read on their events, and every 5 minutes as a backstop).
     if (Date.now() - this.lastPauseRead > 15_000) { this.lastPauseRead = Date.now(); await this.readPause(); }
     this.head = head;
     if (head > this.cursor) {
@@ -180,7 +180,7 @@ export class Engine {
       catch (e) { this.syncError = (e as Error).message.split("\n")[0].slice(0, 160); this.log(`reading new blocks failed at ${this.cursor + 1n}: ${this.syncError}`); }
     }
     // Agents are re-read straight away on their own events (awakening, new rule, start/pause); this is the backstop.
-    if (Date.now() - this.lastAgentRefresh > 60_000) await this.refreshAgents(false);
+    if (Date.now() - this.lastAgentRefresh > 300_000) await this.refreshAgents(false);
     if (Date.now() - this.lastSnapshot > 600_000) await this.snapshot();
     if (Date.now() - this.lastRecover > 600_000) { await this.resolveRouter(); await this.recoverHoldings().catch((e) => this.log(`holdings check failed: ${(e as Error).message.split("\n")[0]}`)); }
     if (ENV.FEE_KEEPER && ENV.DIST && Date.now() - this.feeKeeper.last > 600_000) await this.feeKeeper.run().catch((e) => this.log(`fee share upkeep failed: ${(e as Error).message.split("\n")[0]}`));

@@ -151,7 +151,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(m ? { ok: true, ...m } : { ok: false, error: engine.notPons.has(a.toLowerCase() as `0x${string}`) ? "This isn't a Pons coin paired with ETH, so agents can't trade it." : "Couldn't read this coin right now. Try again in a minute." }));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
-      res.end(await shared("arena", 15_000, async () => JSON.stringify(await engine.arena())));
+      res.end(await shared("arena", 60_000, async () => JSON.stringify(await engine.arena())));
     } else { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); }
   } catch (e) { res.statusCode = 500; res.end(scrub(JSON.stringify({ error: (e as Error).message }))); }
 });
