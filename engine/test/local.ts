@@ -205,8 +205,14 @@ async function main() {
   await call(market, "MockMarket", "buy", [nft, 8n, alice.address], parseEther("0.05"), dev);
   await call(nft, "TrenchersNFT", "transferFrom", [alice.address, dev.address, 9n], 0n, alice);
   await sleep(12000);
-  const fresh = posts.slice(n0);
   const cap = (p: (typeof posts)[number]) => p.body.caption ?? p.body.text ?? (p.body as { media?: { caption?: string }[] }).media?.[0]?.caption ?? "";
+  const isTrade = (p: (typeof posts)[number]) => /Trencher #\d+ (bought|sold) \$/.test(cap(p));
+  // Agent trades so far are posted too, with the coin, the ETH and a link to the agent.
+  const tradePosts = posts.filter(isTrade);
+  console.log("   telegram trades:", JSON.stringify(tradePosts.slice(0, 4).map((p) => cap(p).split("\n").slice(0, 2).join(" | "))));
+  check(tradePosts.some((p) => /Trencher #6 bought \$/.test(cap(p)) && /ETH in/.test(cap(p)) && /\/agent\/6"/.test(cap(p)) && /\/awake\/6\.png$/.test(p.body.photo ?? "")), "Telegram: an agent buy is posted with the coin, the ETH, the agent link and its art");
+  check(tradePosts.some((p) => /Trencher #\d+ sold \$/.test(cap(p)) && /ETH out/.test(cap(p))), "Telegram: an agent sell is posted with the ETH out");
+  const fresh = posts.slice(n0).filter((p) => !isTrade(p));
   console.log("   telegram:", JSON.stringify(fresh.map((p) => ({ m: p.method, c: cap(p).split("\n")[0] }))));
   check(fresh.length === 2, `Telegram got exactly 2 posts (mint and sale, not the plain transfer): ${fresh.length}`);
   check(fresh[0]?.method === "sendMediaGroup" && /2 Trenchers minted/.test(cap(fresh[0])) && /0\.04 ETH/.test(cap(fresh[0])), "Telegram: the mint of 2 is posted with both images and the price");
@@ -215,7 +221,7 @@ async function main() {
   const n1 = posts.length;
   await call(fund, "AgentStarterFund", "claim", [9n], 0n, dev);
   await sleep(8000);
-  const woke = posts.slice(n1);
+  const woke = posts.slice(n1).filter((p) => !isTrade(p));
   check(woke.length === 1 && /Trencher #9 awakened/.test(cap(woke[0])) && /\/awake\/9\.png$/.test(woke[0].body.photo ?? ""), `Telegram: the awakening of #9 is posted with its art (${woke.length} post)`);
   // Site ticker and agent status.
   const act = engine.activityFeed();

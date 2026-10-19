@@ -418,7 +418,7 @@ export class Engine {
         if (p) { p.ethIn += ethIn; p.tokens += tokens; } else book.set(token, { token, ethIn, tokens, openedAt: t });
         await this.symbolOf(token);
         this.touch(w, token);
-        this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!);
+        this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!, undefined, live || l.blockNumber! >= this.catchUpFrom);
         break;
       }
       case "Sold": {
@@ -435,7 +435,7 @@ export class Engine {
           if (p.tokens <= 0n) book.delete(token);
         }
         await this.symbolOf(token);
-        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct);
+        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct, live || l.blockNumber! >= this.catchUpFrom);
         break;
       }
     }
@@ -488,8 +488,10 @@ export class Engine {
 
   private book(w: Address) { let b = this.positions.get(w); if (!b) { b = new Map(); this.positions.set(w, b); } return b; }
   private openCount() { let n = 0; for (const b of this.positions.values()) n += b.size; return n; }
-  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number) {
-    this.trades.push({ agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.symbols.get(token) ?? this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx, pnlPct });
+  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number, post = false) {
+    const tr: Trade = { agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.symbols.get(token) ?? this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx, pnlPct };
+    this.trades.push(tr);
+    if (this.telegram && post) void this.telegram.onTrade(tr)?.catch(() => {});
     if (this.trades.length > 5000) this.trades.splice(0, this.trades.length - 5000);
   }
 

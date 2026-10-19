@@ -3,7 +3,8 @@ import { dirname } from "node:path";
 import { decodeEventLog, formatEther, parseAbi, type Address, type Hash, type PublicClient } from "viem";
 
 /**
- * Live Telegram channel: posts every Trenchers mint and every sale, with the Trencher's art.
+ * Live Telegram channel: posts every Trenchers mint, every sale and every trade an agent makes, with the Trencher's art.
+ * Agent trades can be switched off with TELEGRAM_TRADES=off.
  * Turned on by TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT (the channel's @username or numeric id; the bot
  * must be an admin of the channel). Plain wallet-to-wallet transfers without a payment aren't posted.
  */
@@ -92,6 +93,31 @@ export class TelegramFeed {
       `<a href="${this.cfg.site}/arena">Arena</a>${hash ? ` · <a href="${this.cfg.explorer}/tx/${hash}">tx</a>` : ""}`,
     ];
     try { await this.post([id], "awake", lines.join("\n")); } catch (e) { this.lastError = (e as Error).message.split("\n")[0]; this.log(`telegram: ${this.lastError}`); }
+  }
+
+  /** Trade posts waiting in the queue; when agents trade faster than Telegram allows, extra trades are skipped
+   *  (and counted) rather than letting the channel fall behind. */
+  private tradesWaiting = 0;
+  tradesSkipped = 0;
+  private trades = !/^(off|false|0|no)$/i.test((process.env.TELEGRAM_TRADES || "").trim());
+
+  /** An agent bought or sold a coin. Uses only what the engine already read: no extra RPC calls. */
+  onTrade(t: { agent: number; token: Address; symbol?: string; side: "buy" | "sell"; eth: string; pnlPct?: number; tx: Hash }) {
+    if (!this.trades || !t.agent) return;
+    const key = `trade:${t.tx}:${t.token}:${t.side}` as Hash;
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
+    if (this.tradesWaiting >= 12) { this.tradesSkipped++; return; }
+    const sym = esc(t.symbol || short(t.token));
+    const eth = fmt(Number(t.eth));
+    const pnl = t.side === "sell" && t.pnlPct !== undefined && Number.isFinite(t.pnlPct) ? ` (${t.pnlPct >= 0 ? "+" : ""}${t.pnlPct.toFixed(1)}%)` : "";
+    const lines = [
+      t.side === "buy" ? `🛒 <b>Trencher #${t.agent} bought $${sym}</b>` : `${t.pnlPct !== undefined && t.pnlPct < 0 ? "🔻" : "✅"} <b>Trencher #${t.agent} sold $${sym}</b>`,
+      t.side === "buy" ? `${eth} ETH in` : `${eth} ETH out${pnl}`,
+      `<a href="${this.cfg.site}/agent/${t.agent}">Agent</a> · <a href="${this.cfg.explorer}/token/${t.token}">coin</a> · <a href="${this.cfg.explorer}/tx/${t.tx}">tx</a>`,
+    ];
+    this.tradesWaiting++;
+    return this.post([t.agent], "awake", lines.join("\n")).finally(() => { this.tradesWaiting--; });
   }
 
   private async handleTx(hash: Hash, items: { from: Address; to: Address; id: number }[]) {
