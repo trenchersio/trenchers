@@ -7,6 +7,7 @@ import { PnlCardButton } from "@/components/PnlCard";
 import { AgentLinks } from "@/components/AgentLinks";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
+import { TelegramAlerts } from "./TelegramAlerts";
 import { CoinLaunch } from "./CoinLaunch";
 import { Fold } from "@/components/Fold";
 import { SectionNav } from "@/components/SectionNav";
@@ -181,6 +182,7 @@ export function LiveAgents() {
       </header>
 
       {error && <p className="notice">{error}</p>}
+      {ids.length > 0 && <TelegramAlerts me={me} />}
 
       {ids.length === 0 ? (
         <div className="connect-gate live-empty-gate">
@@ -239,6 +241,13 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   const chatKey = `trenchers-chat-${me.toLowerCase()}-${a.id}`;
   const [chat, setChat] = useState<ChatMsg[]>(() => { try { return JSON.parse(localStorage.getItem(chatKey) || "[]"); } catch { return []; } });
   const saveChat = (c: ChatMsg[]) => { setChat(c); try { localStorage.setItem(chatKey, JSON.stringify(c.slice(-60))); } catch {} };
+  // A rule picked on the Arena's "Winning rules" board (/agents?rule=…&from=…), waiting to be applied.
+  const [copied, setCopied] = useState<{ text: string; from: number | null } | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search), text = (q.get("rule") ?? "").trim().slice(0, 600);
+    if (text) { setCopied({ text, from: Number(q.get("from")) || null }); setTimeout(() => goToSection("guide"), 400); }
+  }, []);
+  const dropCopied = () => { setCopied(null); const u = new URL(window.location.href); u.searchParams.delete("rule"); u.searchParams.delete("from"); history.replaceState(null, "", u.pathname + u.search + u.hash); };
   const [perTrade, setPerTrade] = useState("");
   const [daily, setDaily] = useState("");
   const [dep, setDep] = useState("");
@@ -435,6 +444,17 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         </Fold>
 
         <Fold id="guide" title="Train your agent" sub="Strategy, limits, start or pause">
+        {copied && a.wallet && (
+          <div className="rule-copied">
+            <p className="mono rule-copied-k">Rule copied{copied.from ? ` from Trencher #${copied.from}` : ""}</p>
+            <blockquote>“{copied.text}”</blockquote>
+            <p className="rule-copied-n">Applying it replaces this agent&apos;s current rule (every version is kept). Set the limits below first. Nothing trades until trading is on.</p>
+            <div className="actions">
+              <button type="button" className="gf-btn" disabled={busy} onClick={async () => { const ok = await applyText(copied.text, `Applying the copied rule to Trencher #${a.id}`); if (ok) dropCopied(); }}>Apply to Trencher #{a.id}</button>
+              <button type="button" className="gf-btn ghost" onClick={dropCopied}>Dismiss</button>
+            </div>
+          </div>
+        )}
         <GuideFlow
           id={a.id} busy={busy}
           rule={a.ruleVersion ? { label: `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}`, text: a.ruleText ?? "Rule applied." } : null}

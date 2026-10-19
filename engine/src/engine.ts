@@ -7,6 +7,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { TelegramFeed } from "./telegram";
+import { Alerts } from "./alerts";
 import { dcaBuys, defaultEvery, parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
@@ -71,6 +72,8 @@ export class Engine {
   history = new Map<Address, { t: number; v: number }[]>();
   lastSnapshot = 0;
   telegram: TelegramFeed | null = null;
+  /** Private alerts to holders about their own agents' trades (same bot). */
+  alerts: Alerts | null = null;
   burns!: BurnTracker;
   paused = false;
   cursor = 0n;
@@ -117,6 +120,11 @@ export class Engine {
       );
       void this.telegram.check();
     }
+    if (ENV.TELEGRAM_BOT_TOKEN && !/^(off|false|0|no)$/i.test((process.env.TELEGRAM_ALERTS || "").trim())) {
+      this.alerts = new Alerts({ api: process.env.TELEGRAM_API, token: ENV.TELEGRAM_BOT_TOKEN, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, imageBase: ENV.IMAGE_BASE },
+        (addr) => [...this.agents.values()].filter((a) => a.owner === addr.toLowerCase()).map((a) => a.id).sort((x, y) => x - y), (m) => this.log(m));
+      void this.alerts.start();
+    }
   }
 
   // ------------------------------------------------------------------ chain sync
@@ -136,7 +144,10 @@ export class Engine {
   activityFeed() {
     const wins = this.trades.filter((x) => x.side === "sell" && (x.pnlPct ?? 0) >= 50).slice(-30)
       .map((x) => ({ kind: "win" as const, id: x.agent, time: x.time, tx: x.tx as string, symbol: x.symbol, pct: Math.round(x.pnlPct!) }));
-    return [...this.activity, ...wins].sort((a, b) => b.time - a.time).slice(0, 40);
+    // Every other trade too (the last dozen), so the ticker shows agents at work.
+    const trades = this.trades.filter((x) => x.agent && !(x.side === "sell" && (x.pnlPct ?? 0) >= 50)).slice(-12)
+      .map((x) => ({ kind: "trade" as const, id: x.agent, time: x.time, tx: x.tx as string, symbol: x.symbol, side: x.side, eth: +Number(x.eth).toPrecision(3), pct: x.pnlPct === undefined ? undefined : Math.round(x.pnlPct * 10) / 10 }));
+    return [...this.activity, ...wins, ...trades].sort((a, b) => b.time - a.time).slice(0, 40);
   }
   async start() {
     const head = await this.pub.getBlockNumber();
@@ -418,7 +429,7 @@ export class Engine {
         if (p) { p.ethIn += ethIn; p.tokens += tokens; } else book.set(token, { token, ethIn, tokens, openedAt: t });
         await this.symbolOf(token);
         this.touch(w, token);
-        this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!, undefined, live || l.blockNumber! >= this.catchUpFrom);
+        this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!, undefined, live ? "live" : l.blockNumber! >= this.catchUpFrom ? "catchup" : false);
         break;
       }
       case "Sold": {
@@ -435,7 +446,7 @@ export class Engine {
           if (p.tokens <= 0n) book.delete(token);
         }
         await this.symbolOf(token);
-        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct, live || l.blockNumber! >= this.catchUpFrom);
+        this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct, live ? "live" : l.blockNumber! >= this.catchUpFrom ? "catchup" : false);
         break;
       }
     }
@@ -488,10 +499,11 @@ export class Engine {
 
   private book(w: Address) { let b = this.positions.get(w); if (!b) { b = new Map(); this.positions.set(w, b); } return b; }
   private openCount() { let n = 0; for (const b of this.positions.values()) n += b.size; return n; }
-  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number, post = false) {
+  private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number, post: "live" | "catchup" | false = false) {
     const tr: Trade = { agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.symbols.get(token) ?? this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx, pnlPct };
     this.trades.push(tr);
     if (this.telegram && post) void this.telegram.onTrade(tr)?.catch(() => {});
+    if (this.alerts && post === "live") this.alerts.onTrade(tr, this.agents.get(w)?.owner);
     if (this.trades.length > 5000) this.trades.splice(0, this.trades.length - 5000);
   }
 
@@ -1090,6 +1102,13 @@ export class Engine {
       } as (typeof out)[number]);
     }
     return { updatedAt: this.now(), coins: out.sort((a, b) => a.agent - b.agent) };
+  }
+
+  /** One trade by its transaction (for share links); the newest match if a tx holds several. */
+  findTrade(tx: string, agent?: number) {
+    const t = tx.toLowerCase();
+    for (let i = this.trades.length - 1; i >= 0; i--) { const x = this.trades[i]; if (x.tx.toLowerCase() === t && (!agent || x.agent === agent)) return x; }
+    return null;
   }
 
   /** Live leaderboard: each agent's value, open positions and trading PnL this week, from real trades. */

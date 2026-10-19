@@ -42,7 +42,11 @@ function PnlCardModal({ data, prefix, onClose }: { data: PnlCardData; prefix: st
     } catch { setMsg("Your browser can't copy images. Use Download instead."); }
     setTimeout(() => setMsg(null), 2500);
   };
-  const share = `https://x.com/intent/post?text=${encodeURIComponent(`Trencher #${data.id}: ${data.returnPct >= 0 ? "+" : ""}${data.returnPct.toFixed(1)}% ${data.period ? data.period.toLowerCase() : ""} 🟩\nOne NFT Agent. Endless Possibilities.\nhttps://www.trenchers.io/agent/${data.id}`)}`;
+  // A trade card links to that trade's own page, whose preview on X shows the trade itself.
+  const t = data.trade;
+  const share = `https://x.com/intent/post?text=${encodeURIComponent(t
+    ? `Trencher #${data.id} sold $${t.sym} at ${t.pct >= 0 ? "+" : ""}${t.pct.toFixed(1)}% ${t.pct >= 0 ? "🟩" : "🟥"}\nAn AI agent trading on its holder's own rules.\nhttps://www.trenchers.io/agent/${data.id}/t/${t.tx}`
+    : `Trencher #${data.id}: ${data.returnPct >= 0 ? "+" : ""}${data.returnPct.toFixed(1)}% ${data.period ? data.period.toLowerCase() : ""} 🟩\nOne NFT Agent. Endless Possibilities.\nhttps://www.trenchers.io/agent/${data.id}`)}`;
 
   // Rendered at the end of <body>, so nothing on the page (leaderboard rows, sticky headers) can sit on top of it.
   return createPortal(

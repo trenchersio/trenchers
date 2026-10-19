@@ -89,8 +89,9 @@ async function main() {
 
   // A fake Telegram API that records what the engine posts.
   const { createServer } = await import("node:http");
-  const posts: { method: string; body: { caption?: string; text?: string; photo?: string; media?: { media: string }[] } }[] = [];
-  const tg = createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { const method = req.url!.split("/").pop()!; if (method.startsWith("send")) posts.push({ method, body: JSON.parse(b) }); res.end(method === "getChatMember" ? '{"ok":true,"result":{"status":"administrator","can_post_messages":true}}' : method === "getMe" ? '{"ok":true,"result":{"id":1,"username":"testbot"}}' : '{"ok":true,"result":{"title":"test"}}'); }); }).listen(8977);
+  const posts: { method: string; body: { chat_id?: number | string; caption?: string; text?: string; photo?: string; media?: { media: string }[] } }[] = [];
+  const updates: unknown[] = [];
+  const tg = createServer((req, res) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => { const method = req.url!.split("/").pop()!; if (method.startsWith("send")) posts.push({ method, body: JSON.parse(b) }); if (method === "getUpdates") { const out = updates.splice(0); return void setTimeout(() => res.end(JSON.stringify({ ok: true, result: out })), out.length ? 0 : 300); } res.end(method === "getChatMember" ? '{"ok":true,"result":{"status":"administrator","can_post_messages":true}}' : method === "getMe" ? '{"ok":true,"result":{"id":1,"username":"testbot"}}' : '{"ok":true,"result":{"title":"test"}}'); }); }).listen(8977);
 
   // The engine, in this process.
   Object.assign(process.env, {
@@ -105,6 +106,26 @@ async function main() {
   check(engine.agents.size === 2, "engine found both awakened agents");
   check(engine.agents.get(w6.toLowerCase() as Address)?.rule?.trigger === "launch", "agent #6 rule read from chain: buy every launch");
   check(engine.agents.get(w7.toLowerCase() as Address)?.rule?.trigger === "devsell", "agent #7 rule read from chain: buy when the dev sells");
+
+  // Private alerts: alice signs once, opens the bot link (Start), and is linked to her agents.
+  {
+    const { alertsText } = await import("../src/alerts");
+    const { createServer: mk } = await import("node:http");
+    for (let i = 0; i < 40 && !engine.alerts?.username; i++) await sleep(100);
+    const api = mk((req, res) => { void engine.alerts!.handle(req, res, req.url!.split("?")[0]); }).listen(8978);
+    const time = new Date().toISOString();
+    const signature = await alice.signMessage({ message: alertsText(alice.address, time) });
+    const bad = await fetch("http://127.0.0.1:8978/alerts/link", { method: "POST", body: JSON.stringify({ address: dev.address, time, signature }) });
+    check(bad.status === 401, `alerts: a signature from someone else's wallet is refused (${bad.status})`);
+    const r = await (await fetch("http://127.0.0.1:8978/alerts/link", { method: "POST", body: JSON.stringify({ address: alice.address, time, signature }) })).json() as { url?: string; agents?: number[] };
+    check(/^https:\/\/t\.me\/testbot\?start=[\w-]{16}$/.test(r.url ?? "") && r.agents?.join() === "6,7", `alerts: signing gives a one-time bot link for agents #6 and #7 (${r.url}, ${r.agents})`);
+    updates.push({ update_id: 1, message: { chat: { id: 777, type: "private" }, text: `/start ${r.url!.split("=")[1]}` } });
+    for (let i = 0; i < 40 && !posts.some((p) => p.body.chat_id === 777); i++) await sleep(100);
+    check(posts.some((p) => p.body.chat_id === 777 && /Alerts are on/.test(p.body.text ?? "")), "alerts: pressing Start in the bot links the chat");
+    const st = await (await fetch(`http://127.0.0.1:8978/alerts/status?address=${alice.address}`)).json() as { linked: boolean };
+    check(st.linked === true, "alerts: the site sees the wallet as linked");
+    api.close();
+  }
 
   let running = true;
   (async () => { while (running) { try { await engine.tick(); } catch (e) { console.log("tick error", (e as Error).message); } await sleep(500); } })();
@@ -208,11 +229,14 @@ async function main() {
   const cap = (p: (typeof posts)[number]) => p.body.caption ?? p.body.text ?? (p.body as { media?: { caption?: string }[] }).media?.[0]?.caption ?? "";
   const isTrade = (p: (typeof posts)[number]) => /Trencher #\d+ (bought|sold) \$/.test(cap(p));
   // Agent trades so far are posted too, with the coin, the ETH and a link to the agent.
-  const tradePosts = posts.filter(isTrade);
+  const tradePosts = posts.filter((p) => isTrade(p) && p.body.chat_id !== 777);
   console.log("   telegram trades:", JSON.stringify(tradePosts.slice(0, 4).map((p) => cap(p).split("\n").slice(0, 2).join(" | "))));
   check(tradePosts.some((p) => /Trencher #6 bought \$/.test(cap(p)) && /ETH in/.test(cap(p)) && /\/agent\/6"/.test(cap(p)) && /\/awake\/6\.png$/.test(p.body.photo ?? "")), "Telegram: an agent buy is posted with the coin, the ETH, the agent link and its art");
   check(tradePosts.some((p) => /Trencher #\d+ sold \$/.test(cap(p)) && /ETH out/.test(cap(p))), "Telegram: an agent sell is posted with the ETH out");
-  const fresh = posts.slice(n0).filter((p) => !isTrade(p));
+  const dms = posts.filter((p) => p.body.chat_id === 777 && /Your Trencher #\d+ (bought|sold) \$/.test(cap(p)));
+  console.log("   alerts:", JSON.stringify(dms.slice(0, 3).map((p) => cap(p).split("\n")[0])));
+  check(dms.some((p) => /Your Trencher #6 bought \$/.test(cap(p))) && dms.some((p) => /sold \$/.test(cap(p))), `alerts: alice got a private message for her agents' buys and sells (${dms.length})`);
+  const fresh = posts.slice(n0).filter((p) => !isTrade(p) && p.body.chat_id !== 777);
   console.log("   telegram:", JSON.stringify(fresh.map((p) => ({ m: p.method, c: cap(p).split("\n")[0] }))));
   check(fresh.length === 2, `Telegram got exactly 2 posts (mint and sale, not the plain transfer): ${fresh.length}`);
   check(fresh[0]?.method === "sendMediaGroup" && /2 Trenchers minted/.test(cap(fresh[0])) && /0\.04 ETH/.test(cap(fresh[0])), "Telegram: the mint of 2 is posted with both images and the price");
@@ -221,11 +245,15 @@ async function main() {
   const n1 = posts.length;
   await call(fund, "AgentStarterFund", "claim", [9n], 0n, dev);
   await sleep(8000);
-  const woke = posts.slice(n1).filter((p) => !isTrade(p));
+  const woke = posts.slice(n1).filter((p) => !isTrade(p) && p.body.chat_id !== 777);
   check(woke.length === 1 && /Trencher #9 awakened/.test(cap(woke[0])) && /\/awake\/9\.png$/.test(woke[0].body.photo ?? ""), `Telegram: the awakening of #9 is posted with its art (${woke.length} post)`);
   // Site ticker and agent status.
   const act = engine.activityFeed();
   check(act.some((x) => x.kind === "mint") && act.some((x) => x.kind === "awaken" && x.id === 9), `Activity ticker has mints and the awakening of #9 (${act.map((x) => `${x.kind}#${x.id}`).join(", ")})`);
+  const tr = act.filter((x) => x.kind === "trade") as { side?: string; symbol?: string; tx: string | null; id: number }[];
+  check(tr.length > 0 && tr.every((x) => (x.side === "buy" || x.side === "sell") && x.tx), `Activity ticker has agent trades (${tr.slice(0, 3).map((x) => `#${x.id} ${x.side} $${x.symbol}`).join(", ")})`);
+  const ft = engine.findTrade(tr[0].tx!.toUpperCase().replace("0X", "0x"), tr[0].id);
+  check(!!ft && ft.agent === tr[0].id, "a trade can be looked up by its tx (for share links)");
   const rows = (await engine.arena()).agents as { id: number; blocked: { code: string } | null }[];
   check(rows.every((r) => r.blocked === null || typeof r.blocked.code === "string"), `Arena rows say why an agent can't buy (${rows.map((r) => `#${r.id}:${r.blocked?.code ?? "ready"}`).join(", ")})`);
   tg.close();

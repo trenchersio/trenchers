@@ -7,7 +7,7 @@ import { EXPLORER, ROUTES } from "@/lib/constants";
 const ago = (s: number) => (s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`);
 const href = (a: ActivityItem) => (a.kind === "win" || a.kind === "awaken" ? `${ROUTES.collection}#${a.id}` : a.tx ? `${EXPLORER}/tx/${a.tx}` : ROUTES.arena);
 
-/** A slim live strip: recent mints, awakenings, agent coins and big wins, from the trading engine. */
+/** A slim live strip: recent mints, awakenings, agent coins, agent trades and big wins, from the trading engine. */
 export function ActivityTicker({ className = "" }: { className?: string }) {
   const data = useActivity();
   const [now, setNow] = useState(() => Date.now() / 1000);
@@ -24,7 +24,7 @@ export function ActivityTicker({ className = "" }: { className?: string }) {
             <li key={`${a.kind}-${a.id}-${a.tx}-${k}`} aria-hidden={k >= items.length || undefined}>
               <a href={href(a)} target={href(a).startsWith("http") ? "_blank" : undefined} rel="noreferrer" tabIndex={k >= items.length ? -1 : undefined}>
                 <ArtCanvas id={a.id} size={24} />
-                <span className={`act-kind act-${a.kind}`} />
+                <span className={`act-kind act-${a.kind}${a.side ? ` act-${a.side}` : ""}`} />
                 <span className="act-txt">{activityText(a)}</span>
                 <span className="act-ago mono">{ago(Math.max(0, now - a.time))}</span>
               </a>

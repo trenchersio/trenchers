@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { ENGINE_URL } from "@/lib/constants";
 
-/** The engine's live activity: mints, awakenings, agent coins and big wins, plus the weekly fee share. */
-export type ActivityItem = { kind: "mint" | "awaken" | "coin" | "win"; id: number; time: number; tx: string | null; symbol?: string; count?: number; pct?: number };
+/** The engine's live activity: mints, awakenings, agent coins, agent trades and big wins, plus the weekly fee share. */
+export type ActivityItem = { kind: "mint" | "awaken" | "coin" | "win" | "trade"; id: number; time: number; tx: string | null; symbol?: string; count?: number; pct?: number; side?: "buy" | "sell"; eth?: number };
 export type FeeShare = { week: number; closesIn: string; agentsEarningThisWeek: number; joiningNextWeek: number; potThisWeek: string; lastPayout: string } | null;
 type Activity = { items: ActivityItem[]; feeShare: FeeShare; now: number };
 
@@ -34,4 +34,5 @@ export const activityText = (a: ActivityItem) =>
   a.kind === "mint" ? (a.count && a.count > 1 ? `${a.count} Trenchers minted` : `Trencher #${a.id} minted`)
   : a.kind === "awaken" ? `Trencher #${a.id} awakened`
   : a.kind === "coin" ? `Trencher #${a.id} launched ${a.symbol ? `$${a.symbol}` : "its own coin"}`
+  : a.kind === "trade" ? `Trencher #${a.id} ${a.side === "buy" ? "bought" : "sold"} ${a.symbol ? `$${a.symbol}` : "a coin"}${a.side === "sell" && a.pct !== undefined ? ` at ${a.pct >= 0 ? "+" : ""}${a.pct}%` : a.eth ? ` · ${a.eth} ETH` : ""}`
   : `Trencher #${a.id} closed ${a.symbol ? `$${a.symbol} ` : "a trade "}at +${a.pct}%`;

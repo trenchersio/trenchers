@@ -17,6 +17,7 @@ import { STRATEGIES } from "@/lib/strategies";
 import { Loader } from "@/components/Loader";
 import { EmptyState } from "@/components/EmptyState";
 import { useSlow } from "@/lib/use-slow";
+import { FollowButton, FollowingView, RecapView, RulesBoard, useFollows } from "./ArenaExtras";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
@@ -27,8 +28,8 @@ export const strategyName = (rule: string | null, version: number, target?: Targ
     : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
-type LiveTrade = { agent: number; wallet: string; token: string; symbol?: string; side: "buy" | "sell"; eth: string; time: number; tx: string; pnlPct?: number };
-type LiveAgent = {
+export type LiveTrade = { agent: number; wallet: string; token: string; symbol?: string; side: "buy" | "sell"; eth: string; time: number; tx: string; pnlPct?: number };
+export type LiveAgent = {
   rank: number; id: number; wallet: string; owner?: string; live: boolean; rule: string | null; ruleVersion: number;
   understood: string[]; ruleWarning: string | null; nav: number; cash: number; pnlEth: number; pnlPct: number;
   trades: number; wins: number; closed: number; biggest: { symbol: string; pct: number } | null;
@@ -88,6 +89,10 @@ export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string
   return { ...base, trade: { sym: t.symbol ?? t.token.slice(2, 8), pct, outEth: out, inEth: out / (1 + pct / 100), tx: t.tx, time: t.time } };
 }
 
+const TABS = ["board", "following", "rules", "recap"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_LABEL: Record<Tab, string> = { board: "Leaderboard", following: "Following", rules: "Winning rules", recap: "Weekly recap" };
+
 /** `only`: show just these Trenchers (the holder's own agents on their profile). */
 export function LiveArena({ only }: { only?: number[] } = {}) {
   const { feed: full, error, kind } = useFeed();
@@ -96,6 +101,12 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
   const coins = useCoins();
   const coinOf = (wallet?: string | null) => (wallet && coins?.find((c) => c.wallet.toLowerCase() === wallet.toLowerCase())) || null;
   const [selected, setSelected] = useState<number | null>(null);
+  const follows = useFollows();
+  // Tabs: the leaderboard, agents you follow, winning rules, the weekly recap (#following, #rules, #recap).
+  const [tab, setTabState] = useState<Tab>("board");
+  useEffect(() => { if (only) return; const h = window.location.hash.slice(1); if ((TABS as readonly string[]).includes(h)) setTabState(h as Tab); }, [only]);
+  const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", t === "board" ? window.location.pathname + (window.location.hash === "#live" ? "#live" : "") : `#${t}`); };
+  const open = (id: number) => { setSelected(id); setTab("board"); setTimeout(() => document.querySelector(".arena-grid .detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, []);
 
@@ -132,7 +143,20 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
         <div className="stat"><span className="stat-label">Updated</span><span className="stat-value mono">{ago(now - feed.updatedAt)}</span><span className="stat-sub">every minute</span></div>
       </section>
 
-      <div className="arena-grid">
+      {!mine && (
+        <div className="arena-tabs" role="tablist" aria-label="Arena views">
+          {TABS.map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`arena-tab${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>
+              {TAB_LABEL[t]}{t === "following" && follows.ids.length > 0 && <span className="mono arena-tab-n">{follows.ids.length}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {!mine && tab === "following" && <FollowingView agents={feed.agents} of={of} explorer={explorer} now={now} onOpen={open} />}
+      {!mine && tab === "rules" && <RulesBoard agents={feed.agents} onOpen={open} />}
+      {!mine && tab === "recap" && <RecapView agents={feed.agents} onOpen={open} />}
+
+      <div className="arena-grid" hidden={!mine && tab !== "board"}>
         <section className="board" aria-label="Live leaderboard">
           <div className="board-head">
             <div className="bh-title">{mine ? <h3>In the Arena</h3> : <h1>Leaderboard</h1>}<span className="board-meta">{mine ? `${feed.agents.length} of yours trading or awake · rank out of ${of}` : `${feed.agents.length} agents · ranked by weekly PnL`}</span></div>
@@ -149,7 +173,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <b>Trencher #{a.id}{follows.has(a.id) && <span className="row-star" title="You follow this agent">★</span>}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
                         <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${a.target ? ({ dca: "DCA plan", below: "Buys dips", once: "Holds" } as const)[a.target.mode] : strategyName(a.rule, a.ruleVersion, a.target)}`}</small>
                       </span>
                       {a.target && (
@@ -179,6 +203,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
                     <span className="t-sym">#{t.agent} · {sym(t)}</span>
                     <span className="t-eth"><a href={`${explorer}/tx/${t.tx}`} target="_blank" rel="noreferrer">{Number(t.eth).toFixed(5)} ETH ↗</a></span>
                     <span className={`t-pnl ${t.pnlPct === undefined ? "" : t.pnlPct >= 0 ? "up" : "down"}`}>{t.pnlPct === undefined ? "" : signed(t.pnlPct)}</span>
+                    <span className="t-card">{(() => { const ag = t.side === "sell" && t.pnlPct !== undefined ? feed.agents.find((x) => x.id === t.agent) : null; return ag ? <PnlCardButton data={tradeCard(cardFromLive(ag, of), t)} label="Share" /> : null; })()}</span>
                   </li>
                 ))}
               </ol>
@@ -228,7 +253,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
           <h2>Trencher #{a.id}</h2>
           {a.owner && <p className="mono who-line">Holder {short(a.owner)}</p>}
           <p className="mono who-line">Agent wallet <a href={`${explorer}/address/${a.wallet}`} target="_blank" rel="noreferrer">{short(a.wallet)} ↗</a></p>
-          <div className="agent-actions"><PnlCardButton data={cardFromLive(a, of)} /><AgentLinks wallet={a.wallet} /><span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
+          <div className="agent-actions"><FollowButton id={a.id} /><PnlCardButton data={cardFromLive(a, of)} /><AgentLinks wallet={a.wallet} /><span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
         </div>
       </header>
 
@@ -287,7 +312,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
                 <span className="t-sym">{sym(t)}</span>
                 <span className="t-eth"><a href={`${explorer}/tx/${t.tx}`} target="_blank" rel="noreferrer">{Number(t.eth).toFixed(5)} ETH ↗</a></span>
                 <span className={`t-pnl ${t.pnlPct === undefined ? "" : t.pnlPct >= 0 ? "up" : "down"}`}>{t.pnlPct === undefined ? "" : signed(t.pnlPct)}</span>
-                <span className="t-card">{t.side === "sell" && t.pnlPct !== undefined && <PnlCardButton data={tradeCard(cardFromLive(a, of), t)} label="Card" />}</span>
+                <span className="t-card">{t.side === "sell" && t.pnlPct !== undefined && <PnlCardButton data={tradeCard(cardFromLive(a, of), t)} label="Share" />}</span>
               </li>
             ))}
           </ol>

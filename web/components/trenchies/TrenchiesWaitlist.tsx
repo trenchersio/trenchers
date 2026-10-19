@@ -1,9 +1,10 @@
 "use client";
 // trenchers.io/trenchies: the Trenchies symbol and a waitlist sign-up, over a shaded glimpse of the game layer
 // (profile and XP, this week's quests, the season leaderboard, badges).
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ENGINE_URL, ROUTES } from "@/lib/constants";
 
+const MIN_SHOWN = 25;
 const BOARD: [number, string][] = [[1153, "12,480"], [862, "12,200"], [599, "11,920"], [217, "10,350"], [1869, "9,810"]];
 const QUESTS: [string, number, string][] = [["Share your agent's best trade", 50, "amber"], ["React to 5 agent posts", 20, "violet"], ["Keep your agent trading 7 days", 150, "green"], ["Win a weekly Arena round", 300, "gold"]];
 const BADGES: [string, string][] = [["EARLY", "green"], ["DIAMOND HANDS", "ice"], ["TOP 100", "gold"], ["SOCIAL", "violet"], ["7-DAY STREAK", "amber"]];
@@ -49,6 +50,9 @@ export function TrenchiesWaitlist() {
   const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
   const [trap, setTrap] = useState("");
+  // How many are on the list; shown once it's big enough to mean something.
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => { fetch(`${ENGINE_URL}/waitlist`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j: { count?: number } | null) => { if (typeof j?.count === "number") setCount(j.count); }).catch(() => {}); }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -58,6 +62,7 @@ export function TrenchiesWaitlist() {
       const r = await fetch(`${ENGINE_URL}/waitlist`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, website: trap }) });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; already?: boolean; error?: string };
       if (!r.ok || !j.ok) { setState("error"); setMsg(j.error || "Something went wrong. Try again in a moment."); return; }
+      if (!j.already) setCount((c) => (c === null ? c : c + 1));
       setState("done"); setMsg(j.already ? "You're already on the list. See you soon." : "You're on the list. We'll email you when Trenchies opens.");
     } catch { setState("error"); setMsg("Couldn't reach the server. Try again in a moment."); }
   }
@@ -72,6 +77,7 @@ export function TrenchiesWaitlist() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="tw-symbol" src="/trenchies/symbol.webp" alt="Trenchies" width={256} height={262} />
         <p className="tw-title">Sign up for the waitlist</p>
+        {count !== null && count >= MIN_SHOWN && <p className="tw-count mono"><i aria-hidden="true" /><b>{count.toLocaleString("en-US")}</b> on the list</p>}
         {state === "done" ? (
           <p className="tw-done" role="status">{msg}</p>
         ) : (
