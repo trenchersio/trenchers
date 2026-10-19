@@ -17,7 +17,6 @@
  * Never published: the margin, per-model prices, the upstream cost of a call, the house book (admin token only).
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { RAETO_MODEL, raetoPick } from "./raeto";
 import { dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -694,8 +693,7 @@ export class InferenceDesk {
       // Public model list: names, slugs and context windows only. Prices are not published.
       if (method === "GET" && path === "/icm/v1/models") {
         const m = await this.proxy.modelsBody();
-        const data = m.data.map((x) => ({ id: x.id, object: "model", name: x.name ?? null, context_length: x.context_length ?? null }));
-        send(200, { object: "list", data: [{ id: RAETO_MODEL, object: "model", name: "Raeto smart routing (picks the model per request)", context_length: null }, ...data] }, { "cache-control": "public, max-age=300" });
+        send(200, { object: "list", data: m.data.map((x) => ({ id: x.id, object: "model", name: x.name ?? null, context_length: x.context_length ?? null })) }, { "cache-control": "public, max-age=300" });
         return true;
       }
       if (method === "GET" && (path === "/icm/v1/rate" || path === "/icm/rate")) {
@@ -725,18 +723,9 @@ export class InferenceDesk {
           const msgs = Array.isArray(b.messages) ? (b.messages as unknown[]) : [];
           body = { ...b, model: this.s.trencherModel, messages: [{ role: "system", content: t.persona }, ...msgs] };
         }
-        // raeto/auto: Raeto picks the model, then the call runs and is billed like any other (optional, off by default)
-        let routed: { model: string; via: string } | null = null;
-        if (method === "POST" && body && typeof body === "object" && (body as Record<string, unknown>).model === RAETO_MODEL) {
-          const rb = body as Record<string, unknown>;
-          routed = await raetoPick(rb);
-          const { raeto: _drop, ...rest } = rb; void _drop;
-          body = { ...rest, model: routed.model };
-        }
         const ac = new AbortController();
         res.on("close", () => { if (!res.writableEnded) ac.abort(); });
         const out = await this.surface({ method, path: path.slice(4), bearer: auth.startsWith("Bearer ") ? auth.slice(7).trim() : null, body, query: new URLSearchParams((req.url ?? "").split("?")[1] ?? ""), signal: ac.signal });
-        if (routed) out.headers = { ...out.headers, "x-raeto-model": routed.model, "x-raeto-route": routed.via };
         if (out.stream) {
           res.writeHead(out.status, out.headers);
           const reader = out.stream.getReader();

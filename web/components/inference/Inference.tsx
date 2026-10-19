@@ -7,7 +7,6 @@ import { TokenLine } from "@/components/TokenLine";
 import { useDesk } from "./useDesk";
 import { BuyCredit } from "./BuyCredit";
 import { Endpoint } from "./Endpoint";
-import { RaetoOption } from "./RaetoOption";
 import { Catalogue } from "./Catalogue";
 import { Account } from "./Account";
 import { P2P } from "./P2P";
@@ -78,7 +77,6 @@ export function Inference() {
         </div>
         <div className="ihero-aside">
           <BuyCredit rate={d.rate} orders={d.orders} mock={d.mock} onSent={d.reloadOrders} />
-          <RaetoOption endpoint={endpoint} prefix={prefix} />
           {d.rate?.deposit?.address && (
             <details className="imanual">
               <summary>Or send it yourself</summary>
@@ -111,7 +109,7 @@ export function Inference() {
       </section>
 
       <section className="ifacts">
-        <div className="ifact"><span className="mono">No silent swaps</span><p>The model you name is the model that runs, unless you choose <code>raeto/auto</code> to have one picked for you. Each response carries the provider&apos;s own model id, so you can check.</p></div>
+        <div className="ifact"><span className="mono">No silent swaps</span><p>The model you name is the model that runs. Each response carries the provider&apos;s own model id, so you can check.</p></div>
         <div className="ifact"><span className="mono">Billed on real usage</span><p>A call sets aside a ceiling, then settles on the provider&apos;s token count. The rest comes straight back, and failed calls are free.</p></div>
         <div className="ifact hot"><span className="mono">Usage shrinks supply</span><p>None of the $TRENCHERS paid in is kept. The more the desk is used, the fewer tokens exist.</p></div>
         <div className="ifact"><span className="mono">A key per job</span><p>Give every bot, agent or Trencher its own key and spending cap. Revoke one and the rest keep running.</p></div>
