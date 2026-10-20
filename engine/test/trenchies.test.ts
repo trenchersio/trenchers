@@ -52,11 +52,16 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   assert.equal(levelOf(170), st.level);
   // Shop
   assert.equal((await post("buy", { token: tok, id: "super" })).status, 400, "level-locked");
-  const buy = await post("buy", { token: tok, id: "scooter" }); assert.equal(buy.status, 200, JSON.stringify(buy.j)); assert.equal(buy.j.me.vehicle, "scooter"); assert.equal(buy.j.me.bricks, 20);
+  const buy = await post("buy", { token: tok, id: "moped" }); assert.equal(buy.status, 200, JSON.stringify(buy.j)); assert.equal(buy.j.me.vehicle, "moped"); assert.equal(buy.j.me.bricks, 20);
+  // The tree on your land: gather wood, then it regrows.
+  const w1 = await post("gather", { token: tok, res: "wood" }); assert.equal(w1.status, 200); assert.ok(w1.j.got >= 8 && w1.j.got <= 16, `wood ${w1.j.got}`); assert.equal(w1.j.me.wood, w1.j.got);
+  assert.equal((await post("gather", { token: tok, res: "wood" })).status, 400, "the tree has to regrow first");
+  assert.ok(w1.j.me.next.wood > Date.now() + 3.9 * 3600 * 1000);
+  assert.equal((await post("buy", { token: tok, id: "fence" })).status, 400, "level and materials are checked");
   const lb = (await fetch(`${base}leaderboard?token=${tok}`).then((r) => r.json())) as any;
   assert.equal(lb.players[0].name, "Ser_Me"); assert.equal(lb.me, 1);
   const v = (await fetch(`${base}visit?token=${tok2}&name=ser_me`).then((r) => r.json())) as any;
-  assert.equal(v.player.vehicle, "scooter");
+  assert.equal(v.player.vehicle, "moped");
   assert.equal((await fetch(`${base}state?token=bad`)).status, 401);
   void DAY;
   srv.close();

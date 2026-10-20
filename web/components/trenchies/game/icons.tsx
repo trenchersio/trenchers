@@ -1,0 +1,75 @@
+/** Line icons for Trenchies (24px grid, 1.6 stroke, currentColor). One per catalog glyph plus the UI set. */
+const P: Record<string, string> = {
+  // catalog glyphs
+  house: "M3 11l9-7 9 7M5 9.5V20h14V9.5M10 20v-5h4v5",
+  bath: "M3 12h18v2a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-2zM6 12V6a2 2 0 0 1 4 0M7 19l-1 2M17 19l1 2",
+  shed: "M3 10l9-6 9 6M5 9v11h14V9M9 20v-6h6v6M9 17h6",
+  bed: "M3 18V7M3 13h18v5M21 18v-5a3 3 0 0 0-3-3h-7v3M5.5 11.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0",
+  screen: "M3 5h18v11H3zM8 20h8M12 16v4M6 12l3-3 3 2 5-4",
+  garage: "M3 10l9-6 9 6v10H3zM6 20v-8h12v8M6 15h12M6 18h12",
+  gym: "M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12",
+  server: "M4 4h16v5H4zM4 9h16v5H4zM4 14h16v6H4zM7 6.5h.01M7 11.5h.01M7 17h.01M11 6.5h6M11 11.5h6M11 17h6",
+  leaf: "M5 19c0-9 6-14 15-14 0 9-5 15-14 15zM5 19l7-7",
+  star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
+  heli: "M3 6h18M12 6v3M6 13a6 4 0 0 0 10 0 4 4 0 0 0-10 0zM16 13h5M5 18h11M8 17v1M13 17v1",
+  bike: "M2 17.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M15 17.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M5.5 17.5L9 9h6l3.5 8.5M9 9l3 8.5 3-8.5M8 6h3M15 9l-1-3h2",
+  moped: "M3.5 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0M15.5 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0M8.5 18h7M16 6h2l1 7-1 5M4 13h8l2-3",
+  car: "M3 16v-3l2-5h14l2 5v3zM3 16v2h3v-2M18 16v2h3v-2M5 13h14M7 13v-2M17 13v-2",
+  hover: "M3 13l3-5h12l3 5zM3 13h18M6 17h2M11 17h2M16 17h2M6 13v2M18 13v2",
+  lamp: "M8 3h8l3 7H5zM12 10v10M8 21h8",
+  rug: "M5 4h14v16H5zM8 7h8v10H8zM5 4v-1M9 4v-1M15 4v-1M19 4v-1M5 21v-1M9 21v-1M15 21v-1M19 21v-1",
+  frame: "M4 4h16v16H4zM4 15l5-5 4 4 2-2 5 5",
+  chair: "M7 3h10v9H7zM5 12h14v3H5zM7 15v6M17 15v6",
+  book: "M5 4h5v16H5zM10 4h4v16h-4zM15 5l4 1-3 15-4-1",
+  spark: "M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3",
+  cup: "M5 8h12v6a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM17 10h2a2 2 0 0 1 0 4h-2M9 3v2M13 3v2",
+  fish: "M3 12c4-6 11-6 14 0-3 6-10 6-14 0zM17 12l4-4v8zM8 11h.01",
+  disc: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M12 6a6 6 0 0 0-6 6",
+  trophy: "M8 4h8v6a4 4 0 0 1-8 0zM8 6H4v1a3 3 0 0 0 4 3M16 6h4v1a3 3 0 0 1-4 3M12 14v4M8 21h8M10 18h4",
+  joystick: "M4 15h16v5H4zM12 15V8M10 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M7 17.5h2",
+  music: "M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  crown: "M3 8l4 4 5-7 5 7 4-4-2 11H5zM5 21h14",
+  mail: "M4 6h16v12H4zM4 7l8 6 8-6",
+  tree: "M12 3l6 9h-3l4 6H5l4-6H6zM12 18v3",
+  fence: "M5 6l2-2 2 2v14H5zM15 6l2-2 2 2v14h-4zM3 10h18M3 16h18",
+  fire: "M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-6 2 1 3 3 3 3 1-3 0-6 1-8zM12 20a2 2 0 0 0 2-2c0-2-2-3-2-3s-2 1-2 3a2 2 0 0 0 2 2z",
+  moon: "M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z",
+  ball: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M3 12h18M12 3v18M5.6 5.6c3 3 3 9.8 0 12.8M18.4 5.6c-3 3-3 9.8 0 12.8",
+  sun: "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  drop: "M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z",
+  fan: "M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0M12 10.5C11 6 12 3 14 3s2 4-2 7.5M13.3 12.8c4.4 1.3 6.6 3.6 5.6 5.3s-4.7.2-5.6-5.3M10.7 12.8c-3.4 3-6.6 3.8-7.6 2s2.3-4 7.6-2M12 13.5V21",
+  paw: "M12 13c3 0 5 3 5 5s-2 2-5 2-5 0-5-2 2-5 5-5zM4.4 11a1.6 2 0 1 0 3.2 0a1.6 2 0 1 0 -3.2 0M16.4 11a1.6 2 0 1 0 3.2 0a1.6 2 0 1 0 -3.2 0M7.9 6.5a1.6 2 0 1 0 3.2 0a1.6 2 0 1 0 -3.2 0M12.9 6.5a1.6 2 0 1 0 3.2 0a1.6 2 0 1 0 -3.2 0",
+  bolt: "M13 2L4 14h7l-1 8 9-12h-7z",
+  // ui
+  target: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M7 12a5 5 0 1 0 10 0a5 5 0 1 0 -10 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+  chart: "M3 3v18h18M7 15l4-4 3 3 6-7",
+  build: "M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6",
+  ranks: "M4 20V12h4v8M10 20V6h4v14M16 20v-5h4v5",
+  users: "M5.5 11a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14a6 6 0 0 1 3.5 6",
+  user: "M8 11a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M4 21a8 8 0 0 1 16 0",
+  info: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 11v5M12 8h.01",
+  brick: "M3 6h18v12H3zM3 10h18M3 14h18M9 6v4M15 10v4M9 14v4",
+  flame: "M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-6 2 1 3 3 3 3 1-3 0-6 1-8z",
+  clock: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 7v5l3 2",
+  wood: "M4 8a3 4 0 1 0 0 8h14a3 4 0 1 0 0-8zM18 10a1.5 2 0 1 0 0 4",
+  stone: "M4 16l2-7 5-4 6 2 3 6-2 5H7zM9 9l3 3 4-2",
+  axe: "M14 4l6 6-4 1-3-3zM14 8L3 19l2 2L16 10",
+  pick: "M4 9c5-6 11-6 16 0M12 6v15",
+  home: "M15 18l-6-6 6-6",
+  close: "M6 6l12 12M18 6L6 18",
+  lock: "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4",
+  check: "M5 12l5 5 9-11",
+  plus: "M12 5v14M5 12h14",
+  x: "M4 4l16 16M20 4L4 20",
+  arrow: "M5 12h14M13 6l6 6-6 6",
+  sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
+};
+
+export function Icon({ n, size = 16, className = "" }: { n: string; size?: number; className?: string }) {
+  if (n === "x") return (<svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true"><path fill="currentColor" d="M17.8 3h3.1l-6.8 7.8 8 10.2h-6.3l-4.9-6.4L5.3 21H2.2l7.3-8.3L1.8 3h6.4l4.4 5.9zm-1.1 16.2h1.7L7.4 4.7H5.5z" /></svg>);
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d={P[n] ?? P.sparkle} />
+    </svg>
+  );
+}

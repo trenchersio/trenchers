@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { getAddress, isAddress, verifyMessage, type Address, type PublicClient } from "viem";
 import { NFT_OWNER_ABI } from "./abis";
 import type { Backtest } from "./backtest";
-import { DAY, HAT_TRICK_XP, ITEMS, PICKS, PLAY_XP, RANK_XP, X_XP, item, levelOf, roundLabel, roundOf, roundStart, streakXp } from "./trenchies-catalog";
+import { DAY, GATHER, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, RANK_XP, RENAMED, X_XP, item, levelOf, roundLabel, roundOf, roundStart, streakXp, type Resource } from "./trenchies-catalog";
 
 /**
  * Trenchies: spawn a little Trenchie with your Trencher, pick 3 Pons coins every day, earn XP when your coins finish
@@ -26,6 +26,7 @@ type Player = {
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
+  wood: number; stone: number; next: Partial<Record<Resource, number>>;
   x?: { handle: string; at: number }; xPending?: { handle: string; code: string; at: number };
   results: Result[]; seen: number | null;
 };
@@ -51,7 +52,11 @@ export class Trenchies {
     try {
       if (existsSync(FILE)) {
         const j = JSON.parse(readFileSync(FILE, "utf8")) as { players: Player[]; rounds: [number, Round][] };
-        for (const p of j.players ?? []) this.players.set(p.addr, p);
+        for (const p of j.players ?? []) {
+          p.wood ??= 0; p.stone ??= 0; p.next ??= {};
+          p.items = [...new Set(p.items.map((i) => RENAMED[i] ?? i))]; p.vehicle = RENAMED[p.vehicle] ?? p.vehicle;
+          this.players.set(p.addr, p);
+        }
         for (const [r, v] of j.rounds ?? []) this.rounds.set(r, v);
       }
     } catch { /* start empty */ }
@@ -132,7 +137,7 @@ export class Trenchies {
     const open = roundOf(now) + 1, live = roundOf(now), last = live - 1;
     const st = this.standings(live, now);
     return {
-      ...this.pub(p), bricks: p.bricks, held: p.held, xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
+      ...this.pub(p), bricks: p.bricks, held: p.held, wood: p.wood, stone: p.stone, next: { wood: p.next.wood ?? 0, stone: p.next.stone ?? 0 }, xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
       open: { round: open, label: roundLabel(open), lockAt: roundStart(open), picks: (this.rounds.get(open)?.picks[p.addr] ?? []).map((t) => ({ token: t, symbol: this.host.prices.symbolOf(t) ?? t.slice(2, 8) })) },
       live: { round: live, label: roundLabel(live), endsAt: roundStart(live + 1), dataAt: this.host.prices.updatedAt, players: Object.keys(this.rounds.get(live)?.picks ?? {}).length,
         picks: (this.rounds.get(live)?.picks[p.addr] ?? []).map((t) => { const i = st.findIndex((x) => x.token === t); return { token: t, symbol: st[i]?.symbol ?? t.slice(2, 8), pct: st[i]?.pct ?? null, place: i >= 0 ? i + 1 : null }; }),
@@ -186,7 +191,7 @@ export class Trenchies {
       if (taken) { send(409, { error: "That name is taken. Try another." }); return true; }
       if (!(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
       if (p) { p.nft = nft; p.name = name; p.held = true; }
-      else this.players.set(addr, { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", results: [], seen: null });
+      else this.players.set(addr, { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, next: {}, results: [], seen: null });
       this.save();
       send(200, { me: this.me(this.players.get(addr)!, now) });
       return true;
@@ -221,13 +226,26 @@ export class Trenchies {
         if (p.items.includes(it.id)) { send(400, { error: "You already own this." }); return true; }
         if (levelOf(p.xp) < it.level) { send(400, { error: `Reach level ${it.level} first.` }); return true; }
         if (p.bricks < it.cost) { send(400, { error: `You need ${it.cost - p.bricks} more bricks.` }); return true; }
-        if (it.id === "pool" && !["villa", "mansion"].includes(p.house)) { send(400, { error: "The pool needs the Chain Villa or bigger." }); return true; }
-        p.bricks -= it.cost; p.items.push(it.id);
+        if ((it.wood ?? 0) > p.wood) { send(400, { error: `You need ${(it.wood ?? 0) - p.wood} more wood. Chop the tree on your land.` }); return true; }
+        if ((it.stone ?? 0) > p.stone) { send(400, { error: `You need ${(it.stone ?? 0) - p.stone} more stone. Mine the rock on your land.` }); return true; }
+        if (it.needsHouse !== undefined && HOUSE_ORDER.indexOf(p.house) < it.needsHouse) { send(400, { error: `This needs the ${item(HOUSE_ORDER[it.needsHouse])?.name} or bigger.` }); return true; }
+        p.bricks -= it.cost; p.wood -= it.wood ?? 0; p.stone -= it.stone ?? 0; p.items.push(it.id);
       } else if (!p.items.includes(it.id)) { send(400, { error: "Buy it first." }); return true; }
       if (it.kind === "house") p.house = it.id;
       if (it.kind === "vehicle") p.vehicle = it.id;
       this.save();
       send(200, { me: this.me(p, now) });
+      return true;
+    }
+    if (op === "gather") {
+      const res = String(b.res ?? "") as Resource, g = GATHER[res];
+      if (!g) { send(400, { error: "Gather wood or stone." }); return true; }
+      const at = p.next[res] ?? 0;
+      if (Date.now() < at) { send(400, { error: `It's still regrowing.`, next: at }); return true; }
+      const got = g.min + Math.floor(Math.random() * (g.max - g.min + 1));
+      p[res] += got; p.xp += g.xp; p.bricks += g.xp; p.next[res] = Date.now() + g.every * 1000;
+      this.save();
+      send(200, { me: this.me(p, now), got, res, xp: g.xp });
       return true;
     }
     if (op === "leaderboard") {
