@@ -33,4 +33,5 @@ export {
   type Upstream, type UpstreamModel, type UpstreamUsage, type OpenRouterOptions,
   type CompletionRequest, type CompletionResponse, type StreamedCompletion,
 } from "./upstream.ts";
+export { PearlUpstream, RoutedUpstream, PEARL_PREFIX, PEARL_BASE, parsePearlPrices, pearlCost, toPearlBody, type PearlPrice, type PearlOptions } from "./pearl.ts";
 export type { Account, ApiKey, Charge, Deposit, DepositSource, ChargeState, HouseBook } from "./types.ts";

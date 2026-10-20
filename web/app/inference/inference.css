@@ -587,3 +587,39 @@
 .isec-lede .howto-btn { display: flex; margin: 14px 0 0; width: auto; max-width: 260px; }
 @media (min-width: 1001px) { .isec-lede .howto-btn { margin-left: auto; } }
 .ihero-pitch .howto-btn { width: auto; max-width: 260px; margin: 0 0 22px; }
+
+/* Optional: Pearl's open-weight models (a button that opens a popup) */
+.ipartner { margin-top: 12px; }
+.ipartner-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(17,21,20,.9); color: var(--fog); text-align: left; cursor: pointer; font: inherit; transition: border-color .15s ease; }
+.ipartner-btn:hover { border-color: rgba(78,140,100,.7); }
+.ipartner-mark { flex: none; border-radius: 8px; }
+.ipartner-btn span { display: grid; gap: 2px; min-width: 0; }
+.ipartner-btn b { font-size: 14px; }
+.ipartner-btn em { font-style: normal; color: var(--quiet); font-size: 12.5px; }
+.ipartner-btn i { margin-left: auto; font-style: normal; color: var(--quiet); font-size: 15px; }
+.ipartner-btn:hover b, .ipartner-btn:hover i { color: #7BC99A; }
+.ipartner-btn:focus { outline: none; }
+.ipartner-btn:focus-visible { box-shadow: 0 0 0 3px rgba(57,255,136,.35); }
+.ipartner-back { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); background: rgba(5,7,6,.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: ipartnerIn .18s ease; }
+@keyframes ipartnerIn { from { opacity: 0; } }
+.ipartner-modal { width: min(100%, 640px); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid #2A302D; border-radius: 16px; background: #0F1312; box-shadow: 0 40px 120px -20px rgba(0,0,0,.8); }
+.ipartner-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); background: #0F1312; }
+.ipartner-head h3 { margin: 0; font-size: 18px; color: var(--fog); }
+.ipartner-head p { margin: 2px 0 0; color: var(--quiet); font-size: 13px; }
+.ipartner-x { margin-left: auto; flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--quiet); cursor: pointer; font-size: 14px; }
+.ipartner-x:hover { color: var(--fog); border-color: #3A423E; }
+.ipartner-x:focus { outline: none; } .ipartner-x:focus-visible { box-shadow: 0 0 0 3px rgba(57,255,136,.35); }
+.ipartner-body { padding: 18px 20px 20px; color: var(--quiet); font-size: 14px; line-height: 1.6; }
+.ipartner-body p { margin: 0 0 12px; }
+.ipartner-body a { color: #7BC99A; }
+.ipartner-body code { color: var(--fog); font-size: 13px; overflow-wrap: anywhere; }
+.ipartner-body > ul { margin: 0 0 14px; padding-left: 18px; display: grid; gap: 6px; }
+.ipartner-code, .ipartner-models { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.ipartner-copy { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--quiet); }
+.ipartner-copy:first-child { border-top: 0; }
+.ipartner-code pre { margin: 0; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; font-size: 12px; line-height: 1.55; color: var(--fog); background: rgba(6,8,7,.6); }
+.ipartner-models ul { list-style: none; margin: 0; padding: 4px 0; background: rgba(6,8,7,.6); }
+.ipartner-models li { display: flex; align-items: center; gap: 10px; padding: 5px 10px; font-size: 12.5px; }
+.ipartner-models li code { flex: 1; min-width: 0; font-size: 12px; }
+.ipartner-models li .mono { color: var(--quiet); font-size: 11px; }
+.ipartner-models .inf-fine { margin: 0; padding: 10px 12px; background: rgba(6,8,7,.6); }

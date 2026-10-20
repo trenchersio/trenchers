@@ -28,6 +28,8 @@ export type Rate = {
   /** Contracts the page can use. Empty until they are deployed. */
   router?: string | null;
   otc?: string | null;
+  /** Pearl's open-weight models are offered as pearl/<id>. */
+  pearl?: boolean;
 };
 
 export type Stats = {

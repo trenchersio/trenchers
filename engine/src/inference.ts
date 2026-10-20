@@ -26,7 +26,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  DepositWatcher, IcmError, Ledger, MemoryStore, OpenRouterUpstream, Proxy, createSurface, makeConfig, usdFromInput,
+  DepositWatcher, IcmError, Ledger, MemoryStore, OpenRouterUpstream, PEARL_BASE, PEARL_PREFIX, PearlUpstream, Proxy, RoutedUpstream, createSurface, makeConfig, parsePearlPrices, usdFromInput,
   type CollectionName, type ConfirmedPayment, type IcmConfig, type IcmRequest, type IcmResponse, type PaymentSource, type Row,
   type Upstream, type UpstreamModel,
 } from "./icm/index.ts";
@@ -42,6 +42,11 @@ const int = (v: string | undefined, d: number) => (/^\d+$/.test(clean(v)) ? Numb
 export function inferenceSettings(env: Record<string, string | undefined> = process.env) {
   return {
     openRouterKey: clean(env.OPENROUTER_API_KEY) || null,
+    /** Optional second provider: Pearl's open-weight models, offered as pearl/<id> and paid from the same credit. */
+    pearlKey: clean(env.PEARL_API_KEY) || null,
+    pearlBase: (clean(env.PEARL_BASE_URL) || PEARL_BASE).replace(/\/$/, ""),
+    /** Pearl's prices, dollars per million tokens: "model=input/output[/cached], …". Private, like the margin. */
+    pearlPrices: clean(env.PEARL_PRICES),
     token: clean(env.TRENCHERS_TOKEN) || "0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a",
     /** The InferenceDesk contract: where payments land, and the only place they can go from there is the dead address. */
     desk: clean(env.ICM_DESK) || null,
@@ -341,6 +346,8 @@ export class InferenceDesk {
   readonly proxy: Proxy;
   readonly watcher: DepositWatcher | null;
   readonly enabled: boolean;
+  /** Pearl (the optional second provider): switched on, and how many of its models have a price set. */
+  readonly pearl: { on: boolean; prices: number };
   readonly reason: string | null;
   readonly fault: string | null;
   readonly problems: string[] = [];
@@ -396,7 +403,8 @@ export class InferenceDesk {
         environment: s.environment,
         token: { symbol: "TRENCHERS", address: isAddr(s.token) ? s.token : "0x0000000000000000000000000000000000000001", decimals: 18, chainId: s.chainId, tokensPerUsd: s.tokensPerUsd ?? "1", sink: "burn" },
         marginBps: Math.max(0, s.marginBps), minDepositMicroUsd: s.minDepositUsd, maxHoldMicroUsd: s.maxHoldUsd,
-        allowModels: s.allowModels, denyModels: s.denyModels,
+        // an allow-list written before Pearl was added would otherwise hide every Pearl model
+        allowModels: s.allowModels.length && s.pearlKey && !s.allowModels.some((m) => m.startsWith(PEARL_PREFIX)) ? [...s.allowModels, `${PEARL_PREFIX}*`] : s.allowModels, denyModels: s.denyModels,
       });
     } catch (e) {
       fault = `The inference desk is misconfigured and switched off: ${(e as Error).message}`;
@@ -412,11 +420,13 @@ export class InferenceDesk {
     this.ledger = new Ledger({ store: st, config: this.config });
     this.state = kv(s.file);
 
-    this.enabled = !this.fault && !!s.openRouterKey;
-    this.reason = this.fault ?? (s.openRouterKey ? null : "OPENROUTER_API_KEY is not set, so credit can be bought and keys made, but calls are not routed yet.");
+    this.enabled = !this.fault && (!!s.openRouterKey || !!s.pearlKey);
+    this.reason = this.fault ?? (s.openRouterKey || s.pearlKey ? null : "OPENROUTER_API_KEY is not set, so credit can be bought and keys made, but calls are not routed yet.");
+    const main: Upstream = s.openRouterKey ? new OpenRouterUpstream({ apiKey: s.openRouterKey, referer: "https://www.trenchers.io/inference", title: "Trenchers Inference Markets" }) : new NoUpstream(this.reason ?? "OPENROUTER_API_KEY is not set, so only Pearl models (pearl/…) are routed.");
+    this.pearl = s.pearlKey ? { on: true, prices: parsePearlPrices(s.pearlPrices).size } : { on: false, prices: 0 };
     this.proxy = new Proxy({
       ledger: this.ledger,
-      upstream: s.openRouterKey ? new OpenRouterUpstream({ apiKey: s.openRouterKey, referer: "https://www.trenchers.io/inference", title: "Trenchers Inference Markets" }) : new NoUpstream(this.reason!),
+      upstream: s.pearlKey ? new RoutedUpstream(main, [{ prefix: PEARL_PREFIX, upstream: new PearlUpstream({ apiKey: s.pearlKey, baseUrl: s.pearlBase, prices: parsePearlPrices(s.pearlPrices) }) }]) : main,
     });
     this.surface = createSurface({ ledger: this.ledger, proxy: this.proxy, adminToken: s.adminToken });
 
@@ -542,6 +552,8 @@ export class InferenceDesk {
       enabled: this.enabled,
       reason: this.reason,
       environment: this.config.environment,
+      /** Pearl's open-weight models are on offer as pearl/<id> (same credit, same key). */
+      pearl: this.pearl.on,
       endpoint: `${this.s.publicUrl}/icm/v1`,
       keyPrefix: this.config.keyPrefix,
       // the rate a buyer needs; never the margin
@@ -576,7 +588,7 @@ export class InferenceDesk {
   /** For /health: enough to see it is on and the book balances. Nothing a customer owns, and no margin. */
   status() {
     return {
-      enabled: this.enabled, reason: this.reason, problems: this.problems, watching: !!this.watcher,
+      enabled: this.enabled, reason: this.reason, problems: this.problems, watching: !!this.watcher, pearl: this.pearl,
       lastPoll: this.lastPoll, lastBurn: this.lastBurn, burned: { total: this.burned.total.toString(), pending: this.burned.pending.toString() },
       accounts: this.store.count("icm_accounts"), drift: this.ledger.check().length, otcOrders: this.otc ? this.otc.orders.size : null,
     };

@@ -7,6 +7,7 @@ import { TokenLine } from "@/components/TokenLine";
 import { useDesk } from "./useDesk";
 import { BuyCredit } from "./BuyCredit";
 import { Endpoint } from "./Endpoint";
+import { PearlOption } from "./PearlOption";
 import { Catalogue } from "./Catalogue";
 import { Account } from "./Account";
 import { P2P } from "./P2P";
@@ -77,6 +78,7 @@ export function Inference() {
         </div>
         <div className="ihero-aside">
           <BuyCredit rate={d.rate} orders={d.orders} mock={d.mock} onSent={d.reloadOrders} />
+          <PearlOption endpoint={endpoint} prefix={prefix} models={d.models} on={!!d.rate?.pearl} />
           {d.rate?.deposit?.address && (
             <details className="imanual">
               <summary>Or send it yourself</summary>
