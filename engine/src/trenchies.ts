@@ -5,7 +5,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { getAddress, isAddress, verifyMessage, type Address, type PublicClient } from "viem";
 import { NFT_OWNER_ABI } from "./abis";
 import type { Backtest } from "./backtest";
-import { DAY, GATHER, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, RANK_XP, RENAMED, X_XP, item, levelOf, roundLabel, roundOf, roundStart, streakXp, type Resource } from "./trenchies-catalog";
+import { formatEther } from "viem";
+import type { PrizePot } from "./prizes";
+import { DAY, GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, PRIZE_SPLIT, RANK_XP, RENAMED, X_XP, item, levelOf, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type Resource } from "./trenchies-catalog";
 
 /**
  * Trenchies: spawn a little Trenchie with your Trencher, pick 3 Pons coins every day, earn XP when your coins finish
@@ -26,19 +28,29 @@ type Player = {
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
-  wood: number; stone: number; next: Partial<Record<Resource, number>>;
+  wood: number; stone: number; fish: number; next: Partial<Record<Resource, number>>;
+  /** Who may join this player's land (their Trenchie spawns here and they can chat), and who's asked to. */
+  members: string[]; requests: { addr: string; at: number }[];
   x?: { handle: string; at: number }; xPending?: { handle: string; code: string; at: number };
   results: Result[]; seen: number | null;
 };
 type Settled = { at: number; coins: { token: Address; symbol: string; pct: number | null }[]; players: number };
 type Round = { picks: Record<string, Address[]>; settled?: Settled };
-type Host = { pub: PublicClient; nft: Address; prices: Backtest; symbolOf: (t: Address) => Promise<string>; log: (m: string) => void };
+type Msg = { id: number; by: string; nft: number; text: string; at: number };
+type Prize = { week: number; label: string; feesWei: string; potWei: string; winners: { name: string; addr: string; nft: number; xp: number; share: number; wei: string }[]; at: number; paid: string | null };
+type Host = {
+  pub: PublicClient; nft: Address; prices: Backtest; symbolOf: (t: Address) => Promise<string>; log: (m: string) => void;
+  pot?: PrizePot; announce?: (ids: number[], text: string) => void; notify?: (addr: string, msg: { title: string; body: string; url: string; tag?: string }) => void; site?: string;
+};
 
 const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
 const FILE = clean(process.env.TRENCHIES_FILE) || `${dirname(clean(process.env.CHAT_FILE) || "./chat.json")}/trenchies.json`;
 const SECRET = clean(process.env.TRENCHIES_SECRET) || clean(process.env.CHAT_SECRET) || randomBytes(32).toString("hex");
 const ALLOW = new Set((clean(process.env.TRENCHIES_ALLOW) || clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
 const OPEN = () => clean(process.env.TRENCHIES_OPEN) === "1";
+const ADMINS = new Set((clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
+const HERE = 40_000; // a member counts as "on the land" for 40 s after their last check-in
+const MAX_MEMBERS = 24;
 const NAME = /^[A-Za-z0-9_]{3,16}$/;
 const lc = (a: string) => a.toLowerCase() as Address;
 
@@ -46,14 +58,21 @@ export class Trenchies {
   private players = new Map<string, Player>();
   private rounds = new Map<number, Round>();
   private coinCache: { at: number; list: unknown[] } | null = null;
+  private chats = new Map<string, Msg[]>();
+  private prizes = new Map<number, Prize>();
+  private presence = new Map<string, Map<string, number>>();
+  private lastSay = new Map<string, number>();
+  private msgId = Date.now();
   status = "ok";
 
   constructor(private host: Host) {
     try {
       if (existsSync(FILE)) {
-        const j = JSON.parse(readFileSync(FILE, "utf8")) as { players: Player[]; rounds: [number, Round][] };
+        const j = JSON.parse(readFileSync(FILE, "utf8")) as { players: Player[]; rounds: [number, Round][]; chats?: Record<string, Msg[]>; prizes?: Prize[] };
+        for (const [k, v] of Object.entries(j.chats ?? {})) this.chats.set(k, v);
+        for (const z of j.prizes ?? []) this.prizes.set(z.week, z);
         for (const p of j.players ?? []) {
-          p.wood ??= 0; p.stone ??= 0; p.next ??= {};
+          p.wood ??= 0; p.stone ??= 0; p.fish ??= 0; p.next ??= {}; p.members ??= []; p.requests ??= [];
           p.items = [...new Set(p.items.map((i) => RENAMED[i] ?? i))]; p.vehicle = RENAMED[p.vehicle] ?? p.vehicle;
           this.players.set(p.addr, p);
         }
@@ -65,11 +84,12 @@ export class Trenchies {
     try {
       const keep = [...this.rounds.entries()].sort((a, b) => b[0] - a[0]).slice(0, 90);
       mkdirSync(dirname(FILE), { recursive: true });
-      writeFileSync(`${FILE}.tmp`, JSON.stringify({ players: [...this.players.values()], rounds: keep }));
+      const prizes = [...this.prizes.values()].sort((a, b) => b.week - a.week).slice(0, 52);
+      writeFileSync(`${FILE}.tmp`, JSON.stringify({ players: [...this.players.values()], rounds: keep, chats: Object.fromEntries(this.chats), prizes }));
       renameSync(`${FILE}.tmp`, FILE);
     } catch { /* keep in memory */ }
   }
-  view() { return { players: this.players.size, rounds: this.rounds.size, invite: OPEN() ? "open to holders" : `${ALLOW.size} wallet(s)`, status: this.status }; }
+  view() { return { players: this.players.size, rounds: this.rounds.size, invite: OPEN() ? "open to holders" : `${ALLOW.size} wallet(s)`, status: this.status, prizes: this.host.pot?.view() ?? "off", weeksPaid: [...this.prizes.values()].filter((z) => z.paid).length }; }
 
   // ------------------------------------------------------------------ sessions
 
@@ -104,6 +124,10 @@ export class Trenchies {
 
   /** Every minute: settles the round that just ended, once the price data covers its last minute. */
   tick(now = Date.now() / 1000) {
+    this.settleRound(now);
+    this.settleWeek(now);
+  }
+  private settleRound(now: number) {
     const r = roundOf(now) - 1, rd = this.rounds.get(r);
     if (!rd || rd.settled || this.host.prices.updatedAt < roundStart(r + 1)) return;
     const coins = this.standings(r, roundStart(r + 1)).map(({ token, symbol, pct }) => ({ token, symbol, pct }));
@@ -137,7 +161,9 @@ export class Trenchies {
     const open = roundOf(now) + 1, live = roundOf(now), last = live - 1;
     const st = this.standings(live, now);
     return {
-      ...this.pub(p), bricks: p.bricks, held: p.held, wood: p.wood, stone: p.stone, next: { wood: p.next.wood ?? 0, stone: p.next.stone ?? 0 }, xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
+      ...this.pub(p), bricks: p.bricks, held: p.held, wood: p.wood, stone: p.stone, fish: p.fish, next: { wood: p.next.wood ?? 0, stone: p.next.stone ?? 0, fish: p.next.fish ?? 0 },
+      requests: p.requests.length, lands: [...this.players.values()].filter((h) => h.members.includes(p.addr)).map((h) => this.mini(h)),
+      week: this.weekRank(p.addr, now), xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
       open: { round: open, label: roundLabel(open), lockAt: roundStart(open), picks: (this.rounds.get(open)?.picks[p.addr] ?? []).map((t) => ({ token: t, symbol: this.host.prices.symbolOf(t) ?? t.slice(2, 8) })) },
       live: { round: live, label: roundLabel(live), endsAt: roundStart(live + 1), dataAt: this.host.prices.updatedAt, players: Object.keys(this.rounds.get(live)?.picks ?? {}).length,
         picks: (this.rounds.get(live)?.picks[p.addr] ?? []).map((t) => { const i = st.findIndex((x) => x.token === t); return { token: t, symbol: st[i]?.symbol ?? t.slice(2, 8), pct: st[i]?.pct ?? null, place: i >= 0 ? i + 1 : null }; }),
@@ -177,6 +203,8 @@ export class Trenchies {
       return true;
     }
 
+    if (op === "prizes") { send(200, this.prizeView(now, this.who(q.get("token")))); return true; }
+
     const addr = this.who(b.token ?? q.get("token"));
     if (!addr || !this.allowed(addr)) { send(401, { error: "Sign in again." }); return true; }
     const p = this.players.get(addr) ?? null;
@@ -191,7 +219,7 @@ export class Trenchies {
       if (taken) { send(409, { error: "That name is taken. Try another." }); return true; }
       if (!(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
       if (p) { p.nft = nft; p.name = name; p.held = true; }
-      else this.players.set(addr, { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, next: {}, results: [], seen: null });
+      else this.players.set(addr, { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, fish: 0, next: {}, members: [], requests: [], results: [], seen: null });
       this.save();
       send(200, { me: this.me(this.players.get(addr)!, now) });
       return true;
@@ -243,9 +271,10 @@ export class Trenchies {
       const at = p.next[res] ?? 0;
       if (Date.now() < at) { send(400, { error: `It's still regrowing.`, next: at }); return true; }
       const got = g.min + Math.floor(Math.random() * (g.max - g.min + 1));
-      p[res] += got; p.xp += g.xp; p.bricks += g.xp; p.next[res] = Date.now() + g.every * 1000;
+      const golden = res === "fish" && Math.random() < GOLDEN_FISH.chance, xp = g.xp + (golden ? GOLDEN_FISH.xp : 0);
+      p[res] += got; p.xp += xp; p.bricks += xp; p.next[res] = Date.now() + g.every * 1000;
       this.save();
-      send(200, { me: this.me(p, now), got, res, xp: g.xp });
+      send(200, { me: this.me(p, now), got, res, xp, golden });
       return true;
     }
     if (op === "leaderboard") {
@@ -258,6 +287,15 @@ export class Trenchies {
       const v = [...this.players.values()].find((x) => x.name.toLowerCase() === name);
       if (!v) { send(404, { error: "No Trenchie by that name." }); return true; }
       send(200, { player: { ...this.pub(v), last: v.results[0] ?? null } });
+      return true;
+    }
+    if (op.startsWith("land")) return this.land(op, p, b, q, send);
+    if (op === "prizes/paid") {
+      if (!ADMINS.has(addr)) { send(403, { error: "Only the team can mark a payout." }); return true; }
+      const z = this.prizes.get(Number(b.week)); const tx = String(b.tx ?? "").trim();
+      if (!z || !/^0x[0-9a-fA-F]{64}$/.test(tx)) { send(400, { error: "Give the week and the payout transaction." }); return true; }
+      z.paid = tx; this.save();
+      send(200, this.prizeView(now, addr));
       return true;
     }
     if (op === "x/start") {
@@ -288,6 +326,113 @@ export class Trenchies {
     }
     send(404, { error: "not found" });
     return true;
+  }
+
+  // ------------------------------------------------------------------ lands: join requests, members, chat
+
+  private mini(p: Player) { return { name: p.name, nft: p.nft, level: levelOf(p.xp), x: p.x?.handle ?? null }; }
+  private byName(n: unknown) { const s = String(n ?? "").trim().toLowerCase(); return [...this.players.values()].find((x) => x.name.toLowerCase() === s) ?? null; }
+  private land(op: string, p: Player, b: Record<string, unknown>, q: URLSearchParams, send: (c: number, x: unknown) => void) {
+    const h = this.byName(b.name ?? q.get("name"));
+    if (!h) { send(404, { error: "No Trenchie by that name." }); return true; }
+    const own = h.addr === p.addr, member = h.members.includes(p.addr);
+    const out = () => {
+      const here = this.presence.get(h.addr) ?? new Map<string, number>(), t = Date.now();
+      return {
+        land: { ...this.pub(h), last: h.results[0] ?? null }, role: own ? "owner" : member ? "member" : h.requests.some((r) => r.addr === p.addr) ? "pending" : "visitor",
+        members: h.members.map((a) => this.players.get(a)).filter((x): x is Player => !!x).map((x) => this.mini(x)),
+        present: h.members.filter((a) => (here.get(a) ?? 0) > t - HERE).map((a) => this.players.get(a)).filter((x): x is Player => !!x).map((x) => this.mini(x)),
+        ownerHere: (here.get(h.addr) ?? 0) > t - HERE,
+        chat: (this.chats.get(h.addr) ?? []).slice(-60),
+        requests: own ? h.requests.map((r) => { const x = this.players.get(r.addr); return x ? { ...this.mini(x), at: r.at } : null; }).filter(Boolean) : undefined,
+      };
+    };
+    if (op === "land") {
+      if (own || member) { let m = this.presence.get(h.addr); if (!m) this.presence.set(h.addr, (m = new Map())); m.set(p.addr, Date.now()); }
+      send(200, out()); return true;
+    }
+    if (op === "land/request") {
+      if (own || member) { send(400, { error: "You're already on this land." }); return true; }
+      if (h.members.length >= MAX_MEMBERS) { send(400, { error: "This land is full." }); return true; }
+      if (!h.requests.some((r) => r.addr === p.addr)) {
+        h.requests = [...h.requests.slice(-19), { addr: p.addr, at: Date.now() }];
+        this.save();
+        this.host.notify?.(h.addr, { title: "Someone wants to join your land", body: `${p.name} asked to join ${h.name}'s land in Trenchies.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-join" });
+      }
+      send(200, out()); return true;
+    }
+    if (op === "land/answer") {
+      if (!own) { send(403, { error: "Only the owner can answer." }); return true; }
+      const who = this.byName(b.who); if (!who) { send(404, { error: "No Trenchie by that name." }); return true; }
+      h.requests = h.requests.filter((r) => r.addr !== who.addr);
+      if (b.accept === true && !h.members.includes(who.addr)) {
+        if (h.members.length >= MAX_MEMBERS) { send(400, { error: `A land holds up to ${MAX_MEMBERS} members.` }); return true; }
+        h.members.push(who.addr);
+        this.post(h, { by: "", nft: 0, text: `${who.name} joined the land` });
+        this.host.notify?.(who.addr, { title: "You're in", body: `${h.name} let you join their land in Trenchies.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-join" });
+      }
+      this.save(); send(200, out()); return true;
+    }
+    if (op === "land/leave") {
+      const who = own ? this.byName(b.who) : p;
+      if (!who || who.addr === h.addr || !h.members.includes(who.addr)) { send(400, { error: "Not a member." }); return true; }
+      h.members = h.members.filter((a) => a !== who.addr); this.presence.get(h.addr)?.delete(who.addr);
+      this.post(h, { by: "", nft: 0, text: own ? `${who.name} was removed` : `${who.name} left the land` });
+      this.save(); send(200, out()); return true;
+    }
+    if (op === "land/say") {
+      if (!own && !member) { send(403, { error: "Ask to join this land to chat here." }); return true; }
+      const text = String(b.text ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+      if (!text) { send(400, { error: "Say something." }); return true; }
+      const last = this.lastSay.get(p.addr) ?? 0; if (Date.now() - last < 1500) { send(429, { error: "Slow down a little." }); return true; }
+      this.lastSay.set(p.addr, Date.now());
+      this.post(h, { by: p.name, nft: p.nft, text });
+      this.save(); send(200, out()); return true;
+    }
+    send(404, { error: "not found" }); return true;
+  }
+  private post(h: Player, m: Omit<Msg, "id" | "at">) {
+    const list = this.chats.get(h.addr) ?? []; list.push({ ...m, id: ++this.msgId, at: Date.now() }); this.chats.set(h.addr, list.slice(-100));
+  }
+
+  // ------------------------------------------------------------------ weekly prizes
+
+  /** XP each player's picks earned in week w (settled days only), best first. */
+  private weekBoard(w: number) {
+    const a = weekStart(w) / DAY, z = weekStart(w + 1) / DAY;
+    return [...this.players.values()].map((p) => { const rs = p.results.filter((r) => r.round >= a && r.round < z); return { p, xp: rs.reduce((s, r) => s + r.xp, 0), hits: rs.reduce((s, r) => s + r.picks.filter((x) => x.rank).length, 0) }; })
+      .filter((x) => x.xp > 0).sort((x, y) => y.xp - x.xp || y.hits - x.hits || x.p.createdAt - y.p.createdAt);
+  }
+  private weekRank(addr: string, now: number) {
+    const b = this.weekBoard(weekOf(now)), i = b.findIndex((x) => x.p.addr === addr);
+    return { rank: i >= 0 ? i + 1 : null, xp: i >= 0 ? b[i].xp : 0, players: b.length };
+  }
+  /** Once a week has ended and its last day is settled: work out the winners and their share of the pot. */
+  private settleWeek(now: number) {
+    const w = weekOf(now) - 1; if (this.prizes.has(w) || !this.host.pot) return;
+    const lastRound = weekStart(w + 1) / DAY - 1, rd = this.rounds.get(lastRound);
+    if (rd && !rd.settled) return; // wait for Sunday to settle
+    if (now < weekStart(w + 1) + 600) return;
+    const pot = this.host.pot.potWei(w), fees = this.host.pot.feesIn(w);
+    const top = this.weekBoard(w).slice(0, PRIZE_SPLIT.length), total = PRIZE_SPLIT.slice(0, top.length).reduce((s, x) => s + x, 0) || 1;
+    const winners = top.map((x, i) => { const share = Math.round((PRIZE_SPLIT[i] / total) * 1000) / 10; return { name: x.p.name, addr: x.p.addr, nft: x.p.nft, xp: x.xp, share, wei: ((pot * BigInt(Math.round(share * 10))) / 1000n).toString() }; });
+    this.prizes.set(w, { week: w, label: weekLabel(w), feesWei: fees.toString(), potWei: pot.toString(), winners, at: Date.now(), paid: null });
+    this.save();
+    this.host.log(`Trenchies: week ${weekLabel(w)} settled, pot ${formatEther(pot)} ETH, winners ${winners.map((x) => x.name).join(", ") || "none"}`);
+    if (winners.length && pot > 0n) {
+      const eth = (v: string) => Number(formatEther(BigInt(v))).toFixed(4);
+      this.host.announce?.(winners.map((x) => x.nft), [`🏆 <b>Trenchies weekly prizes</b> (${weekLabel(w)})`, `Pot: <b>${eth(pot.toString())} ETH</b> (5% of the $TRENCHERS creator fees this week)`, "", ...winners.map((x, i) => `${["🥇", "🥈", "🥉"][i]} <b>${x.name}</b> (Trencher #${x.nft}): ${x.xp} XP → ${eth(x.wei)} ETH`), "", `Play: ${this.host.site ?? ""}/trenchies`].join("\n"));
+      for (const x of winners) this.host.notify?.(x.addr, { title: "You won a Trenchies weekly prize", body: `Your picks finished in the top ${PRIZE_SPLIT.length} this week: ${eth(x.wei)} ETH is on its way.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-prize" });
+    }
+  }
+  private prizeView(now: number, viewer: string | null) {
+    const w = weekOf(now), board = this.weekBoard(w), pot = this.host.pot?.view(now) ?? null;
+    return {
+      pot, split: PRIZE_SPLIT, week: { week: w, label: weekLabel(w), start: weekStart(w), end: weekStart(w + 1) },
+      standings: board.slice(0, 10).map((x, i) => ({ rank: i + 1, ...this.mini(x.p), xp: x.xp, hits: x.hits })),
+      me: viewer ? this.weekRank(viewer, now) : null, admin: !!viewer && ADMINS.has(viewer),
+      past: [...this.prizes.values()].sort((a, b) => b.week - a.week).slice(0, 8).map((z) => ({ ...z, winners: z.winners.map((x) => ({ ...x, addr: viewer && ADMINS.has(viewer) ? x.addr : `${x.addr.slice(0, 6)}…${x.addr.slice(-4)}` })) })),
+    };
   }
 
   /** What other players picked most for the open round (a hint, without who). */

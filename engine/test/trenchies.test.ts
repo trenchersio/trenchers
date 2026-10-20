@@ -8,6 +8,7 @@ import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 const me = privateKeyToAccount(generatePrivateKey()), friend = privateKeyToAccount(generatePrivateKey()), stranger = privateKeyToAccount(generatePrivateKey());
 process.env.TRENCHIES_FILE = mkdtempSync(`${tmpdir()}/tr-`) + "/t.json";
 process.env.TRENCHIES_ALLOW = `${me.address},${friend.address}`;
+process.env.CHAT_ADMINS = me.address;
 
 test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit", async () => {
   const { Trenchies, loginText } = await import("../src/trenchies");
@@ -23,7 +24,9 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   };
   const owners: Record<number, string> = { 862: me.address.toLowerCase(), 599: friend.address.toLowerCase() };
   const pub = { readContract: async ({ args }: { args: [bigint] }) => owners[Number(args[0])] ?? "0x0000000000000000000000000000000000000001" };
-  const g = new Trenchies({ pub: pub as never, nft: "0x0000000000000000000000000000000000000002", prices: prices as never, symbolOf: async (t) => `C${t.slice(-1)}`, log: () => {} });
+  const posts: string[] = [];
+  const pot = { potWei: () => 1000n, feesIn: () => 20000n, view: () => ({ potEth: "0.000000000000001" }) };
+  const g = new Trenchies({ pub: pub as never, nft: "0x0000000000000000000000000000000000000002", prices: prices as never, symbolOf: async (t) => `C${t.slice(-1)}`, log: () => {}, pot: pot as never, announce: (_ids, t) => { posts.push(t); } });
   const srv = createServer((req, res) => { void g.handle(req, res, req.url!.split("?")[0]); }).listen(0);
   const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}/trenchies/`;
   const post = async (op: string, body: unknown) => { const r = await fetch(base + op, { method: "POST", body: JSON.stringify(body) }); return { status: r.status, j: await r.json() as any }; };
@@ -63,6 +66,30 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   const v = (await fetch(`${base}visit?token=${tok2}&name=ser_me`).then((r) => r.json())) as any;
   assert.equal(v.player.vehicle, "moped");
   assert.equal((await fetch(`${base}state?token=bad`)).status, 401);
+  // The fishing pond
+  const f1 = await post("gather", { token: tok, res: "fish" }); assert.equal(f1.status, 200); assert.ok(f1.j.got >= 1 && f1.j.got <= 3); assert.ok(f1.j.xp === 10 || f1.j.xp === 50);
+  // Lands: ask to join, the owner accepts, then both can chat; strangers can't.
+  const get = (op: string, t: string, name: string) => fetch(`${base}${op}?token=${t}&name=${name}`).then(async (r) => ({ status: r.status, j: await r.json() as any }));
+  assert.equal((await get("land", tok2, "Ser_Me")).j.role, "visitor");
+  assert.equal((await post("land/say", { token: tok2, name: "Ser_Me", text: "hi" })).status, 403, "visitors can't chat");
+  assert.equal((await post("land/request", { token: tok2, name: "Ser_Me" })).j.role, "pending");
+  const mine = await get("land", tok, "Ser_Me"); assert.equal(mine.j.role, "owner"); assert.equal(mine.j.requests[0].name, "Friend");
+  assert.equal((await post("land/answer", { token: tok2, name: "Ser_Me", who: "Friend", accept: true })).status, 403, "only the owner answers");
+  const ok = await post("land/answer", { token: tok, name: "Ser_Me", who: "Friend", accept: true }); assert.equal(ok.j.members[0].name, "Friend");
+  const here = await get("land", tok2, "Ser_Me"); assert.equal(here.j.role, "member"); assert.equal(here.j.present[0].name, "Friend", "a member who opens the land is spawned in it");
+  const said = await post("land/say", { token: tok2, name: "Ser_Me", text: "gm  everyone" }); assert.equal(said.status, 200); assert.equal(said.j.chat.at(-1).text, "gm everyone");
+  assert.equal((await post("land/say", { token: tok2, name: "Ser_Me", text: "again" })).status, 429, "rate limited");
+  assert.equal((await post("state", { token: tok2 })).j.me.lands[0].name, "Ser_Me");
+  // Weekly prizes: once the week has ended, the best pickers get the pot (50/30/20).
+  const { weekOf, weekStart } = await import("../src/trenchies-catalog");
+  const wk = weekOf(roundStart(r + 1));
+  const pre = (await fetch(`${base}prizes`).then((x) => x.json())) as any; assert.ok(pre.split.length === 3);
+  g.tick(weekStart(wk + 1) + 700);
+  const pz = (await fetch(`${base}prizes?token=${tok}`).then((x) => x.json())) as any;
+  const won = pz.past.find((z: any) => z.week === wk); assert.ok(won, JSON.stringify(pz));
+  assert.equal(won.winners[0].name, "Ser_Me"); assert.equal(won.winners[0].share, 62.5); assert.equal(won.winners[0].wei, "625"); assert.equal(won.winners[1].wei, "375");
+  assert.ok(posts[0]?.includes("weekly prizes"));
+  assert.equal((await post("prizes/paid", { token: tok, week: wk, tx: "0x" + "1".repeat(64) })).status, 200, "the team (CHAT_ADMINS) marks it paid");
   void DAY;
   srv.close();
 });

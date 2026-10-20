@@ -12,7 +12,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass";
-import { drawArt } from "@/lib/art-vector";
+import { artPalette, drawArt } from "@/lib/art-vector";
 import { GATHER, item as catItem, type Resource } from "@/lib/trenchies-catalog";
 import { makeWilds, poolMaterial, poolTexture, type Wilds } from "./wilds";
 import { makeTrenchie } from "./trenchie3d";
@@ -47,10 +47,10 @@ const ROOMS: Record<string, R & { h: number }> = {
   observatory: { x: 2.4, y: 16.5, w: 3.4, d: 3.4, h: 0 },
   helipad: { x: 19.2, y: 18.4, w: 4.4, d: 4.4, h: 0 },
 };
-const TREE = { x: 4.4, y: 22.0 }, ROCK = { x: 8.6, y: 22.5 };
+const TREE = { x: 4.4, y: 22.0 }, ROCK = { x: 8.6, y: 22.5 }, POND = { x: 16.9, y: 20.6 }, DOCK = { x: 15.15, y: 20.62 };
 const POOL: R = { x: 14.9, y: 10.6, w: 3.6, d: 2.2 };
 
-type Kind = "stand" | "sit" | "lie" | "work" | "lift" | "swim" | "look" | "dance" | "chop" | "mine";
+type Kind = "stand" | "sit" | "lie" | "work" | "lift" | "swim" | "look" | "dance" | "chop" | "mine" | "fish";
 type Spot = { act: string; at: Pt; pose: { x: number; y: number; z: number; yaw: number; kind: Kind }; min: number; max: number; w: number; night?: number };
 const LINES: Record<string, string[]> = {
   desk: ["checking the charts", "my picks look good", "volume first, then I buy", "is this the dip?", "one more chart", "gm to the trench"],
@@ -60,7 +60,7 @@ const LINES: Record<string, string[]> = {
   gym: ["one more rep", "strong hands", "leg day"], shed: ["fixing the bike", "building something"], servers: ["the nodes are humming", "all green"],
   greenhouse: ["grow, little plant", "watering the gains"], observatory: ["looking for the moon", "is that a comet?"], helipad: ["waiting for my ride", "nice view up here"],
   ride: ["touching grass", "brb", "taking it for a spin"], idle: ["gm", "nice night in the trench", "need a bigger house", "what are you picking?", "wagmi", "my land is growing"],
-  pet: ["good boy", "who's a good dog"], dance: ["LET'S GO!", "top 3!", "XP!"], chop: ["timber!", "good wood"], mine: ["solid rock", "stone for the build"],
+  pet: ["good boy", "who's a good dog"], dance: ["LET'S GO!", "top 3!", "XP!"], chop: ["timber!", "good wood"], mine: ["solid rock", "stone for the build"], fishing: ["something's biting", "patience…", "got one!"],
   bench: ["thinking about entries", "nice breeze"], hammock: ["nap time", "do not disturb"], firepit: ["warm glow", "campfire charts"], hoop: ["nothing but net", "swish"],
   hottub: ["bubbles and charts"], arcade: ["high score", "one more game"], piano: ["playing in green major"], aquarium: ["fish don't panic sell"], coffee: ["fuel"], fridge: ["snack break"], vinyl: ["lo-fi to trade to"], fountain: ["make a wish: 100x"], statue: ["looking good in stone"],
 };
@@ -122,12 +122,16 @@ export class World3D {
   private park = { x: 16.2, y: 23.5, yaw: Math.PI / 2, garage: false };
   private pets: { kind: string; g: THREE.Group; w: Walker; wait: number; legs?: THREE.Object3D[] }[] = [];
   private drone: THREE.Group | null = null;
+  private pondFish: { m: THREE.Object3D; a: number; r: number; v: number }[] = []; private bobber: THREE.Mesh | null = null; private fishLine: THREE.Line | null = null; private pondRing: THREE.MeshBasicMaterial | null = null; private pondG = new THREE.Group();
+  private guests = new Map<string, { tr: THREE.Group; w: Walker; wait: number; step: number; plate: HTMLElement; bubble: HTMLElement; until: number; yaw: number }>();
+  private follow: string | null = null;
+  private catchArc: { m: THREE.Mesh; t: number; from: THREE.Vector3; to: THREE.Vector3 } | null = null;
   private treeG = new THREE.Group(); private rockG = new THREE.Group(); private treeRing: THREE.MeshBasicMaterial | null = null; private rockRing: THREE.MeshBasicMaterial | null = null;
   private zs: { s: THREE.Sprite; t: number }[] = [];
   private confetti: { m: THREE.Mesh; v: THREE.Vector3; t: number }[] = [];
   private chips: { m: THREE.Mesh; v: THREE.Vector3; t: number }[] = [];
   private look: Look; private nft: number; private t = 0; private lastScreen = 0;
-  private grow: Grow = { wood: 0, stone: 0 };
+  private grow: Grow = { wood: 0, stone: 0, fish: 0 };
   private felling: Partial<Record<Resource, number>> = {}; // t when the fall started
   private busy: Partial<Record<Resource, boolean>> = {};
   private pins: Pins = {};
@@ -280,6 +284,7 @@ export class World3D {
     for (const id of Object.keys(ROOMS)) if (this.has(id)) this.room(id);
     this.outdoor();
     this.gatherables();
+    this.pond();
     this.lots();
     // vehicle, pets, Trenchie
     if (this.vehicle) { this.dyn.remove(this.vehicle); this.clear(this.vehicle); }
@@ -657,6 +662,29 @@ export class World3D {
       const sz = Math.min(r.w - 0.4, 3.4); const pl = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz / 2), m); pl.rotation.x = -Math.PI / 2; const p = W(r.x + r.w / 2, r.y + r.d / 2); pl.position.set(p.x, 0.01, p.z); S.add(pl);
     }
   }
+  /** The fishing pond: still water with koi, lily pads, a stone rim and a short dock to fish from. */
+  private pond() {
+    const S = this.statics, M = this.M, c = POND, rx = 1.85, ry = 1.3;
+    this.pondFish = [];
+    this.pondG = new THREE.Group(); const p = W(c.x, c.y); this.pondG.position.set(p.x, 0, p.z); S.add(this.pondG);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.06, 0.12, 48), this.std(0x2a2f2e, 0.85, 0.1)); rim.scale.set(rx + 0.2, 1, ry + 0.2); rim.position.y = 0.06; rim.receiveShadow = true; this.pondG.add(rim);
+    const wm = this.glow(0x1f8fb0, 0.75, true); this.water.push(wm);
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.02, 48), wm); water.scale.set(rx, 1, ry); water.position.y = 0.12; this.pondG.add(water);
+    for (let i = 0; i < 26; i++) { const a = (i / 26) * Math.PI * 2, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.11 + (i % 3) * 0.03, 0), this.std(0x3a3f3e, 0.85, 0.1)); st.position.set(Math.cos(a) * (rx + 0.18), 0.13, Math.sin(a) * (ry + 0.18)); st.rotation.set(i, i * 2, 0); st.castShadow = true; this.pondG.add(st); }
+    for (const [x, z, r] of [[0.6, -0.5, 0.2], [-0.2, 0.55, 0.16], [1.1, 0.35, 0.14]] as [number, number, number][]) { const pad = new THREE.Mesh(new THREE.CircleGeometry(r, 14, 0.3, Math.PI * 1.8), this.std(0x1f4a2c, 0.7)); pad.rotation.x = -Math.PI / 2; pad.position.set(x, 0.135, z); this.pondG.add(pad); }
+    const flower = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), this.glow(0xff7ab8, 1.3)); flower.position.set(0.6, 0.18, -0.5); this.pondG.add(flower);
+    for (let i = 0; i < 5; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 6), this.glow([0xff8a3d, 0xffffff, 0xff8a3d, GOLD, 0xff5a3d][i], 1.3)); f.rotation.z = Math.PI / 2; const g = new THREE.Group(); g.add(f); g.position.y = 0.1; this.pondG.add(g); this.pondFish.push({ m: g, a: Math.random() * 6, r: 0.4 + Math.random() * 0.8, v: (0.25 + Math.random() * 0.3) * (i % 2 ? 1 : -1) }); }
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.04, 64), (this.pondRing = this.glow(CYAN, 1.2, true))); ring.rotation.x = -Math.PI / 2; ring.scale.set(rx + 0.45, ry + 0.45, 1); ring.position.y = 0.012; this.pondG.add(ring);
+    // the dock, sticking into the water from the path side
+    const wood = this.std(0x4a3a2c, 0.85), d0 = DOCK.x - 0.85;
+    this.box(S, d0, DOCK.y - 0.32, 0.14, 1.25, 0.64, 0.05, wood); for (let k = 0; k < 6; k++) this.box(S, d0 + k * 0.21, DOCK.y - 0.33, 0.19, 0.015, 0.66, 0.005, this.std(0x2a2018, 0.9), false);
+    for (const [x, y] of [[d0 + 0.1, DOCK.y - 0.3], [d0 + 0.1, DOCK.y + 0.24], [d0 + 1.15, DOCK.y - 0.3], [d0 + 1.15, DOCK.y + 0.24]]) this.box(S, x, y, 0, 0.06, 0.06, 0.32, wood);
+    this.nav.blockCircle({ x: c.x + 0.3, y: c.y }, 1.45); this.nav.blockCircle({ x: c.x - 0.9, y: c.y - 0.85 }, 0.6); this.nav.blockCircle({ x: c.x - 0.9, y: c.y + 0.85 }, 0.6);
+    if (this.bobber) { this.dyn.remove(this.bobber); this.bobber.geometry.dispose(); }
+    if (this.fishLine) { this.dyn.remove(this.fishLine); this.fishLine.geometry.dispose(); }
+    this.bobber = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), this.glow(0xff5470, 1.6)); this.bobber.visible = false; this.dyn.add(this.bobber);
+    this.fishLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xdfe6e2, transparent: true, opacity: 0.7 })); this.fishLine.visible = false; this.fishLine.frustumCulled = false; this.dyn.add(this.fishLine);
+  }
   private gatherables() {
     // the tree
     this.treeG = new THREE.Group(); const p = W(TREE.x, TREE.y); this.treeG.position.set(p.x, 0, p.z); this.statics.add(this.treeG);
@@ -743,12 +771,14 @@ export class World3D {
   /** Walk over and chop the tree / mine the rock (the server has already paid out). */
   gather(res: Resource, got: number) {
     if (this.mode === "ride") this.endRide();
-    const c = res === "wood" ? TREE : ROCK, side = res === "wood" ? { x: c.x + 0.95, y: c.y + 0.35 } : { x: c.x + 1.15, y: c.y + 0.45 };
-    const yaw = Math.atan2(c.x - side.x, c.y - side.y);
+    const c = res === "wood" ? TREE : res === "stone" ? ROCK : POND, side = res === "wood" ? { x: c.x + 0.95, y: c.y + 0.35 } : res === "stone" ? { x: c.x + 1.15, y: c.y + 0.45 } : { x: DOCK.x - 0.15, y: DOCK.y };
+    const yaw = res === "fish" ? Math.PI / 2 : Math.atan2(c.x - side.x, c.y - side.y);
     this.busy[res] = true;
-    const s: Spot = { act: res === "wood" ? "chop" : "mine", at: side, pose: { x: side.x, y: side.y, z: 0, yaw, kind: res === "wood" ? "chop" : "mine" }, min: 3.2, max: 3.2, w: 0 };
+    const kind: Kind = res === "wood" ? "chop" : res === "stone" ? "mine" : "fish";
+    const s: Spot = { act: res === "wood" ? "chop" : res === "stone" ? "mine" : "fishing", at: res === "fish" ? { x: DOCK.x - 1.2, y: DOCK.y } : side, pose: { x: side.x, y: side.y, z: res === "fish" ? 0.19 : 0, yaw, kind }, min: res === "fish" ? 5 : 3.2, max: res === "fish" ? 5 : 3.2, w: 0 };
     this.walkTo(s, () => {
       this.felling[res] = this.t; this.busy[res] = false;
+      if (res === "fish" && this.bobber) { const m = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.24, 6), this.glow(GOLD, 1.5)); m.rotation.z = Math.PI / 2; const from = this.bobber.position.clone(), to = W(this.pose.x, this.pose.y).setY(0.9); m.position.copy(from); this.dyn.add(m); this.catchArc = { m, t: 0, from, to }; }
       const pop = this.pins.pop; if (pop) { pop.textContent = `+${got} ${res}`; pop.classList.remove("on"); void pop.offsetWidth; pop.classList.add("on"); this.popUntil = this.t + 2.2; }
       this.onGathered?.(res);
     });
@@ -805,6 +835,7 @@ export class World3D {
       case "idle": if (this.t >= this.until) this.choose(); break;
     }
     this.pets.forEach((p) => this.petStep(p, dt));
+    this.guestStep(dt);
     this.sync(dt);
   }
   private pendingSpot: Spot | null = null; private pendingThen: (() => void) | null = null;
@@ -851,6 +882,7 @@ export class World3D {
       if (P.kind === "lift") { const u = (Math.sin(t * 2.6) + 1) / 2; r.sy = 1 - u * 0.16; r.z = 0; }
       if (P.kind === "swim") { r.z = P.z + Math.sin(t * 2) * 0.03; r.yaw = P.yaw + Math.sin(t * 0.5) * 0.6; }
       if (P.kind === "dance") { r.z = Math.abs(Math.sin(t * 6)) * 0.18; r.yaw = P.yaw + Math.sin(t * 3) * 0.6; }
+      if (P.kind === "fish") { r.sy = 1 + Math.sin(t * 2) * 0.012; r.rx = -0.05; }
       if (P.kind === "chop" || P.kind === "mine") { const u = Math.sin(t * 6); r.rx = 0.18 + u * 0.18; r.z = Math.max(0, -u) * 0.02; }
     }
     return r;
@@ -882,6 +914,9 @@ export class World3D {
     // tree and rock: grown, felled, or growing back
     const now = Date.now();
     const frac = (res: Resource) => { const nx = this.grow[res]; if (!nx || nx <= now) return 1; return Math.max(0, 1 - (nx - now) / (GATHER[res].every * 1000)); };
+    for (const f of this.pondFish) { f.a += f.v * dt; f.m.position.set(Math.cos(f.a) * f.r * 1.5, 0.1 + Math.sin(this.t * 2 + f.r) * 0.01, Math.sin(f.a) * f.r); f.m.rotation.y = -f.a - (f.v > 0 ? 0 : Math.PI); }
+    if (this.pondRing) { const ready = frac("fish") >= 1 && !this.busy.fish; this.pondRing.color.set(CYAN).multiplyScalar(ready ? 1.1 + Math.sin(this.t * 3) * 0.5 : 0.25); }
+    if (this.catchArc) { const c = this.catchArc; c.t += dt / 0.9; const k = Math.min(1, c.t); c.m.position.lerpVectors(c.from, c.to, k); c.m.position.y += Math.sin(k * Math.PI) * 1.2; c.m.rotation.z += dt * 12; if (k >= 1) { this.dyn.remove(c.m); c.m.geometry.dispose(); this.catchArc = null; } }
     for (const [res, g, ring] of [["wood", this.treeG, this.treeRing], ["stone", this.rockG, this.rockRing]] as [Resource, THREE.Group, THREE.MeshBasicMaterial | null][]) {
       const full = g.getObjectByName("full")!, stump = g.getObjectByName("stump")!;
       const fell = this.felling[res], f = this.busy[res] ? 1 : frac(res);
@@ -912,10 +947,13 @@ export class World3D {
         const inner = tr.userData.inner as THREE.Group; inner.scale.y = (HT / 3.3) * this.pose.sy;
       }
       // tool in hand while gathering
-      const kind = this.spot?.pose.kind, gathering = (kind === "chop" || kind === "mine") && (this.mode === "do" || this.mode === "enter");
+      const kind = this.spot?.pose.kind, gathering = (kind === "chop" || kind === "mine" || kind === "fish") && (this.mode === "do" || this.mode === "enter");
       if (gathering && !this.tool) { this.tool = this.makeTool(kind!); tr.add(this.tool); }
       if (!gathering && this.tool) { tr.remove(this.tool); this.tool = null; }
-      if (this.tool) { this.tool.rotation.x = -0.6 + Math.sin(this.t * 6) * 1.0; if (this.mode === "do" && Math.sin(this.t * 6) < -0.97 && Math.random() < 0.5) this.chip(kind === "chop"); }
+      if (this.tool && kind === "fish") { this.tool.rotation.x = 0.9 + Math.sin(this.t * 1.6) * 0.06; }
+      else if (this.tool) { this.tool.rotation.x = -0.6 + Math.sin(this.t * 6) * 1.0; if (this.mode === "do" && Math.sin(this.t * 6) < -0.97 && Math.random() < 0.5) this.chip(kind === "chop"); }
+      if (this.bobber) { const on = kind === "fish" && this.mode === "do"; this.bobber.visible = on; if (on) { const q = W(DOCK.x + 1.15, DOCK.y + 0.05); this.bobber.position.set(q.x, 0.15 + Math.max(0, Math.sin(this.t * 3)) * 0.03 - (this.until - this.t < 1 ? 0.06 : 0), q.z); }
+        if (this.fishLine) { this.fishLine.visible = on && !!this.tool; if (on && this.tool) { this.tool.updateMatrixWorld(); const tip = this.tool.localToWorld(new THREE.Vector3(0, 1.32, 0)); const a = this.fishLine.geometry.attributes.position as THREE.BufferAttribute; a.setXYZ(0, tip.x, tip.y, tip.z); a.setXYZ(1, this.bobber.position.x, this.bobber.position.y, this.bobber.position.z); a.needsUpdate = true; } } }
     }
     this.chips = this.chips.filter((c) => { c.t -= dt; c.v.y -= 7 * dt; c.m.position.addScaledVector(c.v, dt); c.m.rotation.x += dt * 9; if (c.t <= 0 || c.m.position.y < 0.02) { this.dyn.remove(c.m); c.m.geometry.dispose(); return false; } return true; });
     // drone follows above
@@ -930,6 +968,7 @@ export class World3D {
   private makeTool(kind: string) {
     const g = new THREE.Group(), M = this.M; g.position.set(0.33, 0.55, 0.12);
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 8), this.std(0x2a2522, 0.8)); handle.position.y = 0.27; g.add(handle);
+    if (kind === "fish") { handle.scale.set(0.7, 2.4, 0.7); handle.position.y = 0.66; const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), this.glow(NEON, 1.6)); tip.position.y = 1.32; g.add(tip); return g; }
     if (kind === "chop") { const head = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.16), M.metal); head.position.set(0, 0.52, 0.07); g.add(head); }
     else { const head = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 6, 16, Math.PI), M.metal); head.position.set(0, 0.48, 0); head.rotation.y = Math.PI / 2; g.add(head); }
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.02, 0.02), this.glow(NEON, 1.6)); tip.position.set(0, 0.56, kind === "chop" ? 0.15 : 0.14); g.add(tip);
@@ -945,7 +984,8 @@ export class World3D {
   }
   /** Keep the camera on the Trenchie (eased), and the shadow camera on the camera target. */
   private focus(snap: boolean, dt = 1) {
-    const goal = W(this.pose.x || this.me.x, this.pose.y || this.me.y); goal.y = 0.6;
+    const fg = this.follow ? this.guests.get(this.follow) : null;
+    const goal = fg ? W(fg.w.x, fg.w.y) : W(this.pose.x || this.me.x, this.pose.y || this.me.y); goal.y = 0.6;
     goal.x = goal.x * 0.75; goal.z = goal.z * 0.75;
     const k = snap ? 1 : Math.min(1, dt * 1.6), t = this.controls.target, dx = (goal.x - t.x) * k, dy = (goal.y - t.y) * k, dz = (goal.z - t.z) * k;
     t.set(t.x + dx, t.y + dy, t.z + dz); this.camera.position.set(this.camera.position.x + dx, this.camera.position.y + dy, this.camera.position.z + dz);
@@ -966,7 +1006,49 @@ export class World3D {
       if (P.bubble && this.t >= this.bubbleUntil) P.bubble.classList.remove("on");
       place(P.pop, head.clone().setY(head.y + 0.2), this.t < this.popUntil);
     }
-    place(P.tree, W(TREE.x, TREE.y).setY(2.9)); place(P.rock, W(ROCK.x, ROCK.y).setY(1.5));
+    place(P.tree, W(TREE.x, TREE.y).setY(2.9)); place(P.rock, W(ROCK.x, ROCK.y).setY(1.5)); place(P.pond, W(POND.x, POND.y).setY(0.9));
+    for (const g of this.guests.values()) { const h = g.tr.position.clone().setY(HT + 0.12); place(g.plate, h.clone()); place(g.bubble, h.clone(), this.t < g.until); if (this.t >= g.until) g.bubble.classList.remove("on"); }
+  }
+
+  // ------------------------------------------------------------------ other Trenchies on this land (members who are here)
+  setGuests(list: { name: string; nft: number; level: number; x?: string | null }[], follow: string | null = null) {
+    const layer = this.pins.layer; this.follow = follow;
+    const keep = new Set(list.map((g) => g.name));
+    for (const [n, g] of this.guests) if (!keep.has(n)) { this.dyn.remove(g.tr); g.plate.remove(); g.bubble.remove(); this.guests.delete(n); }
+    for (const x of list) {
+      if (this.guests.has(x.name) || !layer) continue;
+      const pal = artPalette(x.nft) ?? this.look.palette, tr = makeTrenchie(x.nft, pal, HT); this.dyn.add(tr);
+      const d = this.door(), w = new Walker(d.x + (Math.random() - 0.5) * 2, d.y + 1.2 + Math.random(), 1.3);
+      const plate = document.createElement("div"); plate.className = "tg-pin";
+      const pl = document.createElement("div"); pl.className = `tg-plate guest${x.name === follow ? " you" : ""}`;
+      const lv = document.createElement("span"); lv.className = "tg-plate-lv"; lv.textContent = `Lv ${x.level}`; const nm = document.createElement("b"); nm.textContent = x.name === follow ? `${x.name} (you)` : x.name;
+      pl.append(lv, nm); plate.append(pl);
+      const bubble = document.createElement("div"); bubble.className = "tg-pin tg-bubble";
+      layer.append(plate, bubble);
+      this.guests.set(x.name, { tr, w, wait: 0.5, step: 0, plate, bubble, until: 0, yaw: 0 });
+    }
+  }
+  /** A chat line from someone on this land: a bubble over their Trenchie. */
+  sayAs(name: string, text: string) {
+    const g = this.guests.get(name);
+    if (!g) { if (name === this.look.name) this.say(text); return; }
+    g.bubble.textContent = text; g.bubble.classList.remove("on"); void g.bubble.offsetWidth; g.bubble.classList.add("on"); g.until = this.t + 4.5;
+  }
+  private guestStep(dt: number) {
+    for (const g of this.guests.values()) {
+      g.wait -= dt;
+      if (g.wait <= 0 && !g.w.path) {
+        const near = Math.random() < 0.55, r = this.HR;
+        const t = near ? { x: this.pose.x + (Math.random() - 0.5) * 3, y: this.pose.y + 0.8 + Math.random() * 1.5 } : { x: 3 + Math.random() * 20, y: r.y + r.d + 1 + Math.random() * (LAND - r.y - r.d - 3.5) };
+        t.x = Math.max(2.2, Math.min(LAND - 2.2, t.x)); t.y = Math.max(2.2, Math.min(LAND - 2.2, t.y));
+        g.w.go(this.nav.route({ x: g.w.x, y: g.w.y }, t), 1.3); g.wait = 3 + Math.random() * 6;
+      }
+      const d = g.w.step(dt); g.step += d * 7.5;
+      const p = W(g.w.x, g.w.y), v = g.w.v;
+      g.tr.position.set(p.x, Math.abs(Math.sin(g.step)) * 0.035 * Math.min(1, v * 1.5), p.z);
+      g.yaw = angLerp(g.yaw, g.w.yaw, Math.min(1, dt * 10));
+      g.tr.rotation.set(0.07 * Math.min(1, v), g.yaw, Math.sin(g.step) * 0.06 * Math.min(1, v), "YXZ");
+    }
   }
 
   resize(w: number, h: number) {
@@ -977,5 +1059,5 @@ export class World3D {
     this.camera.updateProjectionMatrix();
   }
   render() { this.controls.update(); this.composer.render(); this.pinAll(); }
-  dispose() { this.controls.dispose(); this.clear(this.statics); this.clear(this.dyn); this.renderer.dispose(); }
+  dispose() { for (const g of this.guests.values()) { g.plate.remove(); g.bubble.remove(); } this.guests.clear(); this.controls.dispose(); this.clear(this.statics); this.clear(this.dyn); this.renderer.dispose(); }
 }

@@ -181,6 +181,9 @@ export class TelegramFeed {
     return { amount: Number(amount) / 10 ** Number(decimals), symbol: String(symbol) };
   }
 
+  /** A plain channel post with the Trenchers' pictures (used for the Trenchies weekly prizes). */
+  announce(ids: number[], caption: string) { return ids.length ? this.post(ids, "awake", caption) : Promise.resolve(); }
+
   private post(ids: number[], state: "awake" | "dormant", caption: string) {
     const photo = (id: number) => `${this.cfg.imageBase}${state}/${id}.png`;
     const job = this.queue.then(async () => {

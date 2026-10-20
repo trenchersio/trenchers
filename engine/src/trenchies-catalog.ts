@@ -88,11 +88,14 @@ export const item = (id: string) => ITEMS.find((i) => i.id === id);
 /** Old ids from the first version, read as their new names. */
 export const RENAMED: Record<string, string> = { scooter: "moped" };
 
-/** The tree and the rock on every land: tap to gather, then they regrow. */
+/** The tree, the rock and the fishing pond on every land: tap to gather, then they regrow (or the fish come back). */
 export const GATHER = {
   wood: { every: 4 * 3600, min: 8, max: 16, xp: 5, label: "wood" },
   stone: { every: 6 * 3600, min: 5, max: 10, xp: 5, label: "stone" },
+  fish: { every: 2 * 3600, min: 1, max: 3, xp: 10, label: "fish" },
 } as const;
+/** Now and then the catch is a golden fish: bonus XP on top. */
+export const GOLDEN_FISH = { chance: 0.08, xp: 40 };
 export type Resource = keyof typeof GATHER;
 
 /** XP for a pick that finishes 1st, 2nd or 3rd of all coins picked that day. */
@@ -116,3 +119,13 @@ export const DAY = 86400;
 export const roundOf = (t: number) => Math.floor(t / DAY); // the round running at time t (seconds)
 export const roundStart = (r: number) => r * DAY;
 export const roundLabel = (r: number) => new Date(r * DAY * 1000).toISOString().slice(0, 10);
+
+/**
+ * Weekly prizes: weeks run Monday 00:00 to Monday 00:00 UTC. The week's pot is PRIZE_BPS of the $TRENCHERS creator
+ * fees that came in that week, split between the week's best pickers (the XP their picks earned that week).
+ */
+export const PRIZE_BPS = 500; // 5%
+export const PRIZE_SPLIT = [50, 30, 20];
+export const weekOf = (t: number) => Math.floor((Math.floor(t / DAY) - 4) / 7); // day 4 of 1970 was a Monday
+export const weekStart = (w: number) => (w * 7 + 4) * DAY;
+export const weekLabel = (w: number) => `${new Date(weekStart(w) * 1000).toISOString().slice(0, 10)} to ${new Date((weekStart(w + 1) - DAY) * 1000).toISOString().slice(0, 10)}`;

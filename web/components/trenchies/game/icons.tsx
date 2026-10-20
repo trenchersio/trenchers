@@ -62,6 +62,7 @@ const P: Record<string, string> = {
   plus: "M12 5v14M5 12h14",
   x: "M4 4l16 16M20 4L4 20",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  chat: "M4 5h16v11H9l-5 4z M8 9.5h8 M8 12.5h5",
   sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
 };
 

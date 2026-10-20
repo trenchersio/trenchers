@@ -13,6 +13,7 @@ import { Recaps } from "./recap";
 import { Backtest } from "./backtest";
 import { Market } from "./market";
 import { Trenchies } from "./trenchies";
+import { PrizePot } from "./prizes";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
@@ -133,7 +134,15 @@ recaps.onSaved = (week, prev) => {
 // "Test this rule on last week": 7 days of Pons prices, read 4 times a day (a few dozen reads each time).
 const backtest = engine ? new Backtest({ pub: engine.pub as never, curves: engine.curves, tokens: engine.tokens as never, log, ethUsd: ENV.ETH_USD, snipeWait: ENV.SNIPE_WAIT_SEC, maxPositions: ENV.MAX_POSITIONS, maxHold: ENV.MAX_HOLD_SEC }) : null;
 // Trenchies: daily picks settled from those same prices, a few minutes after each UTC day ends.
-const trenchies = engine && backtest ? new Trenchies({ pub: engine.pub as never, nft: ENV.NFT as `0x${string}`, prices: backtest, symbolOf: (t) => engine.symbolOf(t), log }) : null;
+// Weekly prize pot: 5% of the $TRENCHERS creator fees that come in each week (2 to 3 reads an hour).
+const pot = engine ? new PrizePot(engine.pub as never, ENV.TRENCHERS_TOKEN, ENV.PONS_FACTORY, log) : null;
+if (pot) { setTimeout(() => void pot.update(), 90_000); setInterval(() => void pot.update(), 3_600_000); }
+const trenchies = engine && backtest ? new Trenchies({
+  pub: engine.pub as never, nft: ENV.NFT as `0x${string}`, prices: backtest, symbolOf: (t) => engine.symbolOf(t), log,
+  pot: pot ?? undefined, site: ENV.SITE_URL,
+  announce: (ids, text) => { void engine.telegram?.announce(ids, text); },
+  notify: (addr, msg) => engine.push.notify(addr, msg),
+}) : null;
 if (backtest) {
   // Prices: hourly (a handful of reads each time), and right after midnight UTC so the day can be settled.
   let lastDay = Math.floor(Date.now() / 86_400_000);
