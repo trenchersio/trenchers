@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { loadArt } from "@/lib/art-vector";
-import { GATHER, type Resource } from "@/lib/trenchies-catalog";
+import { GATHER, NET_EVERY, type Resource } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
 import type { Grow, Look } from "./types";
 
@@ -11,9 +11,11 @@ type Props = {
   look: Look; nft: number; celebrate?: number; grow: Grow; now: number;
   /** Your own land: the tree, the rock and the pond can be gathered. */
   mine: boolean; onGather?: (res: Resource) => void;
+  /** Catch butterflies (every 20 minutes): when the net is ready again, and what was caught last. */
+  netAt?: number; onNet?: () => void; netted?: { got: string[]; n: number } | null;
   /** Bumped by the game after a successful gather, so the Trenchie walks over and does it. */
   gathered?: { res: Resource; got: number; n: number } | null;
-  busy?: Resource | null;
+  busy?: Resource | "net" | null;
   /** Members on this land right now (their Trenchies walk around), and who the camera follows. */
   guests?: Guest[]; follow?: string | null;
   /** The land's chat: new lines show as bubbles over whoever said them. */
@@ -22,15 +24,15 @@ type Props = {
 
 const left = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s % 60).padStart(2, "0")}s`; };
 const TAG: Record<Resource, { label: string; icon: string; verb: string }> = {
-  wood: { label: "Oak tree · wood", icon: "wood", verb: "Chop" },
-  stone: { label: "Stone rock · stone", icon: "stone", verb: "Mine" },
+  wood: { label: "Forest · wood", icon: "wood", verb: "Chop" },
+  stone: { label: "Quarry · stone", icon: "stone", verb: "Mine" },
   fish: { label: "Pond · fish", icon: "fish", verb: "Fish" },
 };
 
 /** The living land in 3D, with HTML pinned onto it: nameplates, speech bubbles, and the tree, rock and pond cards. */
-export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gathered, busy, guests = [], follow = null, chat, className = "" }: Props & { className?: string }) {
+export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gathered, busy, guests = [], follow = null, chat, netAt = 0, onNet, netted, className = "" }: Props & { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), tree = useRef<HTMLDivElement>(null), rock = useRef<HTMLDivElement>(null), pond = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
+  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), tree = useRef<HTMLDivElement>(null), rock = useRef<HTMLDivElement>(null), pond = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
   const world = useRef<import("./scene3d").World3D | null>(null);
   const latest = useRef({ look, nft, grow, guests, follow }); latest.current = { look, nft, grow, guests, follow };
   const seen = useRef<number>(-1);
@@ -41,7 +43,7 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gath
       if (!alive) return;
       const w = (world.current = new World3D(c, latest.current.look, latest.current.nft));
       w.setGrow(latest.current.grow);
-      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, tree: tree.current, rock: rock.current, pond: pond.current, layer: layer.current });
+      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, tree: tree.current, rock: rock.current, pond: pond.current, net: net.current, layer: layer.current });
       w.setGuests(latest.current.guests, latest.current.follow);
       const size = () => { const r = c.getBoundingClientRect(); w.resize(Math.max(1, r.width), Math.max(1, r.height)); };
       size(); ro = new ResizeObserver(size); ro.observe(c);
@@ -58,6 +60,7 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gath
   useEffect(() => { world.current?.setGrow(grow); }, [grow]);
   useEffect(() => { if (celebrate) world.current?.celebrate(); }, [celebrate]);
   useEffect(() => { if (gathered) world.current?.gather(gathered.res, gathered.got); }, [gathered]);
+  useEffect(() => { if (netted) world.current?.net(netted.got); }, [netted]);
   const gkey = guests.map((g) => `${g.name}:${g.level}`).join();
   useEffect(() => { world.current?.setGuests(latest.current.guests, latest.current.follow); }, [gkey, follow]);
   useEffect(() => {
@@ -90,6 +93,12 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gath
         <div ref={tree} className="tg-pin tg-pin-tag">{tag("wood")}</div>
         <div ref={rock} className="tg-pin tg-pin-tag">{tag("stone")}</div>
         <div ref={pond} className="tg-pin tg-pin-tag">{tag("fish")}</div>
+        <div ref={net} className="tg-pin tg-pin-tag">{mine && (() => { const ready = !netAt || netAt <= now * 1000; return (
+          <div className="tg-pin-in"><div className="tg-tag3 net">
+            <span className="tg-tag3-ic"><Icon n="spark" size={15} /></span>
+            <span className="tg-tag3-t"><small>Butterflies · every {NET_EVERY / 60} min</small><b>{ready ? "Ready to catch" : left(netAt - now * 1000)}</b></span>
+            {ready && <button type="button" className="tg-tag3-go" disabled={busy === "net"} onClick={() => onNet?.()}>{busy === "net" ? "…" : "Catch"}</button>}
+          </div><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>); })()}</div>
         <div ref={plate} className="tg-pin"><div className="tg-plate"><span className="tg-plate-lv">Lv {look.level ?? 1}</span><b>{look.name}</b>{look.x && <span className="tg-plate-x"><Icon n="x" size={9} />{look.x}</span>}</div></div>
         <div className="tg-pin tg-bubble" ref={bubble} />
         <div className="tg-pin tg-pop" ref={pop} />

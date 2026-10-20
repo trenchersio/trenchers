@@ -12,7 +12,7 @@
     "test:local": "tsx test/local.ts",
     "test:inference": "tsx test/inference-local.ts",
     "test:icm": "node --import tsx --test test/icm/*.test.ts",
-    "test:trenchies": "node --import tsx --test test/trenchies.test.ts"
+    "test:trenchies": "node --import tsx --test test/trenchies.test.ts test/trenchies-rewards.test.ts"
   },
   "dependencies": {
     "tsx": "^4.19.0",

@@ -7,7 +7,8 @@ import { NFT_OWNER_ABI } from "./abis";
 import type { Backtest } from "./backtest";
 import { formatEther } from "viem";
 import type { PrizePot } from "./prizes";
-import { DAY, GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, PRIZE_SPLIT, RANK_XP, RENAMED, X_XP, item, levelOf, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type Resource } from "./trenchies-catalog";
+import { ACHIEVEMENTS, CHEER, COSMETICS, DAY, GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, PRIZE_SPLIT, QUESTS, RANK_XP, REFERRAL, RENAMED, X_XP, cosmetic, item, landValue, levelOf, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type ChestTier, type Resource, type Slot } from "./trenchies-catalog";
+import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, emptyProgress, ensureQuests, gain, note, openChest, stat, swingNet, type Progress } from "./trenchies-rewards";
 
 /**
  * Trenchies: spawn a little Trenchie with your Trencher, pick 3 Pons coins every day, earn XP when your coins finish
@@ -23,14 +24,21 @@ export const loginText = (addr: string, time: string) => `Sign in to Trenchies\n
 
 type Pick = { token: Address; symbol: string; pct: number | null; rank: number | null };
 type Result = { round: number; picks: Pick[]; xp: number; parts: { label: string; xp: number }[]; at: number };
-type Player = {
+type Player = Progress & {
   addr: string; name: string; nft: number; held: boolean; createdAt: number;
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
-  wood: number; stone: number; fish: number; next: Partial<Record<Resource, number>>;
+  wood: number; stone: number; fish: number; next: Partial<Record<Resource | "net", number>>;
   /** Who may join this player's land (their Trenchie spawns here and they can chat), and who's asked to. */
   members: string[]; requests: { addr: string; at: number }[];
+  /** Who invited them (a referral), and whether the inviter has been paid for it. */
+  referredBy?: string; refPaid?: boolean;
+  /** Today's visits and cheers (each land counts once a day). */
+  visited: { day: number; lands: string[] }; cheered: { day: number; lands: string[] };
+  /** Phone reminders already sent, so nothing repeats. */
+  notified: { picks?: number; daily?: number; ready?: Partial<Record<Resource, number>>; lastAt?: number };
+  lastSeen: number;
   x?: { handle: string; at: number }; xPending?: { handle: string; code: string; at: number };
   results: Result[]; seen: number | null;
 };
@@ -73,6 +81,9 @@ export class Trenchies {
         for (const z of j.prizes ?? []) this.prizes.set(z.week, z);
         for (const p of j.players ?? []) {
           p.wood ??= 0; p.stone ??= 0; p.fish ??= 0; p.next ??= {}; p.members ??= []; p.requests ??= [];
+          const e = emptyProgress();
+          for (const k of Object.keys(e) as (keyof typeof e)[]) (p as Record<string, unknown>)[k] ??= e[k];
+          p.visited ??= { day: -1, lands: [] }; p.cheered ??= { day: -1, lands: [] }; p.notified ??= {}; p.lastSeen ??= p.createdAt;
           p.items = [...new Set(p.items.map((i) => RENAMED[i] ?? i))]; p.vehicle = RENAMED[p.vehicle] ?? p.vehicle;
           this.players.set(p.addr, p);
         }
@@ -146,8 +157,15 @@ export class Trenchies {
       if (res.some((x) => x.rank === 1)) p.wins++;
       p.hits += hits;
       const xp = parts.reduce((s, x) => s + x.xp, 0);
-      p.xp += xp; p.bricks += xp;
+      gain(p, xp, "picks");
+      p.stats.bestStreak = Math.max(p.stats.bestStreak ?? 0, p.streak);
       p.results.unshift({ round: r, picks: res, xp, parts, at: Date.now() }); p.results = p.results.slice(0, 30);
+      checkAchievements(p);
+      // a friend you invited has now played a whole day: your referral reward
+      if (p.referredBy && !p.refPaid) {
+        const ref = this.players.get(p.referredBy);
+        if (ref) { p.refPaid = true; ref.bricks += REFERRAL.refBricks; ref.chests[REFERRAL.refChest]++; stat(ref, "referrals"); note(ref, "ref", `${p.name} played their first day: +${REFERRAL.refBricks} bricks and a ${REFERRAL.refChest} chest`); checkAchievements(ref); this.host.notify?.(ref.addr, { title: "Your friend is playing", body: `${p.name} played their first day of Trenchies. You got ${REFERRAL.refBricks} bricks and a ${REFERRAL.refChest} chest.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-ref" }); }
+      }
     }
     rd.settled = { at: Date.now(), coins, players: n };
     this.save();
@@ -155,7 +173,7 @@ export class Trenchies {
   }
 
   private pub(p: Player) {
-    return { name: p.name, nft: p.nft, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt };
+    return { name: p.name, nft: p.nft, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt, wear: p.wear };
   }
   private me(p: Player, now: number) {
     const open = roundOf(now) + 1, live = roundOf(now), last = live - 1;
@@ -163,6 +181,7 @@ export class Trenchies {
     return {
       ...this.pub(p), bricks: p.bricks, held: p.held, wood: p.wood, stone: p.stone, fish: p.fish, next: { wood: p.next.wood ?? 0, stone: p.next.stone ?? 0, fish: p.next.fish ?? 0 },
       requests: p.requests.length, lands: [...this.players.values()].filter((h) => h.members.includes(p.addr)).map((h) => this.mini(h)),
+      ...this.progress(p, now),
       week: this.weekRank(p.addr, now), xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
       open: { round: open, label: roundLabel(open), lockAt: roundStart(open), picks: (this.rounds.get(open)?.picks[p.addr] ?? []).map((t) => ({ token: t, symbol: this.host.prices.symbolOf(t) ?? t.slice(2, 8) })) },
       live: { round: live, label: roundLabel(live), endsAt: roundStart(live + 1), dataAt: this.host.prices.updatedAt, players: Object.keys(this.rounds.get(live)?.picks ?? {}).length,
@@ -204,12 +223,19 @@ export class Trenchies {
     }
 
     if (op === "prizes") { send(200, this.prizeView(now, this.who(q.get("token")))); return true; }
+    if (op === "public") {
+      const v = this.byName(q.get("name"));
+      if (!v) { send(404, { error: "No Trenchie by that name." }); return true; }
+      res.setHeader("cache-control", "public, max-age=60");
+      send(200, { player: this.showcase(v) });
+      return true;
+    }
 
     const addr = this.who(b.token ?? q.get("token"));
     if (!addr || !this.allowed(addr)) { send(401, { error: "Sign in again." }); return true; }
     const p = this.players.get(addr) ?? null;
 
-    if (op === "state") { send(200, { me: p ? this.me(p, now) : null, now }); return true; }
+    if (op === "state") { if (p) { p.lastSeen = Date.now(); ensureQuests(p, roundOf(now)); } send(200, { me: p ? this.me(p, now) : null, now }); return true; }
 
     if (op === "spawn") {
       const nft = Number(b.nft), name = String(b.name ?? "").trim();
@@ -219,7 +245,14 @@ export class Trenchies {
       if (taken) { send(409, { error: "That name is taken. Try another." }); return true; }
       if (!(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
       if (p) { p.nft = nft; p.name = name; p.held = true; }
-      else this.players.set(addr, { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, fish: 0, next: {}, members: [], requests: [], results: [], seen: null });
+      else {
+        const np: Player = { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, fish: 0, next: {}, members: [], requests: [], results: [], seen: null,
+          ...emptyProgress(), visited: { day: -1, lands: [] }, cheered: { day: -1, lands: [] }, notified: {}, lastSeen: Date.now() };
+        // invited by a friend (their Trenchie name): you both get bricks now, they get a chest once you've played a day
+        const ref = this.byName(b.ref);
+        if (ref && ref.addr !== addr) { np.referredBy = ref.addr; np.bricks += REFERRAL.newBricks; np.chests.common++; note(np, "ref", `Invited by ${ref.name}: +${REFERRAL.newBricks} bricks and a common chest`); }
+        this.players.set(addr, np);
+      }
       this.save();
       send(200, { me: this.me(this.players.get(addr)!, now) });
       return true;
@@ -243,6 +276,7 @@ export class Trenchies {
       if (toks.length !== PICKS || !toks.every((t) => /^0x[0-9a-f]{40}$/.test(t) && this.host.prices.known(t as Address))) { send(400, { error: `Pick ${PICKS} different Pons coins.` }); return true; }
       const open = roundOf(now) + 1;
       this.round(open).picks[addr] = toks as Address[];
+      bump(p, roundOf(now), "pick");
       this.save();
       send(200, { me: this.me(p, now) });
       return true;
@@ -257,7 +291,9 @@ export class Trenchies {
         if ((it.wood ?? 0) > p.wood) { send(400, { error: `You need ${(it.wood ?? 0) - p.wood} more wood. Chop the tree on your land.` }); return true; }
         if ((it.stone ?? 0) > p.stone) { send(400, { error: `You need ${(it.stone ?? 0) - p.stone} more stone. Mine the rock on your land.` }); return true; }
         if (it.needsHouse !== undefined && HOUSE_ORDER.indexOf(p.house) < it.needsHouse) { send(400, { error: `This needs the ${item(HOUSE_ORDER[it.needsHouse])?.name} or bigger.` }); return true; }
+        if (it.needs && !p.items.includes(it.needs)) { send(400, { error: `This needs the ${item(it.needs)?.name} first.` }); return true; }
         p.bricks -= it.cost; p.wood -= it.wood ?? 0; p.stone -= it.stone ?? 0; p.items.push(it.id);
+        bump(p, roundOf(now), "build"); checkAchievements(p);
       } else if (!p.items.includes(it.id)) { send(400, { error: "Buy it first." }); return true; }
       if (it.kind === "house") p.house = it.id;
       if (it.kind === "vehicle") p.vehicle = it.id;
@@ -272,16 +308,60 @@ export class Trenchies {
       if (Date.now() < at) { send(400, { error: `It's still regrowing.`, next: at }); return true; }
       const got = g.min + Math.floor(Math.random() * (g.max - g.min + 1));
       const golden = res === "fish" && Math.random() < GOLDEN_FISH.chance, xp = g.xp + (golden ? GOLDEN_FISH.xp : 0);
-      p[res] += got; p.xp += xp; p.bricks += xp; p.next[res] = Date.now() + g.every * 1000;
+      p[res] += got; p.next[res] = Date.now() + g.every * 1000;
+      stat(p, res, got); if (golden) { stat(p, "golden"); p.chests.common++; note(p, "chest", "A golden fish! It came with a common chest"); }
+      gain(p, xp, res); bump(p, roundOf(now), res); checkAchievements(p);
       this.save();
       send(200, { me: this.me(p, now), got, res, xp, golden });
       return true;
     }
     if (op === "leaderboard") {
-      const all = [...this.players.values()].sort((x, y) => y.xp - x.xp || y.hits - x.hits);
-      send(200, { players: all.slice(0, 100).map((x, i) => ({ rank: i + 1, ...this.pub(x) })), me: all.findIndex((x) => x.addr === addr) + 1 });
+      const kind = q.get("kind") ?? "xp", score = (x: Player) => kind === "value" ? landValue(x.items) : kind === "cheers" ? (x.stats.cheersGot ?? 0) : kind === "bugs" ? Object.values(x.bugs).reduce((s, n) => s + n, 0) : x.xp;
+      const all = [...this.players.values()].sort((x, y) => score(y) - score(x) || y.xp - x.xp);
+      send(200, { kind, players: all.slice(0, 100).map((x, i) => ({ rank: i + 1, ...this.pub(x), score: score(x) })), me: all.findIndex((x) => x.addr === addr) + 1 });
       return true;
     }
+    if (op === "daily") {
+      const r = claimDaily(p, roundOf(now));
+      if (!r) { send(400, { error: "Already claimed today. Come back tomorrow." }); return true; }
+      this.save(); send(200, { me: this.me(p, now), reward: r }); return true;
+    }
+    if (op === "chest") {
+      const tier = String(b.tier ?? "") as ChestTier;
+      if (!["common", "rare", "epic"].includes(tier)) { send(400, { error: "Which chest?" }); return true; }
+      const got = openChest(p, tier);
+      if (!got) { send(400, { error: "You don't have one of those." }); return true; }
+      bump(p, roundOf(now), "chest"); this.save(); send(200, { me: this.me(p, now), got }); return true;
+    }
+    if (op === "net") {
+      const r = swingNet(p as Progress & { next: Partial<Record<string, number>> }, Date.now());
+      if ("error" in r) { send(400, { error: r.error, next: r.next }); return true; }
+      bump(p, roundOf(now), "net"); this.save(); send(200, { me: this.me(p, now), got: r.got, xp: r.xp }); return true;
+    }
+    if (op === "wear") {
+      const slot = String(b.slot ?? "") as Slot, id = b.id === null || b.id === "" ? null : String(b.id ?? "");
+      if (!["hat", "eyes", "neck", "back", "aura", "outline"].includes(slot)) { send(400, { error: "Unknown slot." }); return true; }
+      if (id !== null && (cosmetic(id)?.slot !== slot || !canWear(p, id))) { send(400, { error: "You don't have that yet." }); return true; }
+      if (id === null) delete p.wear[slot]; else p.wear[slot] = id;
+      bump(p, roundOf(now), "wear"); this.save(); send(200, { me: this.me(p, now) }); return true;
+    }
+    if (op === "cosmetic/buy") {
+      const err = buyCosmetic(p, String(b.id ?? "")); if (err) { send(400, { error: err }); return true; }
+      this.save(); send(200, { me: this.me(p, now) }); return true;
+    }
+    if (op === "cheer") {
+      const h = this.byName(b.name); if (!h || h.addr === p.addr) { send(400, { error: "Cheer someone else's land." }); return true; }
+      const today = roundOf(now); if (p.cheered.day !== today) p.cheered = { day: today, lands: [] };
+      if (p.cheered.lands.includes(h.addr)) { send(400, { error: "You already cheered this land today." }); return true; }
+      p.cheered.lands.push(h.addr);
+      if (p.cheered.lands.length <= CHEER.perDay) gain(p, CHEER.xp, "cheer");
+      stat(p, "cheersGiven"); h.bricks += CHEER.ownerBricks; stat(h, "cheersGot");
+      note(h, "cheer", `${p.name} cheered your land (+${CHEER.ownerBricks} bricks)`);
+      bump(p, today, "cheer"); checkAchievements(p); checkAchievements(h);
+      this.save(); send(200, { me: this.me(p, now), cheers: h.stats.cheersGot ?? 0 }); return true;
+    }
+    if (op === "shared") { bump(p, roundOf(now), "share"); this.save(); send(200, { me: this.me(p, now) }); return true; }
+    if (op === "inbox/seen") { const upTo = Number(b.id) || 0; p.inbox = p.inbox.filter((x) => x.id > upTo); this.save(); send(200, { ok: true }); return true; }
     if (op === "visit") {
       const name = (q.get("name") ?? "").trim().toLowerCase();
       const v = [...this.players.values()].find((x) => x.name.toLowerCase() === name);
@@ -319,7 +399,7 @@ export class Trenchies {
       } catch { send(502, { error: "Couldn't reach X right now. Try again in a minute." }); return true; }
       const first = !p.x;
       p.x = { handle: pend.handle, at: Date.now() }; p.xPending = undefined;
-      if (first) { p.xp += X_XP; p.bricks += X_XP; }
+      if (first) gain(p, X_XP, "x");
       this.save();
       send(200, { me: this.me(p, now), bonus: first ? X_XP : 0 });
       return true;
@@ -328,9 +408,58 @@ export class Trenchies {
     return true;
   }
 
+  // ------------------------------------------------------------------ progression read-outs
+
+  private progress(p: Player, now: number) {
+    const today = roundOf(now), qs = ensureQuests(p, today);
+    return {
+      daily: dailyState(p, today),
+      quests: { list: qs.list.map((x) => ({ ...x, ...QUESTS.find((d) => d.id === x.id)! })), bonus: qs.bonus },
+      chests: p.chests, bugs: p.bugs, achievements: p.achievements, achievementCount: ACHIEVEMENTS.length,
+      stats: { ...p.stats, owned: p.items.length }, wardrobe: COSMETICS.filter((c) => canWear(p, c.id)).map((c) => c.id), wear: p.wear,
+      inbox: p.inbox, netAt: p.next.net ?? 0, landValue: landValue(p.items), cheers: p.stats.cheersGot ?? 0,
+      cheeredToday: p.cheered.day === today ? p.cheered.lands.length : 0,
+    };
+  }
+  /** What anyone may see of a land (the public page and its share card). */
+  private showcase(v: Player) {
+    const all = [...this.players.values()].sort((x, y) => y.xp - x.xp);
+    return { ...this.pub(v), wear: v.wear, landValue: landValue(v.items), cheers: v.stats.cheersGot ?? 0, rank: all.findIndex((x) => x.addr === v.addr) + 1, players: all.length, achievements: v.achievements.length, species: Object.keys(v.bugs).length, members: v.members.length };
+  }
+  /** Opening someone else's land: counts once per land per day (quests, the Explorer achievement, their visitor count). */
+  private visit(p: Player, h: Player) {
+    const today = roundOf(Date.now() / 1000);
+    if (p.visited.day !== today) p.visited = { day: today, lands: [] };
+    if (p.visited.lands.includes(h.addr)) return;
+    p.visited.lands.push(h.addr); stat(p, "visits"); stat(h, "visitors");
+    bump(p, today, "visit"); checkAchievements(p);
+  }
+  /**
+   * Phone reminders (only for players who turned notifications on, at most one every 2 hours each):
+   * picks closing within 2 hours, the daily reward waiting, the forest, quarry or pond ready again.
+   */
+  remind(now = Date.now() / 1000) {
+    if (!this.host.notify) return;
+    const today = roundOf(now), open = today + 1, lockIn = roundStart(open) - now, hour = new Date(now * 1000).getUTCHours(), url = `${this.host.site ?? ""}/trenchies/play`;
+    let changed = false;
+    for (const p of this.players.values()) {
+      if (Date.now() - p.lastSeen > 14 * DAY * 1000) continue; // gone quiet: leave them be
+      if ((p.notified.lastAt ?? 0) > Date.now() - 2 * 3600_000) continue;
+      let msg: { title: string; body: string; tag: string } | null = null;
+      if (lockIn < 2 * 3600 && !(this.rounds.get(open)?.picks[p.addr]) && p.notified.picks !== open) { msg = { title: "Picks close soon", body: `Lock in your 3 picks for tomorrow: ${Math.max(1, Math.round(lockIn / 60))} minutes left.`, tag: "trenchies-picks" }; p.notified.picks = open; }
+      else if (hour >= 8 && p.daily.last !== today && p.notified.daily !== today) { msg = { title: "Your daily reward is waiting", body: `Day ${dailyState(p, today).day + 1} of 7. Don't break the run.`, tag: "trenchies-daily" }; p.notified.daily = today; }
+      else {
+        const ready = (Object.keys(GATHER) as Resource[]).filter((r) => (p.next[r] ?? 0) > 0 && (p.next[r] ?? 0) <= Date.now() && p.notified.ready?.[r] !== p.next[r]);
+        if (ready.length) { const words: Record<Resource, string> = { wood: "the forest has regrown", stone: "the quarry is ready", fish: "the fish are back" }; msg = { title: "Ready to gather", body: `On your land: ${ready.map((r) => words[r]).join(", ")}.`, tag: "trenchies-ready" }; p.notified.ready = { ...p.notified.ready, ...Object.fromEntries(ready.map((r) => [r, p.next[r]])) }; }
+      }
+      if (msg) { p.notified.lastAt = Date.now(); changed = true; this.host.notify(p.addr, { ...msg, url }); }
+    }
+    if (changed) this.save();
+  }
+
   // ------------------------------------------------------------------ lands: join requests, members, chat
 
-  private mini(p: Player) { return { name: p.name, nft: p.nft, level: levelOf(p.xp), x: p.x?.handle ?? null }; }
+  private mini(p: Player) { return { name: p.name, nft: p.nft, level: levelOf(p.xp), x: p.x?.handle ?? null, wear: p.wear }; }
   private byName(n: unknown) { const s = String(n ?? "").trim().toLowerCase(); return [...this.players.values()].find((x) => x.name.toLowerCase() === s) ?? null; }
   private land(op: string, p: Player, b: Record<string, unknown>, q: URLSearchParams, send: (c: number, x: unknown) => void) {
     const h = this.byName(b.name ?? q.get("name"));
@@ -348,6 +477,7 @@ export class Trenchies {
       };
     };
     if (op === "land") {
+      if (!own) this.visit(p, h);
       if (own || member) { let m = this.presence.get(h.addr); if (!m) this.presence.set(h.addr, (m = new Map())); m.set(p.addr, Date.now()); }
       send(200, out()); return true;
     }
@@ -367,7 +497,7 @@ export class Trenchies {
       h.requests = h.requests.filter((r) => r.addr !== who.addr);
       if (b.accept === true && !h.members.includes(who.addr)) {
         if (h.members.length >= MAX_MEMBERS) { send(400, { error: `A land holds up to ${MAX_MEMBERS} members.` }); return true; }
-        h.members.push(who.addr);
+        h.members.push(who.addr); stat(who, "joined"); checkAchievements(who);
         this.post(h, { by: "", nft: 0, text: `${who.name} joined the land` });
         this.host.notify?.(who.addr, { title: "You're in", body: `${h.name} let you join their land in Trenchies.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-join" });
       }
@@ -387,6 +517,7 @@ export class Trenchies {
       const last = this.lastSay.get(p.addr) ?? 0; if (Date.now() - last < 1500) { send(429, { error: "Slow down a little." }); return true; }
       this.lastSay.set(p.addr, Date.now());
       this.post(h, { by: p.name, nft: p.nft, text });
+      bump(p, roundOf(Date.now() / 1000), "chat");
       this.save(); send(200, out()); return true;
     }
     send(404, { error: "not found" }); return true;

@@ -1,37 +1,26 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createWalletClient, custom, getAddress, type Address } from "viem";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { artPalette, loadArt } from "@/lib/art-vector";
 import { ownedTrenchers, walletProvider } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { useWallet } from "@/lib/wallet";
-import { GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_XP, X_XP, item, levelOf, xpFor, type Item, type ItemKind, type Resource } from "@/lib/trenchies-catalog";
+import { CHEER, GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, NET_EVERY, PICKS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_XP, REFERRAL, X_XP, bug, item, levelOf, xpFor, type ChestTier, type Item, type ItemKind, type Resource } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
-import { Land, type ChatMsg } from "./Land";
+import { Land } from "./Land";
+import { ChestModal, CollectionPanel, DailyModal, TodayPanel, Wardrobe, rewardText } from "./progress";
+import type { Call, LandInfo, Me, Mini, Note, Pub, Result } from "./model";
 import type { Look, Palette } from "./types";
 
 // ------------------------------------------------------------------ types + api
-type Pick = { token: string; symbol: string; pct: number | null; rank: number | null };
-type Result = { round: number; picks: Pick[]; xp: number; parts: { label: string; xp: number }[]; at: number };
-type Pub = { name: string; nft: number; level: number; xp: number; streak: number; hits: number; wins: number; hatTricks: number; rounds: number; items: string[]; house: string; vehicle: string; x: string | null };
-type Me = Pub & {
-  bricks: number; held: boolean; wood: number; stone: number; fish: number; next: { wood: number; stone: number; fish: number }; xPending: { handle: string; code: string } | null;
-  requests: number; lands: Mini[]; week: { rank: number | null; xp: number; players: number };
-  open: { round: number; label: string; lockAt: number; picks: { token: string; symbol: string }[] };
-  live: { round: number; label: string; endsAt: number; dataAt: number; players: number; picks: { token: string; symbol: string; pct: number | null; place: number | null }[]; top: { token: string; symbol: string; pct: number | null; by: number }[] };
-  last: { round: number; label: string; top: { token: string; symbol: string; pct: number | null }[]; players: number } | null;
-  results: Result[]; unseen: Result | null;
-};
 type Coin = { token: string; symbol: string; price: number; changePct: number; volEth: number; trades: number };
-type Mini = { name: string; nft: number; level: number; x: string | null };
-type LandInfo = { land: Pub; role: "owner" | "member" | "pending" | "visitor"; members: Mini[]; present: Mini[]; ownerHere: boolean; chat: ChatMsg[]; requests?: (Mini & { at: number })[] };
 type Prizes = {
   pot: { wallet: string | null; bps: number; potEth: string; feesEth: string; end: number; updatedAt: number; error: string | null } | null; split: number[];
   week: { label: string; end: number }; standings: (Mini & { rank: number; xp: number; hits: number })[]; me: { rank: number | null; xp: number; players: number } | null; admin: boolean;
   past: { week: number; label: string; potWei: string; winners: { name: string; addr: string; nft: number; xp: number; share: number; wei: string }[]; paid: string | null }[];
 };
-type Panel = "picks" | "results" | "build" | "prizes" | "board" | "lands" | "rules" | "me";
+type Panel = "picks" | "today" | "build" | "me" | "collection" | "board" | "prizes" | "lands" | "more";
 const API = `${ENGINE_URL}/trenchies/`;
 const loginText = (addr: string, time: string) => `Sign in to Trenchies\n\nWallet: ${addr}\nTime: ${time}\n\nThis only proves you hold this wallet. It costs nothing and sends no transaction.`;
 const tokKey = (a: string) => `trenchies:token:${a.toLowerCase()}`;
@@ -48,7 +37,9 @@ function usePalette(nft: number | null) {
   useEffect(() => { if (!nft) return; loadArt().then(() => { const x = artPalette(nft); if (x) setP(x); }).catch(() => {}); }, [nft]);
   return p;
 }
-const DOCK: [Panel, string, string][] = [["picks", "target", "Picks"], ["results", "chart", "Results"], ["build", "build", "Build"], ["prizes", "trophy", "Prizes"], ["board", "ranks", "Ranks"], ["lands", "users", "Lands"], ["rules", "info", "Rules"], ["me", "user", "Me"]];
+const DOCK: [Panel, string, string][] = [["picks", "target", "Picks"], ["today", "gift", "Today"], ["build", "build", "Build"], ["me", "shirt", "Trenchie"], ["collection", "medal", "Collect"], ["board", "ranks", "Ranks"], ["prizes", "trophy", "Prizes"], ["lands", "users", "Lands"], ["more", "more", "More"]];
+const SITE = "https://www.trenchers.io";
+const inviteUrl = (name: string) => `${SITE}/trenchies/u/${encodeURIComponent(name)}`;
 const eth = (v: string | number, d = 4) => { const n = Number(v); return n === 0 ? "0" : n < 10 ** -d ? `<${(10 ** -d).toFixed(d)}` : n.toFixed(d); };
 const weiEth = (w: string) => Number(BigInt(w)) / 1e18;
 function until(ts: number, now: number) { const s = Math.max(0, Math.floor(ts - now)), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return d ? `${d}d ${h}h` : `${h}h ${m}m`; }
@@ -74,12 +65,19 @@ export function TrenchiesGame() {
   const [toast, setToast] = useState<string | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [gathered, setGathered] = useState<{ res: Resource; got: number; n: number } | null>(null);
-  const [gathering, setGathering] = useState<Resource | null>(null);
+  const [netted, setNetted] = useState<{ got: string[]; n: number } | null>(null);
+  const [gathering, setGathering] = useState<Resource | "net" | null>(null);
   const [landInfo, setLandInfo] = useState<LandInfo | null>(null);
+  const [dailyOpen, setDailyOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [chest, setChest] = useState<ChestTier | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [cheered, setCheered] = useState<string[]>([]);
+  const shownDaily = useRef(false), shownNotes = useRef(new Set<number>());
   const [prizes, reloadPrizes] = usePrizes(token);
   const now = useNow();
 
-  const call = useCallback(async (op: string, body?: Record<string, unknown>, get?: Record<string, string>) => {
+  const call: Call = useCallback(async (op, body, get) => {
     const q = new URLSearchParams({ ...(get ?? {}), token: token ?? "" });
     const r = await fetch(body ? API + op : `${API}${op}?${q}`, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, token }) } : undefined);
     const j = await r.json().catch(() => ({}));
@@ -88,8 +86,10 @@ export function TrenchiesGame() {
     return j;
   }, [token, addr]);
   const say = (m: string) => { setToast(m); setTimeout(() => setToast((t) => (t === m ? null : t)), 3200); };
-  const apply = (next: Me) => setMe((prev) => { if (prev && next.level > prev.level) setLevelUp(next.level); return next; });
+  const apply = useCallback((next: Me) => setMe((prev) => { if (prev && next.level > prev.level) setLevelUp(next.level); return next; }), []);
 
+  // an invite link (?ref=name) is remembered until you spawn
+  useEffect(() => { try { const r = new URLSearchParams(window.location.search).get("ref"); if (r) localStorage.setItem("trenchies:ref", r); } catch { /* */ } }, []);
   useEffect(() => {
     setMe(null); setToken(null); setVisiting(null);
     if (!addr) { setPhase("boot"); return; }
@@ -107,7 +107,18 @@ export function TrenchiesGame() {
     }).catch(() => {});
     load(); const iv = setInterval(load, 60_000);
     return () => { alive = false; clearInterval(iv); };
-  }, [token]);
+  }, [token, apply]);
+  // the daily reward pops up once per visit until it's claimed
+  useEffect(() => { if (phase === "play" && me && !me.daily?.claimed && !shownDaily.current && !me.unseen) { shownDaily.current = true; const t = setTimeout(() => setDailyOpen(true), 1600); return () => clearTimeout(t); } }, [phase, me]);
+  // news from the engine (quests done, chests, cheers, achievements) as cards, then marked read
+  useEffect(() => {
+    if (!me?.inbox?.length) return;
+    const fresh = me.inbox.filter((n) => !shownNotes.current.has(n.id)); if (!fresh.length) return;
+    fresh.forEach((n) => shownNotes.current.add(n.id));
+    setNotes((x) => [...x, ...fresh].slice(-4));
+    fresh.forEach((n) => setTimeout(() => setNotes((x) => x.filter((y) => y.id !== n.id)), 5200));
+    void call("inbox/seen", { id: Math.max(...fresh.map((n) => n.id)) }).catch(() => {});
+  }, [me?.inbox, call]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = async () => {
     if (!addr) return; setBusy(true); setErr(null);
@@ -125,10 +136,47 @@ export function TrenchiesGame() {
     finally { setBusy(false); }
   };
   const gather = async (res: Resource) => {
+    if (visiting) setVisiting(null);
     setGathering(res);
-    try { const j = await call("gather", { res }); apply(j.me); setGathered({ res, got: j.got, n: Date.now() }); say(j.golden ? `A golden fish! +${j.got} fish · +${j.xp} XP` : `+${j.got} ${res} · +${j.xp} XP`); }
+    try { const j = await call("gather", { res }); apply(j.me); setGathered({ res, got: j.got, n: Date.now() }); say(j.golden ? `A golden fish! +${j.got} fish · +${j.xp} XP and a chest` : `+${j.got} ${res} · +${j.xp} XP`); }
     catch (e) { say((e as Error).message); }
     setGathering(null);
+  };
+  const net = async () => {
+    if (visiting) setVisiting(null);
+    setGathering("net");
+    try { const j = await call("net", {}); apply(j.me); setNetted({ got: j.got, n: Date.now() }); say(`Caught ${(j.got as string[]).map((id) => bug(id)?.name ?? id).join(" and ")} · +${j.xp} XP`); }
+    catch (e) { say((e as Error).message); }
+    setGathering(null);
+  };
+  const claimDaily = async () => {
+    setClaiming(true);
+    try { const j = await call("daily", {}); apply(j.me); setParty((p) => p + 1); say(`Daily reward: ${rewardText(j.reward)}`); setDailyOpen(false); }
+    catch (e) { say((e as Error).message); setDailyOpen(false); }
+    setClaiming(false);
+  };
+  const shareLand = () => {
+    if (!me) return;
+    const text = `My Trenchie ${me.name} is level ${me.level} with a land worth ${me.landValue.toLocaleString("en-US")} bricks. Come build next to me in Trenchies by @trenchersio`;
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(inviteUrl(me.name))}`, "_blank", "noopener");
+    void call("shared", {}).then((j) => apply(j.me)).catch(() => {});
+  };
+  const cheer = async (name: string) => {
+    try { const j = await call("cheer", { name }); apply(j.me); setCheered((c) => [...c, name]); setParty((p) => p + 1); say(`You cheered ${name}'s land · +${CHEER.xp} XP`); }
+    catch (e) { const m = (e as Error).message; if (/already/i.test(m)) setCheered((c) => [...c, name]); say(m); }
+  };
+  const goQuest = (id: string) => {
+    if (!me) return;
+    const ready = (r: Resource) => !me.next[r] || me.next[r] <= Date.now();
+    if (id === "pick") setPanel("picks");
+    else if (id === "wood" || id === "stone" || id === "fish") { if (ready(id)) { setPanel(null); void gather(id); } else say(`Ready in ${until(me.next[id] / 1000, now)}`); }
+    else if (id === "net") { if (!me.netAt || me.netAt <= Date.now()) { setPanel(null); void net(); } else say(`The net is ready in ${until(me.netAt / 1000, now)}`); }
+    else if (id === "visit" || id === "cheer") setPanel("board");
+    else if (id === "chat") { setPanel(null); say("Say something in your land chat"); }
+    else if (id === "build") setPanel("build");
+    else if (id === "wear") setPanel("me");
+    else if (id === "chest") { const t = (["epic", "rare", "common"] as ChestTier[]).find((x) => me.chests[x] > 0); if (t) setChest(t); else say("No chests yet: finish all 3 quests for one"); }
+    else if (id === "share") shareLand();
   };
 
   // the land you're on: its members, who's here, its chat (checked every few seconds; members checking in are "here")
@@ -145,11 +193,13 @@ export function TrenchiesGame() {
   }, [landName, phase, token]);
   const landAct = async (op: string, body: Record<string, unknown>, ok?: string) => { try { const j = await call(op, { name: landName, ...body }) as LandInfo; setLandInfo(j); if (ok) say(ok); return true; } catch (e) { say((e as Error).message); return false; } };
 
+  const myPalette = usePalette(me?.nft ?? null);
   const palette = usePalette(visiting?.nft ?? me?.nft ?? null);
   const subject = visiting ?? me;
-  const look: Look | null = useMemo(() => subject ? { name: subject.name, house: subject.house, vehicle: subject.vehicle, items: subject.items, palette, trophies: subject.hits, level: subject.level, x: subject.x } : null, [subject, palette]);
+  const look: Look | null = useMemo(() => subject ? { name: subject.name, house: subject.house, vehicle: subject.vehicle, items: subject.items, palette, trophies: subject.hits, level: subject.level, x: subject.x, wear: subject.wear } : null, [subject, palette]);
   const grow = useMemo(() => (!visiting && me ? { wood: me.next.wood, stone: me.next.stone, fish: me.next.fish ?? 0 } : { wood: 0, stone: 0, fish: 0 }), [visiting, me]);
   const guests = useMemo(() => (landInfo && landInfo.land.name === landName ? landInfo.present : []), [landInfo, landName]);
+  const onChestDone = useCallback((m: Me) => apply(m), [apply]);
 
   if (phase === "boot" || !addr) return (
     <Splash>
@@ -176,10 +226,14 @@ export function TrenchiesGame() {
 
   const level = levelOf(me.xp), lo = xpFor(level), hi = xpFor(level + 1), prog = Math.max(0, Math.min(1, (me.xp - lo) / Math.max(1, hi - lo)));
   const needPicks = me.open.picks.length < PICKS;
+  const chests = (me.chests?.common ?? 0) + (me.chests?.rare ?? 0) + (me.chests?.epic ?? 0);
+  const todo = (me.daily && !me.daily.claimed ? 1 : 0) + (me.quests?.list.filter((q) => !q.done).length ?? 0) + chests;
+  const netReady = !me.netAt || me.netAt <= now * 1000;
 
   return (
     <div className="tg">
       <Land key={visiting ? `v-${visiting.name}` : "home"} look={look} nft={subject!.nft} celebrate={party} grow={grow} now={now} mine={!visiting} onGather={gather} gathered={visiting ? null : gathered} busy={gathering}
+        netAt={visiting ? 0 : me.netAt} onNet={net} netted={visiting ? null : netted}
         guests={guests} follow={visiting && landInfo?.role === "member" ? me.name : null} chat={landInfo && landInfo.land.name === landName ? landInfo.chat : undefined} />
 
       <header className="tg-hud">
@@ -195,9 +249,10 @@ export function TrenchiesGame() {
         </div>
         <div className="tg-stats">
           <span className="tg-card tg-stat" title="Bricks: every XP you earn adds one"><Icon n="brick" size={14} /><b>{n0(me.bricks)}</b></span>
-          <span className="tg-card tg-stat" title="Wood: chop the tree on your land"><Icon n="wood" size={14} /><b>{n0(me.wood)}</b></span>
-          <span className="tg-card tg-stat" title="Stone: mine the rock on your land"><Icon n="stone" size={14} /><b>{n0(me.stone)}</b></span>
+          <span className="tg-card tg-stat" title="Wood: chop the forest on your land"><Icon n="wood" size={14} /><b>{n0(me.wood)}</b></span>
+          <span className="tg-card tg-stat" title="Stone: mine the quarry on your land"><Icon n="stone" size={14} /><b>{n0(me.stone)}</b></span>
           <span className="tg-card tg-stat tg-hide-s" title="Fish: catch them in your pond"><Icon n="fish" size={14} /><b>{n0(me.fish ?? 0)}</b></span>
+          {chests > 0 && <button type="button" className="tg-card tg-stat tg-chestchip" onClick={() => setPanel("today")} title="Chests to open"><Icon n="chest" size={14} /><b>{chests}</b></button>}
           {prizes?.pot && <button type="button" className="tg-card tg-stat tg-potchip" onClick={() => setPanel("prizes")} title="This week's prize pot"><Icon n="trophy" size={14} /><b>{eth(prizes.pot.potEth)} ETH</b></button>}
           <span className={`tg-card tg-stat${me.streak > 1 ? " hot" : ""}`} title="Days in a row"><Icon n="flame" size={14} /><b>{me.streak}</b></span>
           <button type="button" className={`tg-card tg-stat tg-lock${needPicks ? " urgent" : ""}`} onClick={() => setPanel("picks")}><Icon n="clock" size={14} /><span>{needPicks ? "Pick before" : "Locked in"}</span><b className="mono">{left(me.open.lockAt, now)}</b></button>
@@ -207,19 +262,24 @@ export function TrenchiesGame() {
       {visiting && (
         <div className="tg-visit-bar">
           <span>{landInfo?.role === "member" ? "You're on" : "Visiting"} <b>{visiting.name}</b>&apos;s land · Lv {visiting.level}</span>
+          <button type="button" className="tg-btn tg-btn-sm tg-btn-cheer" disabled={cheered.includes(visiting.name)} onClick={() => void cheer(visiting.name)}><Icon n="heart" size={13} />{cheered.includes(visiting.name) ? "Cheered" : "Cheer"}</button>
           {landInfo?.role === "visitor" && <button type="button" className="tg-btn tg-btn-sm tg-btn-go" onClick={() => void landAct("land/request", {}, `Asked ${visiting.name} to let you join`)}>Ask to join</button>}
           {landInfo?.role === "pending" && <span className="tg-tag">Request sent</span>}
           {landInfo?.role === "member" && <button type="button" className="tg-btn tg-btn-sm" onClick={() => void landAct("land/leave", {}, `You left ${visiting.name}'s land`)}>Leave</button>}
           <button type="button" className="tg-btn tg-btn-sm" onClick={() => setVisiting(null)}>Back home</button>
         </div>
       )}
+      {!visiting && netReady && <button type="button" className="tg-card tg-netfab" onClick={() => void net()} disabled={gathering === "net"}><Icon n="bug" size={15} /><span>Catch butterflies</span></button>}
       {landInfo && landInfo.land.name === landName && <LandChat info={landInfo} me={me.name} onSay={(text) => landAct("land/say", { text })} onJoin={() => void landAct("land/request", {}, "Request sent")} />}
       {!me.held && <div className="tg-warn">Trencher #{me.nft} isn&apos;t in this wallet any more. <button type="button" className="linkish" onClick={() => setPanel("me")}>Move your Trenchie</button></div>}
 
       <nav className="tg-dock" aria-label="Trenchies">
         {DOCK.map(([k, ic, l]) => (
           <button key={k} type="button" className={`tg-dk${panel === k ? " on" : ""}`} onClick={() => setPanel(panel === k ? null : k)}>
-            <Icon n={ic} size={18} /><span>{l}</span>{k === "picks" && needPicks && <i className="tg-dot" />}{k === "lands" && me.requests > 0 && <i className="tg-dot tg-dot-n">{me.requests}</i>}
+            <Icon n={ic} size={18} /><span>{l}</span>
+            {k === "picks" && needPicks && <i className="tg-dot" />}
+            {k === "today" && todo > 0 && <i className="tg-dot tg-dot-n">{todo}</i>}
+            {k === "lands" && me.requests > 0 && <i className="tg-dot tg-dot-n">{me.requests}</i>}
           </button>
         ))}
       </nav>
@@ -228,17 +288,21 @@ export function TrenchiesGame() {
         <aside className="tg-panel" role="dialog" aria-label={panel}>
           <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
           {panel === "picks" && <PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} />}
-          {panel === "results" && <ResultsPanel me={me} />}
+          {panel === "today" && <TodayPanel me={me} onClaim={claimDaily} claiming={claiming} onGo={goQuest} onChest={setChest} onShare={shareLand} invite={inviteUrl(me.name)} />}
           {panel === "build" && <ShopPanel me={me} call={call} onDone={(m, it) => { apply(m); setParty((p) => p + 1); say(`${it.name} added to your land`); }} />}
+          {panel === "me" && <ProfilePanel me={me} palette={myPalette} call={call} onMe={(m, bonus) => { apply(m); if (bonus) { setParty((p) => p + 1); say(`X linked: +${bonus} XP`); } }} onRespawn={() => setPhase("spawn")} onShare={shareLand} />}
+          {panel === "collection" && <CollectionPanel me={me} now={now} onNet={() => { setPanel(null); void net(); }} />}
           {panel === "board" && <BoardPanel call={call} onVisit={(p) => { setVisiting(p); setPanel(null); }} />}
           {panel === "lands" && <LandsPanel me={me} call={call} info={!visiting ? landInfo : null} onVisit={(p) => { setVisiting(p); setPanel(null); }} onAnswer={async (who, accept) => { const ok = await landAct("land/answer", { name: me.name, who, accept }, accept ? `${who} can now join your land` : undefined); if (ok) setMe((m) => (m ? { ...m, requests: Math.max(0, m.requests - 1) } : m)); }} onKick={(who) => void landAct("land/leave", { name: me.name, who }, `${who} was removed`)} />}
           {panel === "prizes" && <PrizesPanel prizes={prizes} now={now} call={call} reload={reloadPrizes} />}
-          {panel === "rules" && <RulesPanel />}
-          {panel === "me" && <ProfilePanel me={me} call={call} onMe={(m, bonus) => { apply(m); if (bonus) { setParty((p) => p + 1); say(`X linked: +${bonus} XP`); } }} onRespawn={() => setPhase("spawn")} />}
+          {panel === "more" && <MorePanel me={me} />}
         </aside>
       )}
 
+      {notes.length > 0 && <div className="tg-notes" role="status">{notes.map((n) => <div key={n.id} className={`tg-note ${n.kind}`}><Icon n={n.kind === "chest" || n.kind === "level" ? "chest" : n.kind === "ach" ? "medal" : n.kind === "cheer" ? "heart" : n.kind === "bug" ? "bug" : n.kind === "quest" ? "quest" : n.kind === "ref" ? "users" : "sparkle"} size={14} /><span>{n.text}</span></div>)}</div>}
       {me.unseen && !visiting && <Reveal r={me.unseen} onCollect={async () => { const r = me.unseen!; await call("seen", { round: r.round }).catch(() => {}); setMe({ ...me, unseen: null }); if (r.xp > 10) setParty((p) => p + 1); }} />}
+      {dailyOpen && !me.unseen && me.daily && !me.daily.claimed && <DailyModal me={me} busy={claiming} onClaim={claimDaily} onClose={() => setDailyOpen(false)} />}
+      {chest && <ChestModal tier={chest} call={call} onDone={onChestDone} onClose={(tryOn) => { setChest(null); if (tryOn) setPanel("me"); }} />}
       {levelUp && <LevelUp level={levelUp} onClose={() => setLevelUp(null)} />}
       {toast && <div className="tg-toast" role="status">{toast}</div>}
     </div>
@@ -372,7 +436,8 @@ function Spawn({ me, existing, onDone, call }: { me: Address; existing: Me | nul
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { ownedTrenchers(me).then((x) => { setIds(x); setPick((p) => p ?? x[0] ?? null); if (!name && x[0]) setName(`Trenchie${x[0]}`); }).catch(() => setIds([])); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
-  const go = async () => { if (!pick) return; setBusy(true); setErr(null); try { const j = await call("spawn", { nft: pick, name: name.trim() }); onDone(j.me); } catch (e) { setErr((e as Error).message); } setBusy(false); };
+  const [ref] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("ref"); if (q) localStorage.setItem("trenchies:ref", q); return q ?? localStorage.getItem("trenchies:ref") ?? ""; } catch { return ""; } });
+  const go = async () => { if (!pick) return; setBusy(true); setErr(null); try { const j = await call("spawn", { nft: pick, name: name.trim(), ...(ref && !existing ? { ref } : {}) }); onDone(j.me); } catch (e) { setErr((e as Error).message); } setBusy(false); };
   return (
     <div className="tg-splash tg-spawn">
       <a className="tg-back" href={ROUTES.home}><Icon n="home" size={14} />trenchers.io</a>
@@ -380,6 +445,7 @@ function Spawn({ me, existing, onDone, call }: { me: Address; existing: Me | nul
       <img src="/trenchies/symbol.webp" alt="" className="tg-sym" />
       <h1>{existing ? "Move your Trenchie" : "Spawn your Trenchie"}</h1>
       <p className="tg-lede">{existing ? "Pick another Trencher you hold. Your XP, bricks and land come along." : "Pick the Trencher it's born from. Your Trenchie wears its colours."}</p>
+      {ref && !existing && <p className="tg-invited"><Icon n="gift" size={14} />Invited by <b>{ref}</b>: you start with +{REFERRAL.newBricks} bricks and a chest.</p>}
       {ids === null ? <p className="tg-lede">Finding your Trenchers…</p> : ids.length === 0 ? <p className="tg-err">This wallet doesn&apos;t hold a Trencher. You need one to spawn a Trenchie.</p> : (
         <div className="tg-nfts">{ids.slice(0, 24).map((id) => <button key={id} type="button" className={`tg-nft${pick === id ? " on" : ""}`} onClick={() => setPick(id)}><ArtCanvas id={id} size={72} /><span>#{id}</span></button>)}</div>
       )}
@@ -503,19 +569,22 @@ function ShopPanel({ me, call, onDone }: { me: Me; call: (op: string, b?: Record
 }
 
 // ------------------------------------------------------------------ leaderboard + visit + rules
-function BoardPanel({ call, onVisit }: { call: (op: string, b?: undefined, q?: Record<string, string>) => Promise<{ players: (Pub & { rank: number })[]; me: number }>; onVisit: (p: Pub) => void }) {
-  const [d, setD] = useState<{ players: (Pub & { rank: number })[]; me: number } | null>(null);
-  useEffect(() => { call("leaderboard", undefined, {}).then(setD).catch(() => setD({ players: [], me: 0 })); }, [call]);
+function BoardPanel({ call, onVisit }: { call: Call; onVisit: (p: Pub) => void }) {
+  const [kind, setKind] = useState<"xp" | "value" | "cheers" | "bugs">("xp");
+  const [d, setD] = useState<{ players: (Pub & { rank: number; score: number })[]; me: number } | null>(null);
+  useEffect(() => { setD(null); call("leaderboard", undefined, { kind }).then(setD).catch(() => setD({ players: [], me: 0 })); }, [call, kind]);
+  const unit = (p: Pub & { score: number }) => kind === "xp" ? `${n0(p.xp)} XP` : kind === "value" ? `${n0(p.score ?? 0)} bricks` : kind === "cheers" ? `${n0(p.score ?? 0)} cheers` : `${n0(p.score ?? 0)} caught`;
   return (
     <div className="tg-pp">
       <header className="tg-ph"><p className="tg-k">Leaderboard</p><h2>Top Trenchies</h2></header>
-      {d && d.me > 0 && <p className="tg-sub">You&apos;re <b>#{d.me}</b> of {d.players.length}. Tap anyone to visit their land.</p>}
+      <div className="tg-tabs" role="tablist">{([["xp", "XP"], ["value", "Land value"], ["cheers", "Cheers"], ["bugs", "Butterflies"]] as const).map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}</button>)}</div>
+      {d && d.me > 0 && <p className="tg-sub">You&apos;re <b>#{d.me}</b>. Tap anyone to visit their land and cheer it (+{CHEER.xp} XP for you, +{CHEER.ownerBricks} bricks for them).</p>}
       {!d ? <p className="tg-sub">Loading…</p> : (
         <ol className="tg-board">{d.players.map((p) => (
           <li key={p.name}><button type="button" onClick={() => onVisit(p)}>
             <span className={`tg-rk${p.rank <= 3 ? " top" : ""}`}>{p.rank}</span>
             <ArtCanvas id={p.nft} size={28} /><span className="tg-bn"><b>{p.name}</b><small>{p.x ? `@${p.x}` : `${p.hits} top-3 picks`}</small></span>
-            <span className="tg-lvb">Lv {p.level}</span><em className="mono">{n0(p.xp)} XP</em>
+            <span className="tg-lvb">Lv {p.level}</span><em className="mono">{unit(p)}</em>
           </button></li>))}</ol>
       )}
     </div>
@@ -524,36 +593,44 @@ function BoardPanel({ call, onVisit }: { call: (op: string, b?: undefined, q?: R
 function RulesPanel() {
   const h = (s: number) => `${s / 3600} hours`;
   return (
+    <ol className="tg-rules">
+      <li><span>1</span><div><b>Pick 3 coins a day</b><p>Choose 3 Pons coins before 00:00 UTC. They count for the next UTC day, 00:00 to 24:00. You can change them until the lock.</p></div></li>
+      <li><span>2</span><div><b>Every pick is ranked</b><p>All coins picked by anyone that day are ranked by how much their price climbs. If one of yours lands in the top 3 you earn XP: <b>{RANK_XP[0]}</b> for 1st, <b>{RANK_XP[1]}</b> for 2nd, <b>{RANK_XP[2]}</b> for 3rd.</p></div></li>
+      <li><span>3</span><div><b>Bonus XP</b><p>+{PLAY_XP} for playing a day, +5 per day in a row (up to +50), +{HAT_TRICK_XP} when all 3 picks make the top 3, and +{X_XP} once for linking your X.</p></div></li>
+      <li><span>4</span><div><b>Daily reward and quests</b><p>Claim a reward every day: it builds to a rare chest on day 7, and missing a day starts it again. Three quests a day pay XP and bricks; finish all three for a chest.</p></div></li>
+      <li><span>5</span><div><b>XP builds your land</b><p>Every XP you earn adds a brick. Spend bricks on a bigger house, new rooms, rides, furniture, garden pieces and pets. Higher levels unlock more, up to level 40.</p></div></li>
+      <li><span>6</span><div><b>Forest, quarry and pond</b><p>Chop the forest every {h(GATHER.wood.every)} ({GATHER.wood.min}–{GATHER.wood.max} wood), mine the quarry every {h(GATHER.stone.every)} ({GATHER.stone.min}–{GATHER.stone.max} stone), fish every {h(GATHER.fish.every)} ({GATHER.fish.min}–{GATHER.fish.max} fish). About {Math.round(GOLDEN_FISH.chance * 100)}% of catches are golden: +{GOLDEN_FISH.xp} XP and a chest.</p></div></li>
+      <li><span>7</span><div><b>Butterflies</b><p>Swing the net every {NET_EVERY / 60} minutes. 11 kinds, from common to a legendary Golden Birdwing. Collect them all for Butterfly Wings.</p></div></li>
+      <li><span>8</span><div><b>Chests, achievements, wardrobe</b><p>Chests hold bricks, wood and stone, or things to wear. Achievements pay XP, chests and rare outfits. Dress your Trenchie under Trenchie.</p></div></li>
+      <li><span>9</span><div><b>Cheers and invites</b><p>Cheer other lands: +{CHEER.xp} XP for you (up to {CHEER.perDay} a day), +{CHEER.ownerBricks} bricks for them. Invite friends with your link: they start with +{REFERRAL.newBricks} bricks, you get +{REFERRAL.refBricks} and a {REFERRAL.refChest} chest when they play their first day.</p></div></li>
+      <li><span>10</span><div><b>Weekly prizes</b><p>Every week (Monday to Sunday, UTC) the 3 players whose picks earned the most XP split the prize pot: {PRIZE_SPLIT.join(" / ")}%. The pot is {PRIZE_BPS / 100}% of the $TRENCHERS creator fees that came in that week, paid out in ETH.</p></div></li>
+      <li><span>11</span><div><b>Lands and chat</b><p>Visit anyone&apos;s land. Ask to join, and once the owner accepts, your Trenchie spawns there whenever you visit and you can use that land&apos;s chat.</p></div></li>
+    </ol>
+  );
+}
+function MorePanel({ me }: { me: Me }) {
+  const [tab, setTab] = useState<"results" | "rules">("results");
+  return (
     <div className="tg-pp">
-      <header className="tg-ph"><p className="tg-k">How it works</p><h2>Rules</h2></header>
-      <ol className="tg-rules">
-        <li><span>1</span><div><b>Pick 3 coins a day</b><p>Choose 3 Pons coins before 00:00 UTC. They count for the next UTC day, 00:00 to 24:00. You can change them until the lock.</p></div></li>
-        <li><span>2</span><div><b>Every pick is ranked</b><p>All coins picked by anyone that day are ranked by how much their price climbs. If one of yours lands in the top 3 you earn XP: <b>{RANK_XP[0]}</b> for 1st, <b>{RANK_XP[1]}</b> for 2nd, <b>{RANK_XP[2]}</b> for 3rd.</p></div></li>
-        <li><span>3</span><div><b>Bonus XP</b><p>+{PLAY_XP} for playing a day, +5 per day in a row (up to +50), +{HAT_TRICK_XP} when all 3 picks make the top 3, and +{X_XP} once for linking your X.</p></div></li>
-        <li><span>4</span><div><b>XP builds your land</b><p>Every XP you earn adds a brick. Spend bricks to upgrade the house, add rooms, buy rides, furniture, garden pieces and pets. Higher levels unlock more.</p></div></li>
-        <li><span>5</span><div><b>Wood and stone</b><p>Chop the tree on your land every {h(GATHER.wood.every)} for {GATHER.wood.min}–{GATHER.wood.max} wood, and mine the rock every {h(GATHER.stone.every)} for {GATHER.stone.min}–{GATHER.stone.max} stone. Each gives +5 XP. Bigger builds need them.</p></div></li>
-        <li><span>6</span><div><b>Fishing</b><p>Fish in your pond every {h(GATHER.fish.every)} for {GATHER.fish.min}–{GATHER.fish.max} fish and +{GATHER.fish.xp} XP. About {Math.round(GOLDEN_FISH.chance * 100)}% of catches are golden: +{GOLDEN_FISH.xp} XP extra.</p></div></li>
-        <li><span>7</span><div><b>Weekly prizes</b><p>Every week (Monday to Sunday, UTC) the 3 players whose picks earned the most XP split the prize pot: {PRIZE_SPLIT.join(" / ")}%. The pot is {PRIZE_BPS / 100}% of the $TRENCHERS creator fees that came in that week, paid out in ETH after the week ends.</p></div></li>
-        <li><span>8</span><div><b>Lands and chat</b><p>Visit anyone&apos;s land. Ask to join, and once the owner accepts, your Trenchie spawns there whenever you visit and you can use that land&apos;s chat. Owners accept or remove members under Lands.</p></div></li>
-        <li><span>9</span><div><b>Your Trenchie lives there</b><p>It works at the desk by day, sleeps at night, uses what you build and rides around the block. Tap it to say hi.</p></div></li>
-      </ol>
-      <p className="tg-fine">Prices come from Pons and update hourly. Results settle after 00:00 UTC.</p>
+      <div className="tg-tabs" role="tablist"><button type="button" className={tab === "results" ? "on" : ""} onClick={() => setTab("results")}>Results</button><button type="button" className={tab === "rules" ? "on" : ""} onClick={() => setTab("rules")}>How it works</button></div>
+      {tab === "results" ? <ResultsPanel me={me} /> : <><header className="tg-ph"><p className="tg-k">How it works</p><h2>Rules</h2></header><RulesPanel /><p className="tg-fine">Prices come from Pons and update hourly. Results settle after 00:00 UTC.</p></>}
     </div>
   );
 }
-
 // ------------------------------------------------------------------ profile + X
-function ProfilePanel({ me, call, onMe, onRespawn }: { me: Me; call: (op: string, b?: Record<string, unknown>) => Promise<{ me: Me; bonus?: number }>; onMe: (m: Me, bonus?: number) => void; onRespawn: () => void }) {
+function ProfilePanel({ me, palette, call, onMe, onRespawn, onShare }: { me: Me; palette: Palette; call: Call; onMe: (m: Me, bonus?: number) => void; onRespawn: () => void; onShare: () => void }) {
   const [handle, setHandle] = useState(me.xPending?.handle ?? ""); const [url, setUrl] = useState(""); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const run = async (op: string, b: Record<string, unknown>) => { setBusy(true); setErr(null); try { const j = await call(op, b); onMe(j.me, j.bonus); } catch (e) { setErr((e as Error).message); } setBusy(false); };
   const post = me.xPending ? `My Trenchie ${me.name} just moved into the trench. ${me.xPending.code}\n\ntrenchers.io/trenchies` : "";
   return (
     <div className="tg-pp">
-      <div className="tg-prof"><ArtCanvas id={me.nft} size={56} /><div><h2>{me.name}</h2><p className="tg-sub">Trencher #{me.nft} · Level {me.level} · {n0(me.xp)} XP</p></div></div>
+      <div className="tg-prof"><ArtCanvas id={me.nft} size={44} /><div><h2>{me.name}</h2><p className="tg-sub">Trencher #{me.nft} · Level {me.level} · {n0(me.xp)} XP</p></div></div>
+      <Wardrobe me={me} palette={palette} call={call} onMe={(m) => onMe(m)} />
       <dl className="tg-kpis">
-        <div><dt>Days played</dt><dd>{me.rounds}</dd></div><div><dt>Top-3 picks</dt><dd>{me.hits}</dd></div>
-        <div><dt>1st places</dt><dd>{me.wins}</dd></div><div><dt>Hat tricks</dt><dd>{me.hatTricks}</dd></div>
+        <div><dt>Land value</dt><dd>{n0(me.landValue ?? 0)}</dd></div><div><dt>Cheers</dt><dd>{me.cheers ?? 0}</dd></div>
+        <div><dt>Top-3 picks</dt><dd>{me.hits}</dd></div><div><dt>Achievements</dt><dd>{me.achievements?.length ?? 0}</dd></div>
       </dl>
+      <div className="tg-row"><button type="button" className="tg-btn tg-btn-x" onClick={onShare}><Icon n="x" size={13} />Share your land</button><a className="tg-btn" href={inviteUrl(me.name)} target="_blank" rel="noreferrer"><Icon n="eye" size={13} />Public page</a></div>
       <section className="tg-box">
         <h3><Icon n="x" size={12} /> X account</h3>
         {me.x ? <p className="tg-sub">Linked to <a href={`https://x.com/${me.x}`} target="_blank" rel="noreferrer"><b>@{me.x}</b></a>. It shows above your Trenchie and on the leaderboard.</p>
@@ -572,7 +649,6 @@ function ProfilePanel({ me, call, onMe, onRespawn }: { me: Me; call: (op: string
     </div>
   );
 }
-
 // ------------------------------------------------------------------ moments
 function Reveal({ r, onCollect }: { r: Result; onCollect: () => void }) {
   const [shown, setShown] = useState(0);
@@ -592,6 +668,7 @@ function LevelUp({ level, onClose }: { level: number; onClose: () => void }) {
   return (
     <div className="tg-modal" onClick={onClose}><div className="tg-mbox tg-lvup">
       <p className="tg-k">Level up</p><p className="tg-biglv">{level}</p>
+      {level % 5 === 0 && <p className="tg-sub"><Icon n="chest" size={13} /> You got a {level % 10 === 0 ? "epic" : "rare"} chest. Open it under Today.</p>}
       {unlocked.length ? <><p className="tg-sub">New to build:</p><div className="tg-unl">{unlocked.map((i) => <span key={i.id}><Icon n={i.glyph} size={12} />{i.name}</span>)}</div></> : <p className="tg-sub">Keep picking: more unlocks at level {ITEMS.find((i) => i.level > level)?.level ?? level + 1}.</p>}
       <button type="button" className="tg-btn tg-btn-go tg-wide" onClick={onClose}>Nice</button>
     </div></div>

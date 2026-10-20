@@ -32,7 +32,7 @@ function carWheel(x: number, z: number, r: number, w: number, accent: number) {
   g.position.set(x, r, z); g.userData.spin = true; return g;
 }
 
-type Car = { len: number; wid: number; r: number; body: [number, number][]; glass: [number, number][]; color: number; accent: number; wheels: [number, number]; hover?: boolean };
+type Car = { len: number; wid: number; r: number; body: [number, number][]; glass: [number, number][]; color: number; accent: number; wheels: [number, number]; hover?: boolean; tw?: number };
 const CARS: Record<string, Car> = {
   hatch: { len: 1.9, wid: 0.9, r: 0.17, color: 0xe9eceb, accent: NEON, wheels: [-0.6, 0.62],
     body: [[-0.95, 0.12], [0.95, 0.12], [0.98, 0.42], [0.62, 0.52], [0.25, 0.86], [-0.7, 0.88], [-0.95, 0.62]],
@@ -46,6 +46,15 @@ const CARS: Record<string, Car> = {
   super: { len: 2.35, wid: 1.0, r: 0.16, color: 0xf2f4f3, accent: NEON, wheels: [-0.8, 0.8],
     body: [[-1.18, 0.1], [1.18, 0.1], [1.2, 0.22], [0.45, 0.4], [-0.05, 0.6], [-0.7, 0.58], [-1.18, 0.38]],
     glass: [[0.36, 0.42], [-0.06, 0.57], [-0.62, 0.55]] },
+  pickup: { len: 2.4, wid: 1.0, r: 0.22, color: 0x8a2a2a, accent: NEON, wheels: [-0.8, 0.8],
+    body: [[-1.2, 0.18], [1.2, 0.18], [1.22, 0.6], [0.8, 0.68], [0.55, 1.08], [-0.15, 1.1], [-0.2, 0.72], [-1.2, 0.72]],
+    glass: [[0.7, 0.71], [0.52, 1.02], [-0.1, 1.04], [-0.13, 0.74]] },
+  limo: { len: 3.2, wid: 0.95, r: 0.17, color: 0x0b0d0c, accent: 0xffcf3a, wheels: [-1.15, 1.15],
+    body: [[-1.6, 0.12], [1.6, 0.12], [1.62, 0.42], [1.2, 0.5], [0.95, 0.82], [-1.3, 0.84], [-1.6, 0.6]],
+    glass: [[1.08, 0.53], [0.92, 0.79], [-1.25, 0.8], [-1.5, 0.58]] },
+  monster: { len: 2.4, wid: 1.2, r: 0.42, tw: 0.34, color: 0x2f6fdb, accent: NEON, wheels: [-0.82, 0.86],
+    body: [[-1.15, 0.62], [1.15, 0.62], [1.18, 0.95], [0.75, 1.02], [0.5, 1.42], [-0.95, 1.44], [-1.15, 1.2]],
+    glass: [[0.66, 1.05], [0.46, 1.36], [-0.9, 1.38], [-1.0, 1.12]] },
   hover: { len: 2.2, wid: 1.0, r: 0.0, color: 0x0b0d0c, accent: 0x6ee7ff, wheels: [0, 0], hover: true,
     body: [[-1.1, 0.12], [1.1, 0.12], [1.14, 0.26], [0.4, 0.42], [0.0, 0.66], [-0.75, 0.62], [-1.1, 0.4]],
     glass: [[0.32, 0.45], [-0.02, 0.62], [-0.68, 0.58]] },
@@ -57,7 +66,10 @@ export function makeVehicle(kind: string) {
   if (c) {
     const body = profile(c.body, c.wid, paint(c.color)); g.add(body);
     const glass = profile(c.glass, c.wid + 0.02, tint, 0.03); g.add(glass);
-    if (!c.hover) for (const x of c.wheels) for (const z of [-c.wid / 2 + 0.05, c.wid / 2 - 0.05]) { const w = carWheel(x, z, c.r, 0.16, c.accent); g.add(w); g.userData.wheels.push(w); }
+    if (!c.hover) for (const x of c.wheels) for (const z of [-c.wid / 2 + 0.05, c.wid / 2 - 0.05]) { const w = carWheel(x, z * (c.tw ? 1.12 : 1), c.r, c.tw ?? 0.16, c.accent); g.add(w); g.userData.wheels.push(w); }
+    if (kind === "monster") { for (const x of c.wheels) g.add(tube(new THREE.Vector3(x, c.r, 0), new THREE.Vector3(x * 0.8, 0.66, 0), 0.05, chrome)); }
+    if (kind === "pickup") { const bed = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, c.wid - 0.16), rubber); bed.position.set(-0.7, 0.7, 0); g.add(bed); }
+    if (kind === "limo") { const flag = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 0.14), glow(0xffcf3a, 1.4)); flag.position.set(1.4, 0.58, 0.3); g.add(flag); }
     const front = c.body[2][0], back = c.body[0][0];
     for (const z of [-c.wid / 2 + 0.16, c.wid / 2 - 0.16]) {
       const hl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.2), glow(0xffffff, 2.2)); hl.position.set(front + 0.02, c.body[2][1] - 0.06, z); g.add(hl);
@@ -81,6 +93,35 @@ export function makeVehicle(kind: string) {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.015, 0.34), glow(NEON, 1.6)); strip.position.set(-0.05, 0.27, 0); g.add(strip);
     g.userData.seat = V(-0.3, 0.66, 0);
     return g;
+  }
+  if (kind === "golfcart") {
+    for (const x of [-0.5, 0.5]) for (const z of [-0.36, 0.36]) { const w = carWheel(x, z, 0.15, 0.12, NEON); g.add(w); g.userData.wheels.push(w); }
+    g.add(profile([[-0.75, 0.16], [0.78, 0.16], [0.8, 0.42], [0.45, 0.5], [-0.75, 0.5]], 0.82, paint(0xf2f4f3, 0.35), 0.05));
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.72), dark); seat.position.set(-0.25, 0.58, 0); g.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.36, 0.72), dark); back.position.set(-0.5, 0.8, 0); g.add(back);
+    for (const x of [-0.6, 0.5]) for (const z of [-0.36, 0.36]) g.add(tube(V(x, 0.5, z), V(x * 0.95, 1.42, z), 0.018, chrome));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.86), paint(0x39ff88, 0.4)); roof.position.set(-0.05, 1.44, 0); g.add(roof);
+    g.add(tube(V(0.3, 0.55, 0), V(0.2, 0.85, 0), 0.015, dark)); const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.012, 6, 18), dark); wheel.position.set(0.2, 0.86, 0); wheel.rotation.y = Math.PI / 2; wheel.rotation.x = 0.5; g.add(wheel);
+    g.userData.seat = V(-0.25, 0.62, 0); return g;
+  }
+  if (kind === "quad") {
+    for (const x of [-0.42, 0.45]) for (const z of [-0.3, 0.3]) { const w = carWheel(x, z, 0.2, 0.18, NEON); g.add(w); g.userData.wheels.push(w); }
+    g.add(profile([[-0.6, 0.3], [0.62, 0.3], [0.68, 0.48], [0.3, 0.55], [0.1, 0.72], [-0.4, 0.72], [-0.62, 0.55]], 0.46, paint(0xe0702a, 0.35), 0.06));
+    for (const x of [-0.42, 0.45]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.8), dark); f.position.set(x, 0.5, 0); g.add(f); }
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.3), dark); seat.position.set(-0.18, 0.76, 0); g.add(seat);
+    g.add(tube(V(0.32, 0.6), V(0.3, 0.95), 0.02, chrome)); g.add(tube(V(0.3, 0.95, -0.28), V(0.3, 0.95, 0.28), 0.02, dark));
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.2), glow(0xffffff, 2.2)); hl.position.set(0.69, 0.47, 0); g.add(hl);
+    g.userData.seat = V(-0.2, 0.74, 0); return g;
+  }
+  if (kind === "motorbike") {
+    for (const x of [-0.58, 0.6]) { const w = new THREE.Group(); w.add(new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.07, 10, 28), rubber)); const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.06, 18), chrome); hub.rotation.x = Math.PI / 2; w.add(hub); w.position.set(x, 0.31, 0); g.add(w); g.userData.wheels.push(w); }
+    g.add(profile([[-0.5, 0.42], [0.1, 0.36], [0.45, 0.45], [0.62, 0.72], [0.4, 0.86], [0.05, 0.78], [-0.3, 0.72], [-0.62, 0.66]], 0.3, paint(0x0b0d0c, 0.25), 0.06));
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 10), paint(0x39ff88, 0.25)); tank.scale.set(1.5, 0.8, 0.9); tank.position.set(0.18, 0.8, 0); g.add(tank);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.26), dark); seat.position.set(-0.22, 0.8, 0); g.add(seat);
+    g.add(tube(V(0.6, 0.31), V(0.48, 0.98), 0.025, chrome)); g.add(tube(V(0.48, 0.98, -0.26), V(0.48, 0.98, 0.26), 0.02, dark));
+    g.add(tube(V(-0.45, 0.4, 0.14), V(-0.75, 0.48, 0.14), 0.035, chrome));
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), glow(0xffffff, 2.2)); hl.position.set(0.58, 0.9, 0); g.add(hl);
+    g.userData.seat = V(-0.22, 0.78, 0); return g;
   }
   // city bike
   for (const x of [-0.5, 0.5]) {

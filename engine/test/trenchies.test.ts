@@ -10,7 +10,7 @@ process.env.TRENCHIES_FILE = mkdtempSync(`${tmpdir()}/tr-`) + "/t.json";
 process.env.TRENCHIES_ALLOW = `${me.address},${friend.address}`;
 process.env.CHAT_ADMINS = me.address;
 
-test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit", async () => {
+test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit", async (t) => {
   const { Trenchies, loginText } = await import("../src/trenchies");
   const { roundOf, roundStart, DAY, levelOf } = await import("../src/trenchies-catalog");
   const T = (n: number) => `0x${String(n).padStart(40, "a")}` as `0x${string}`;
@@ -28,6 +28,7 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   const pot = { potWei: () => 1000n, feesIn: () => 20000n, view: () => ({ potEth: "0.000000000000001" }) };
   const g = new Trenchies({ pub: pub as never, nft: "0x0000000000000000000000000000000000000002", prices: prices as never, symbolOf: async (t) => `C${t.slice(-1)}`, log: () => {}, pot: pot as never, announce: (_ids, t) => { posts.push(t); } });
   const srv = createServer((req, res) => { void g.handle(req, res, req.url!.split("?")[0]); }).listen(0);
+  t.after(() => srv.close());
   const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}/trenchies/`;
   const post = async (op: string, body: unknown) => { const r = await fetch(base + op, { method: "POST", body: JSON.stringify(body) }); return { status: r.status, j: await r.json() as any }; };
   const login = async (acct: typeof me) => { const time = new Date().toISOString(); return post("login", { address: acct.address, time, signature: await acct.signMessage({ message: loginText(acct.address, time) }) }); };
@@ -52,14 +53,14 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   assert.equal(st.unseen.round, r + 1);
   const st2 = (await post("state", { token: tok2 })).j.me;
   assert.equal(st2.results[0].xp, 10 + 40, "friend: C3 finished #3");
-  assert.equal(levelOf(170), st.level);
+  assert.equal(levelOf(st.xp), st.level); assert.equal(st.xp, 170 + 15 + 20, "plus the picks quest (15) and the First Picks achievement (20)");
   // Shop
   assert.equal((await post("buy", { token: tok, id: "super" })).status, 400, "level-locked");
-  const buy = await post("buy", { token: tok, id: "moped" }); assert.equal(buy.status, 200, JSON.stringify(buy.j)); assert.equal(buy.j.me.vehicle, "moped"); assert.equal(buy.j.me.bricks, 20);
+  const buy = await post("buy", { token: tok, id: "moped" }); assert.equal(buy.status, 200, JSON.stringify(buy.j)); assert.equal(buy.j.me.vehicle, "moped"); assert.equal(buy.j.me.bricks, st.bricks - 150);
   // The tree on your land: gather wood, then it regrows.
-  const w1 = await post("gather", { token: tok, res: "wood" }); assert.equal(w1.status, 200); assert.ok(w1.j.got >= 8 && w1.j.got <= 16, `wood ${w1.j.got}`); assert.equal(w1.j.me.wood, w1.j.got);
+  const w1 = await post("gather", { token: tok, res: "wood" }); assert.equal(w1.status, 200); assert.ok(w1.j.got >= 10 && w1.j.got <= 20, `wood ${w1.j.got}`); assert.equal(w1.j.me.wood, w1.j.got);
   assert.equal((await post("gather", { token: tok, res: "wood" })).status, 400, "the tree has to regrow first");
-  assert.ok(w1.j.me.next.wood > Date.now() + 3.9 * 3600 * 1000);
+  assert.ok(w1.j.me.next.wood > Date.now() + 2.9 * 3600 * 1000);
   assert.equal((await post("buy", { token: tok, id: "fence" })).status, 400, "level and materials are checked");
   const lb = (await fetch(`${base}leaderboard?token=${tok}`).then((r) => r.json())) as any;
   assert.equal(lb.players[0].name, "Ser_Me"); assert.equal(lb.me, 1);

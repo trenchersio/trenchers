@@ -152,6 +152,7 @@ if (backtest) {
     const d = Math.floor(Date.now() / 86_400_000);
     if (d !== lastDay && Date.now() % 86_400_000 > 60_000) { lastDay = d; go(); }
     try { trenchies?.tick(); } catch (e) { log(`Trenchies: ${(e as Error).message}`); }
+    if (Date.now() % 600_000 < 60_000) { try { trenchies?.remind(); } catch (e) { log(`Trenchies reminders: ${(e as Error).message}`); } }
   }, 60_000);
 }
 const market = new Market(ENV.NFT);
