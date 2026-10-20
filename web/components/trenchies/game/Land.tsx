@@ -1,21 +1,25 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { loadArt } from "@/lib/art-vector";
-import { GATHER, NET_EVERY, type Resource } from "@/lib/trenchies-catalog";
+import { NET_EVERY } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
 import type { Grow, Look } from "./types";
+import type { Sky } from "./weather";
 
 export type Guest = { name: string; nft: number; level: number; x?: string | null };
 export type ChatMsg = { id: number; by: string; nft: number; text: string; at: number };
 type Props = {
   look: Look; nft: number; celebrate?: number; grow: Grow; now: number;
-  /** Your own land: the tree, the rock and the pond can be gathered. */
-  mine: boolean; onGather?: (res: Resource) => void;
+  /** Your own land: the trading desk and the butterflies can be used. */
+  mine: boolean;
   /** Catch butterflies (every 20 minutes): when the net is ready again, and what was caught last. */
-  netAt?: number; onNet?: () => void; netted?: { got: string[]; n: number } | null;
-  /** Bumped by the game after a successful gather, so the Trenchie walks over and does it. */
-  gathered?: { res: Resource; got: number; n: number } | null;
-  busy?: Resource | "net" | null;
+  netAt?: number; onNet?: () => void; netted?: { got: string[]; n: number } | null; busy?: "net" | null;
+  /** The trading desk: opening it, whether it's open (the Trenchie sits at its desk), and live prices for its screens. */
+  onDesk?: () => void; atDesk?: boolean; ticker?: [number, number][];
+  /** Placing a garden piece: the next tap on the ground comes back here. */
+  onPick?: ((x: number, y: number) => void) | null;
+  /** The weather over this land (checked every minute). */
+  onSky?: (s: Sky) => void;
   /** Members on this land right now (their Trenchies walk around), and who the camera follows. */
   guests?: Guest[]; follow?: string | null;
   /** The land's chat: new lines show as bubbles over whoever said them. */
@@ -23,82 +27,79 @@ type Props = {
 };
 
 const left = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s % 60).padStart(2, "0")}s`; };
-const TAG: Record<Resource, { label: string; icon: string; verb: string }> = {
-  wood: { label: "Forest · wood", icon: "wood", verb: "Chop" },
-  stone: { label: "Quarry · stone", icon: "stone", verb: "Mine" },
-  fish: { label: "Pond · fish", icon: "fish", verb: "Fish" },
-};
 
-/** The living land in 3D, with HTML pinned onto it: nameplates, speech bubbles, and the tree, rock and pond cards. */
-export function Land({ look, nft, celebrate = 0, grow, now, mine, onGather, gathered, busy, guests = [], follow = null, chat, netAt = 0, onNet, netted, className = "" }: Props & { className?: string }) {
+/** The living land in 3D, with HTML pinned onto it: nameplates, speech bubbles, and the desk and butterfly tags. */
+export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onNet, netted, busy, onDesk, atDesk = false, ticker, onPick = null, onSky, guests = [], follow = null, chat, className = "" }: Props & { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), tree = useRef<HTMLDivElement>(null), rock = useRef<HTMLDivElement>(null), pond = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
+  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), desk = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
   const world = useRef<import("./scene3d").World3D | null>(null);
-  const latest = useRef({ look, nft, grow, guests, follow }); latest.current = { look, nft, grow, guests, follow };
+  const latest = useRef({ look, nft, grow, guests, follow, onPick, onSky, atDesk }); latest.current = { look, nft, grow, guests, follow, onPick, onSky, atDesk };
   const seen = useRef<number>(-1);
   useEffect(() => {
-    const c = ref.current!; let raf = 0, alive = true, last = performance.now(), ro: ResizeObserver | null = null;
+    const c = ref.current!; let raf = 0, alive = true, last = performance.now(), ro: ResizeObserver | null = null, skyT = 0;
+    // phones: a lighter renderer and at most ~40 frames a second (a hidden tab doesn't draw at all)
+    const slow = window.matchMedia?.("(max-width: 720px)").matches || (navigator.hardwareConcurrency ?? 8) <= 4;
     (async () => {
       const [{ World3D }] = await Promise.all([import("./scene3d"), loadArt().catch(() => null)]);
       if (!alive) return;
-      const w = (world.current = new World3D(c, latest.current.look, latest.current.nft));
+      const w = (world.current = new World3D(c, latest.current.look, latest.current.nft, { lite: slow }));
       w.setGrow(latest.current.grow);
-      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, tree: tree.current, rock: rock.current, pond: pond.current, net: net.current, layer: layer.current });
+      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, desk: desk.current, net: net.current, layer: layer.current });
       w.setGuests(latest.current.guests, latest.current.follow);
+      w.setDesk(latest.current.atDesk);
+      if (latest.current.onPick) w.onGround = (x, y) => latest.current.onPick?.(x, y);
       const size = () => { const r = c.getBoundingClientRect(); w.resize(Math.max(1, r.width), Math.max(1, r.height)); };
       size(); ro = new ResizeObserver(size); ro.observe(c);
-      const frame = (t: number) => { if (!alive) return; const dt = Math.min(0.1, (t - last) / 1000); last = t; w.update(dt); w.render(); raf = requestAnimationFrame(frame); };
+      const frame = (t: number) => {
+        if (!alive) return; raf = requestAnimationFrame(frame);
+        if (document.hidden) { last = t; return; }
+        if (slow && t - last < 1000 / 42) return;
+        const dt = Math.min(0.1, (t - last) / 1000); last = t;
+        w.update(dt); w.render();
+        if (!skyT || t - skyT > 60_000) { skyT = t; latest.current.onSky?.(w.weatherNow); }
+      };
       raf = requestAnimationFrame(frame);
     })();
     let down = { x: 0, y: 0 };
     const pd = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY }; };
-    const pu = (e: PointerEvent) => { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return; const r = c.getBoundingClientRect(); world.current?.click(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); };
+    const pu = (e: PointerEvent) => { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return; const r = c.getBoundingClientRect(); world.current?.click(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); };
     c.addEventListener("pointerdown", pd); c.addEventListener("pointerup", pu);
     return () => { alive = false; cancelAnimationFrame(raf); ro?.disconnect(); c.removeEventListener("pointerdown", pd); c.removeEventListener("pointerup", pu); world.current?.dispose(); world.current = null; };
   }, []);
   useEffect(() => { world.current?.setLook(look, nft); }, [look, nft]);
   useEffect(() => { world.current?.setGrow(grow); }, [grow]);
   useEffect(() => { if (celebrate) world.current?.celebrate(); }, [celebrate]);
-  useEffect(() => { if (gathered) world.current?.gather(gathered.res, gathered.got); }, [gathered]);
   useEffect(() => { if (netted) world.current?.net(netted.got); }, [netted]);
+  useEffect(() => { world.current?.setDesk(atDesk); }, [atDesk]);
+  useEffect(() => { if (ticker) world.current?.setTicker(ticker); }, [ticker]);
+  useEffect(() => { if (world.current) world.current.onGround = onPick ? (x, y) => latest.current.onPick?.(x, y) : null; }, [onPick]);
   const gkey = guests.map((g) => `${g.name}:${g.level}`).join();
   useEffect(() => { world.current?.setGuests(latest.current.guests, latest.current.follow); }, [gkey, follow]);
   useEffect(() => {
     // the first load just remembers where the chat is; lines after that get bubbles
-    if (!chat) return; // not loaded yet
+    if (!chat) return;
     const top = chat.length ? chat[chat.length - 1].id : 0;
     if (seen.current >= 0) for (const m of chat) if (m.id > seen.current && m.by) world.current?.sayAs(m.by, m.text);
     seen.current = Math.max(seen.current, top);
   }, [chat]);
 
-  const tag = (res: Resource) => {
-    const at = grow[res], ready = !at || at <= now * 1000, g = GATHER[res], t = TAG[res];
-    return (
-      <div className="tg-pin-in">
-        <div className={`tg-tag3 ${res}`}>
-          <span className="tg-tag3-ic"><Icon n={t.icon} size={15} /></span>
-          <span className="tg-tag3-t"><small>{t.label}</small>
-            <b>{ready ? `+${g.min}–${g.max} ${res}` : left(at - now * 1000)}</b></span>
-          {mine && ready && <button type="button" className="tg-tag3-go" disabled={busy === res} onClick={() => onGather?.(res)}>{busy === res ? "…" : t.verb}</button>}
-          {!ready && <span className="tg-tag3-wait">{res === "fish" ? "fish coming back" : "regrowing"}</span>}
-        </div>
-        <i className="tg-tag3-stem" /><i className="tg-tag3-dot" />
-      </div>
-    );
-  };
+  const ready = !netAt || netAt <= now * 1000;
   return (
-    <div className={`tg-landwrap ${className}`}>
+    <div className={`tg-landwrap ${className}${onPick ? " picking" : ""}`}>
       <canvas ref={ref} className="tg-land" aria-label={`${look.name}'s land`} />
       <div className="tg-pins" ref={layer}>
-        <div ref={tree} className="tg-pin tg-pin-tag">{tag("wood")}</div>
-        <div ref={rock} className="tg-pin tg-pin-tag">{tag("stone")}</div>
-        <div ref={pond} className="tg-pin tg-pin-tag">{tag("fish")}</div>
-        <div ref={net} className="tg-pin tg-pin-tag">{mine && (() => { const ready = !netAt || netAt <= now * 1000; return (
+        <div ref={desk} className="tg-pin tg-pin-tag">{mine && onDesk && !atDesk && (
+          <div className="tg-pin-in"><button type="button" className="tg-tag3 desk" onClick={onDesk}>
+            <span className="tg-tag3-ic"><Icon n="chart" size={15} /></span>
+            <span className="tg-tag3-t"><small>Trading desk</small><b>BTC up or down</b></span>
+            <span className="tg-tag3-go">Trade</span>
+          </button><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>)}</div>
+        <div ref={net} className="tg-pin tg-pin-tag">{mine && (
           <div className="tg-pin-in"><div className="tg-tag3 net">
-            <span className="tg-tag3-ic"><Icon n="spark" size={15} /></span>
+            <span className="tg-tag3-ic"><Icon n="bug" size={15} /></span>
             <span className="tg-tag3-t"><small>Butterflies · every {NET_EVERY / 60} min</small><b>{ready ? "Ready to catch" : left(netAt - now * 1000)}</b></span>
             {ready && <button type="button" className="tg-tag3-go" disabled={busy === "net"} onClick={() => onNet?.()}>{busy === "net" ? "…" : "Catch"}</button>}
-          </div><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>); })()}</div>
+          </div><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>)}</div>
         <div ref={plate} className="tg-pin"><div className="tg-plate"><span className="tg-plate-lv">Lv {look.level ?? 1}</span><b>{look.name}</b>{look.x && <span className="tg-plate-x"><Icon n="x" size={9} />{look.x}</span>}</div></div>
         <div className="tg-pin tg-bubble" ref={bubble} />
         <div className="tg-pin tg-pop" ref={pop} />

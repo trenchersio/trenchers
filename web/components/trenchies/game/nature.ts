@@ -1,11 +1,11 @@
 /**
- * The land itself: grass, the ring road with its street lamps, stone paths, the forest down the left side (with the
- * big oak you chop), the quarry (with the boulder you mine), the fishing pond and its dock, grass and wild flowers,
- * and the butterflies that drift around the garden (moths at night).
+ * The land itself: grass, the ring road with its street lamps, stone paths, the forest down the left side (with a
+ * big old oak at its edge), the pond with koi and a dock to sit on, grass and wild flowers, and the butterflies that
+ * drift around the garden (moths at night).
  */
 import * as THREE from "three";
 import { CYAN, GOLD, NEON, type Kit } from "./kit";
-import { CHOP, DOCK, DOOR_X, FOREST, LAND, MINE, POND, QUARRY, ROAD } from "./layout";
+import { CHOP, DOCK, DOOR_X, FOREST, LAND, POND, ROAD } from "./layout";
 import type { Pt, R } from "./nav";
 import { poolMaterial, poolTexture } from "./wilds";
 
@@ -49,15 +49,15 @@ export function stones(k: Kit, a: Pt, b: Pt, w = 0.95) {
 }
 
 // ------------------------------------------------------------------ the forest
-export type Fell = { g: THREE.Group; full: THREE.Object3D; stump: THREE.Object3D; ring: THREE.MeshBasicMaterial };
+
 function bigTree(k: Kit, s: number) {
   const g = new THREE.Group();
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * s, 0.18 * s, 1.5 * s, 9), k.M.darkwood); trunk.position.y = 0.75 * s; trunk.castShadow = true; g.add(trunk);
   for (const [x, y, z, r, m] of [[0, 1.9, 0, 0.95, k.M.leaf], [0.45, 2.4, 0.15, 0.62, k.M.leaf2], [-0.4, 2.3, -0.2, 0.6, k.M.leaf], [0.05, 2.85, -0.05, 0.45, k.M.leaf2]] as [number, number, number, number, THREE.Material][]) { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r * s, 1), m); c.position.set(x * s, y * s, z * s); c.castShadow = true; g.add(c); }
   return g;
 }
-/** Trees across the forest strip (instanced), leaving clearings where `keepOut` says; the big oak you chop at its edge. */
-export function forest(k: Kit, keepOut: R[]): Fell {
+/** Trees across the forest strip (instanced), leaving clearings where `keepOut` says, and the big oak at its edge. */
+export function forest(k: Kit, keepOut: R[]) {
   const trees: THREE.Matrix4[] = [], pines: THREE.Matrix4[] = [], stumps: THREE.Matrix4[] = [];
   const m4 = (x: number, y: number, s: number, ry: number) => { const p = k.W(x, y); return new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s * (0.85 + rnd() * 0.35), s)); };
   for (let y = FOREST.y + 0.6; y < FOREST.y + FOREST.d - 0.4; y += 1.25) for (let x = FOREST.x + 0.5; x < FOREST.x + FOREST.w - 0.3; x += 1.35) {
@@ -82,46 +82,15 @@ export function forest(k: Kit, keepOut: R[]): Fell {
   // ferns and mushrooms on the forest floor
   const fern: THREE.Matrix4[] = []; for (let i = 0; i < 90; i++) { const p = { x: FOREST.x + rnd() * FOREST.w, y: FOREST.y + rnd() * FOREST.d }; if (keepOut.some((r) => inR(p, r))) continue; fern.push(m4(p.x, p.y, 0.6 + rnd() * 0.6, rnd() * 6)); }
   const fg = new THREE.ConeGeometry(0.16, 0.32, 5); fg.translate(0, 0.16, 0); add(fg, k.flat(0x2e6b3a), fern, false);
-  // the big oak
-  const g = new THREE.Group(), p = k.W(CHOP.x, CHOP.y); g.position.set(p.x, 0, p.z); k.root.add(k.keep(g));
-  const full = bigTree(k, 1.15); full.name = "full"; g.add(full);
-  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.21, 0.26, 12), k.std(0xc9a77a, 0.8)); stump.position.y = 0.13; stump.name = "stump"; g.add(stump);
-  const ringM = k.glow(NEON, 1.2, true), ring = new THREE.Mesh(new THREE.RingGeometry(1.05, 1.12, 48), ringM); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.015; g.add(ring);
+  // the big oak, with a bench-like root to sit on
+  const g = new THREE.Group(), p = k.W(CHOP.x, CHOP.y); g.position.set(p.x, 0, p.z); k.root.add(g);
+  g.add(bigTree(k, 1.15));
   k.nav.blockCircle(CHOP, 0.32);
-  return { g, full, stump, ring: ringM };
-}
-
-// ------------------------------------------------------------------ the quarry
-export function quarry(k: Kit): Fell {
-  const Q = QUARRY, M = k.M, rock = k.flat(0x2a2e2c, 0.9), rock2 = k.flat(0x222624, 0.9);
-  k.box(Q.x, Q.y, -0.01, Q.w, Q.d, 0.025, k.std(0x3a3c37, 1), false).castShadow = false;
-  for (let i = 0; i < 40; i++) { const x = Q.x + rnd() * Q.w, y = Q.y + rnd() * Q.d; const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.05 + rnd() * 0.06, 0), rock); const p = k.W(x, y); m.position.set(p.x, 0.03, p.z); k.root.add(m); }
-  // a wall of boulders round the back and right, an opening at the front
-  const wall: [number, number, number][] = [];
-  for (let x = Q.x; x <= Q.x + Q.w; x += 0.9) wall.push([x, Q.y - 0.2 + rnd() * 0.3, 0.6 + rnd() * 0.5]);
-  for (let y = Q.y + 0.6; y <= Q.y + Q.d; y += 0.9) wall.push([Q.x + Q.w + 0.1, y, 0.5 + rnd() * 0.45]);
-  for (let y = Q.y + 0.6; y <= Q.y + Q.d - 1.2; y += 1.0) wall.push([Q.x - 0.1, y, 0.4 + rnd() * 0.3]);
-  for (const [x, y, s] of wall) { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rnd() < 0.5 ? rock : rock2); const p = k.W(x, y); m.position.set(p.x, s * 0.55, p.z); m.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3); m.scale.y = 0.8 + rnd() * 0.5; m.castShadow = true; m.receiveShadow = true; k.root.add(m); k.nav.blockCircle({ x, y }, s * 0.8); }
-  for (let i = 0; i < 7; i++) { const x = Q.x + 0.5 + rnd() * (Q.w - 1), y = Q.y + 0.2 + rnd() * 0.5; const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.12 + rnd() * 0.1, 0), k.glow(i % 3 ? CYAN : 0xb388ff, 1.05)); c.scale.y = 1.8; const p = k.W(x, y); c.position.set(p.x, 0.9 + rnd() * 0.4, p.z + 0.35); k.root.add(c); }
-  // a mine cart on rails
-  for (const dy of [-0.22, 0.22]) k.box(Q.x + 3.2, Q.y + Q.d * 0.55 + dy, 0.01, 2.6, 0.04, 0.03, M.metal, false);
-  for (let i = 0; i < 6; i++) k.box(Q.x + 3.3 + i * 0.45, Q.y + Q.d * 0.55 - 0.32, 0.0, 0.12, 0.64, 0.025, M.darkwood, false);
-  k.box(Q.x + 4.1, Q.y + Q.d * 0.55 - 0.3, 0.08, 0.8, 0.6, 0.45, k.std(0x6b3d24, 0.6, 0.4)); for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.13, 0), rock); const p = k.W(Q.x + 4.3 + (i % 2) * 0.35, Q.y + Q.d * 0.55 - 0.1 + Math.floor(i / 2) * 0.2); m.position.set(p.x, 0.58, p.z); k.root.add(m); }
-  k.nav.block({ x: Q.x + 4.1, y: Q.y + Q.d * 0.55 - 0.3, w: 0.8, d: 0.6 }, 0.12);
-  // the boulder you mine
-  const g = new THREE.Group(), p = k.W(MINE.x, MINE.y); g.position.set(p.x, 0, p.z); k.root.add(k.keep(g));
-  const full = new THREE.Group(); full.name = "full"; g.add(full);
-  for (const [ox, oz, s, h] of [[0, 0, 0.7, 0.8], [0.55, 0.3, 0.4, 0.46], [-0.5, 0.32, 0.34, 0.36]] as [number, number, number, number][]) { const gm = new THREE.DodecahedronGeometry(s, 0), m = new THREE.Mesh(gm, k.std(0x2a2f2d, 0.75, 0.15)); m.scale.set(1.1, h / s, 1); m.position.set(ox, h * 0.85, oz); m.rotation.set(ox * 2, oz * 3, 0.3); m.castShadow = true; full.add(m); const e = new THREE.LineSegments(new THREE.EdgesGeometry(gm), new THREE.LineBasicMaterial({ color: 0xd9dcda, transparent: true, opacity: 0.55 })); e.scale.copy(m.scale); e.position.copy(m.position); e.rotation.copy(m.rotation); full.add(e); }
-  const vein = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.035, 0.035), k.glow(CYAN, 1.8)); vein.position.set(0.05, 0.8, 0.55); vein.rotation.z = 0.5; full.add(vein);
-  const stump = new THREE.Group(); stump.name = "stump"; g.add(stump);
-  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1 + (i % 3) * 0.04, 0), k.std(0x2a2f2d, 0.75, 0.15)); m.position.set(Math.cos(i * 1.3) * 0.35, 0.08, Math.sin(i * 1.3) * 0.3); stump.add(m); }
-  const ringM = k.glow(CYAN, 1.2, true), ring = new THREE.Mesh(new THREE.RingGeometry(1.05, 1.12, 48), ringM); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; g.add(ring);
-  k.nav.blockCircle(MINE, 0.75);
-  return { g, full, stump, ring: ringM };
+  k.reg.spots.push({ act: "oak", at: { x: CHOP.sx, y: CHOP.sy }, pose: { x: CHOP.sx - 0.25, y: CHOP.sy - 0.15, z: 0, yaw: Math.atan2(CHOP.x - CHOP.sx, CHOP.y - CHOP.sy) + Math.PI, kind: "sit" }, min: 8, max: 14, w: 0.6 });
 }
 
 // ------------------------------------------------------------------ the pond
-export type Pond = { g: THREE.Group; ring: THREE.MeshBasicMaterial; fish: { m: THREE.Object3D; a: number; r: number; v: number }[]; bobberAt: Pt };
+export type Pond = { g: THREE.Group; fish: { m: THREE.Object3D; a: number; r: number; v: number }[] };
 export function pond(k: Kit): Pond {
   const c = POND, g = new THREE.Group(), p = k.W(c.x, c.y); g.position.set(p.x, 0, p.z); k.root.add(k.keep(g));
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.04, 0.12, 64), k.std(0x2a2f2e, 0.85, 0.1)); rim.scale.set(c.rx + 0.25, 1, c.ry + 0.25); rim.position.y = 0.05; rim.receiveShadow = true; g.add(rim);
@@ -134,7 +103,6 @@ export function pond(k: Kit): Pond {
   for (let i = 0; i < 6; i++) { const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.7 + rnd() * 0.4, 4), k.flat(0x3c7a45)); const a = 2.2 + rnd() * 1.2; reed.position.set(Math.cos(a) * (c.rx - 0.1) + rnd() * 0.3, 0.45, Math.sin(a) * (c.ry - 0.1)); g.add(reed); const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 6), k.std(0x6b4a2a, 0.9)); tip.position.set(reed.position.x, 0.85 + rnd() * 0.15, reed.position.z); g.add(tip); }
   const fish: Pond["fish"] = [];
   for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 6), k.glow([0xff8a3d, 0xffffff, 0xff8a3d, GOLD, 0xff5a3d, 0xffffff, 0xff8a3d][i], 1.3)); f.rotation.z = Math.PI / 2; const fg = new THREE.Group(); fg.add(f); fg.position.y = 0.09; g.add(fg); fish.push({ m: fg, a: rnd() * 6, r: 0.4 + rnd() * 1.3, v: (0.22 + rnd() * 0.3) * (i % 2 ? 1 : -1) }); }
-  const ringM = k.glow(CYAN, 1.2, true), ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.03, 64), ringM); ring.rotation.x = -Math.PI / 2; ring.scale.set(c.rx + 0.5, c.ry + 0.5, 1); ring.position.y = 0.012; g.add(ring);
   // the dock: from the bank out over the water
   const wood = k.std(0x6b5238, 0.85), plank = k.std(0x4a3a2c, 0.9), L = DOCK.x1 - DOCK.x0;
   k.box(DOCK.x0, DOCK.y - 0.36, 0.16, L, 0.72, 0.05, wood); for (let i = 0; i < Math.floor(L / 0.21); i++) k.box(DOCK.x0 + i * 0.21, DOCK.y - 0.37, 0.21, 0.015, 0.74, 0.005, plank, false);
@@ -142,7 +110,9 @@ export function pond(k: Kit): Pond {
   k.box(DOCK.x1 - 0.1, DOCK.y - 0.36, 0.21, 0.08, 0.08, 0.3, wood); const lan = k.night(0xffd59a, 0.9); k.box(DOCK.x1 - 0.13, DOCK.y - 0.39, 0.51, 0.14, 0.14, 0.16, lan, false);
   // keep walkers off the water (the dock is reached by stepping onto it)
   for (let a = 0; a < Math.PI * 2; a += 0.2) for (const f of [0.35, 0.7, 1]) k.nav.blockCircle({ x: c.x + Math.cos(a) * c.rx * f, y: c.y + Math.sin(a) * c.ry * f }, 0.6);
-  return { g, ring: ringM, fish, bobberAt: { x: DOCK.x1 + 1.2, y: DOCK.y + 0.1 } };
+  // sit on the end of the dock, feet over the water
+  k.reg.spots.push({ act: "dock", at: { x: DOCK.x0 - 0.5, y: DOCK.y }, pose: { x: DOCK.x1 - 0.3, y: DOCK.y, z: 0.21, yaw: Math.PI / 2, kind: "sit" }, min: 10, max: 18, w: 0.9, night: 0.5 });
+  return { g, fish };
 }
 
 // ------------------------------------------------------------------ grass, flowers

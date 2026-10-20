@@ -5,13 +5,13 @@
  */
 import { createHash } from "node:crypto";
 import {
-  ACHIEVEMENTS, BUTTERFLIES, CHESTS, COSMETICS, DAILY, NET_EVERY, QUESTS, QUEST_ALL, cosmetic, cosmeticFree, levelChest, levelOf,
+  ACHIEVEMENTS, BUTTERFLIES, CHESTS, COSMETICS, DAILY, LEVEL_COINS, NET_EVERY, QUESTS, QUEST_ALL, cosmetic, cosmeticFree, levelChest, levelOf,
   type ChestTier, type Reward, type Slot, type Stat,
 } from "./trenchies-catalog";
 
 export type Note = { id: number; kind: "quest" | "chest" | "ach" | "level" | "daily" | "cheer" | "ref" | "bug" | "join"; text: string; at: number };
 export type Progress = {
-  addr: string; xp: number; bricks: number; wood: number; stone: number; fish: number; items: string[];
+  addr: string; xp: number; bricks: number; items: string[];
   hits: number; wins: number; hatTricks: number; rounds: number; streak: number;
   daily: { next: number; last: number | null; run: number; best: number };
   quests: { day: number; list: { id: string; n: number; done: boolean }[]; bonus: boolean };
@@ -34,15 +34,17 @@ export function note(p: Progress, kind: Note["kind"], text: string) { p.inbox = 
 /** A number from 0 to 1, the same every time for the same seed (quests, chest rolls in tests). */
 export const seeded = (s: string) => parseInt(createHash("sha256").update(s).digest("hex").slice(0, 8), 16) / 0xffffffff;
 
-/** XP (and the same number of bricks). Crossing a level that ends in 5 or 0 drops a chest. */
+/** XP (levels only; coins are earned separately). Each level up pays coins, and every 5th level a chest. */
 export function gain(p: Progress, xp: number, why?: string) {
   if (xp <= 0) return;
   const before = levelOf(p.xp);
-  p.xp += xp; p.bricks += xp;
+  p.xp += xp;
   const after = levelOf(p.xp);
   for (let l = before + 1; l <= after; l++) {
+    p.bricks += LEVEL_COINS * l;
     const c = levelChest(l);
-    if (c) { p.chests[c]++; note(p, "level", `Level ${l}: a ${c} chest`); }
+    note(p, "level", `Level ${l}: +${LEVEL_COINS * l} coins${c ? ` and a ${c} chest` : ""}`);
+    if (c) p.chests[c]++;
   }
   if (after > before) checkAchievements(p);
   void why;
@@ -50,11 +52,9 @@ export function gain(p: Progress, xp: number, why?: string) {
 export function grant(p: Progress, r: Reward, why: string) {
   if (r.xp) gain(p, r.xp, why);
   if (r.bricks) p.bricks += r.bricks;
-  if (r.wood) p.wood += r.wood;
-  if (r.stone) p.stone += r.stone;
   if (r.chest) p.chests[r.chest]++;
 }
-export const rewardText = (r: Reward) => [r.bricks && `${r.bricks} bricks`, r.xp && `${r.xp} XP`, r.wood && `${r.wood} wood`, r.stone && `${r.stone} stone`, r.chest && `a ${r.chest} chest`].filter(Boolean).join(", ");
+export const rewardText = (r: Reward) => [r.bricks && `${r.bricks} coins`, r.xp && `${r.xp} XP`, r.chest && `a ${r.chest} chest`].filter(Boolean).join(", ");
 
 // ------------------------------------------------------------------------------------------------ daily reward
 /** The calendar: today's reward if it hasn't been claimed. Missing a day starts it again at day 1. */
@@ -92,7 +92,7 @@ export function bump(p: Progress, today: number, id: string, n = 1) {
     if (q.id !== id || q.done) continue;
     const def = QUESTS.find((x) => x.id === id)!;
     q.n = Math.min(def.goal, q.n + n);
-    if (q.n >= def.goal) { q.done = true; grant(p, { xp: def.xp, bricks: def.bricks }, "quest"); note(p, "quest", `Quest done: ${def.text} (+${def.xp} XP, +${def.bricks} bricks)`); }
+    if (q.n >= def.goal) { q.done = true; grant(p, { xp: def.xp, bricks: def.bricks }, "quest"); note(p, "quest", `Quest done: ${def.text} (+${def.xp} XP, +${def.bricks} coins)`); }
   }
   if (!p.quests.bonus && p.quests.list.every((q) => q.done)) { p.quests.bonus = true; grant(p, QUEST_ALL, "quests"); note(p, "quest", `All 3 quests done: ${rewardText(QUEST_ALL)}`); }
 }
@@ -123,19 +123,16 @@ export function checkAchievements(p: Progress) {
 }
 
 // ------------------------------------------------------------------------------------------------ chests
-export type ChestResult = { tier: ChestTier; bricks?: number; wood?: number; stone?: number; cosmetic?: string };
+export type ChestResult = { tier: ChestTier; bricks?: number; cosmetic?: string };
 export function openChest(p: Progress, tier: ChestTier, rnd: () => number = Math.random): ChestResult | null {
   if ((p.chests[tier] ?? 0) <= 0) return null;
   p.chests[tier]--;
   const def = CHESTS[tier], roll = rnd(), span = (a: [number, number]) => a[0] + Math.floor(rnd() * (a[1] - a[0] + 1));
   let out: ChestResult = { tier };
   const unowned = COSMETICS.filter((c) => !p.wardrobe.includes(c.id) && !c.ach && def.rarities.includes(c.rarity) && (c.chest || c.cost));
-  if (roll >= def.odds.bricks + def.odds.mats && unowned.length) {
+  if (roll >= def.odds.bricks && unowned.length) {
     const c = unowned[Math.floor(rnd() * unowned.length)];
     p.wardrobe.push(c.id); out = { tier, cosmetic: c.id };
-  } else if (roll >= def.odds.bricks) {
-    const w = span(def.mats), s = Math.round(span(def.mats) * 0.7);
-    p.wood += w; p.stone += s; out = { tier, wood: w, stone: s };
   } else { const b = span(def.bricks); p.bricks += b; out = { tier, bricks: b }; }
   return out;
 }
@@ -167,7 +164,7 @@ export function buyCosmetic(p: Progress, id: string): string | null {
   if (canWear(p, id)) return "You already have this.";
   if (!c.cost) return c.chest ? "This one only comes from chests." : c.ach ? "This one is an achievement reward." : `Reach level ${c.level} first.`;
   if ((c.level ?? 1) > levelOf(p.xp)) return `Reach level ${c.level} first.`;
-  if (p.bricks < c.cost) return `You need ${c.cost - p.bricks} more bricks.`;
+  if (p.bricks < c.cost) return `You need ${c.cost - p.bricks} more coins.`;
   p.bricks -= c.cost; p.wardrobe.push(id);
   return null;
 }

@@ -11,9 +11,9 @@ import type { Palette } from "./types";
 
 const n0 = (v: number) => v.toLocaleString("en-US");
 export const RARITY: Record<string, string> = { common: "#a9b3ad", uncommon: "#39ff88", rare: "#6ee7ff", epic: "#b388ff", legendary: "#ffcf3a" };
-export const rewardText = (r: Reward) => [r.bricks && `${r.bricks} bricks`, r.xp && `${r.xp} XP`, r.wood && `${r.wood} wood`, r.stone && `${r.stone} stone`, r.chest && `a ${r.chest} chest`].filter(Boolean).join(" + ");
+export const rewardText = (r: Reward) => [r.bricks && `${r.bricks} coins`, r.xp && `${r.xp} XP`, r.chest && `a ${r.chest} chest`].filter(Boolean).join(" + ");
 function Chips({ r }: { r: Reward }) {
-  return <span className="tg-chips">{r.bricks ? <span><Icon n="brick" size={11} />{r.bricks}</span> : null}{r.xp ? <span className="xp">+{r.xp} XP</span> : null}{r.wood ? <span><Icon n="wood" size={11} />{r.wood}</span> : null}{r.stone ? <span><Icon n="stone" size={11} />{r.stone}</span> : null}{r.chest ? <span className={`ch ${r.chest}`}><Icon n="chest" size={11} />{r.chest}</span> : null}</span>;
+  return <span className="tg-chips">{r.bricks ? <span className="coin"><Icon n="coin" size={11} />{r.bricks}</span> : null}{r.xp ? <span className="xp">+{r.xp} XP</span> : null}{r.chest ? <span className={`ch ${r.chest}`}><Icon n="chest" size={11} />{r.chest}</span> : null}</span>;
 }
 export function statOf(me: Me, s: Stat) {
   switch (s) { case "picks": return me.rounds; case "hits": return me.hits; case "wins": return me.wins; case "hatTricks": return me.hatTricks; case "owned": return me.items.length; case "level": return levelOf(me.xp); case "species": return Object.keys(me.bugs ?? {}).length; default: return me.stats?.[s] ?? 0; }
@@ -30,9 +30,9 @@ export function Calendar({ me, onClaim, busy }: { me: Me; onClaim?: () => void; 
         return (
           <div key={i} className={`tg-cal-d${done ? " done" : ""}${today ? " today" : ""}${i === 6 ? " big" : ""}`}>
             <small>Day {i + 1}</small>
-            <span className="tg-cal-ic"><Icon n={r.chest ? "chest" : r.wood ? "wood" : "brick"} size={i === 6 ? 22 : 18} /></span>
-            <b>{r.chest ? `${r.chest} chest` : r.bricks ? `${r.bricks}` : `${r.wood}+${r.stone}`}</b>
-            {r.chest && r.bricks ? <em>+{r.bricks}</em> : null}
+            <span className="tg-cal-ic"><Icon n={r.chest ? "chest" : "disc"} size={i === 6 ? 22 : 18} /></span>
+            <b>{r.chest ? `${r.chest} chest` : `${r.bricks ?? 0}`}</b>
+            {r.chest && r.bricks ? <em>+{r.bricks}</em> : !r.chest && r.xp ? <em>+{r.xp} XP</em> : null}
             {done && <i className="tg-cal-ok"><Icon n="check" size={11} /></i>}
           </div>
         );
@@ -54,7 +54,7 @@ export function DailyModal({ me, onClaim, onClose, busy }: { me: Me; onClaim: ()
 }
 
 // ------------------------------------------------------------------ today: daily, quests, chests, invites
-const QUEST_GO: Record<string, string> = { pick: "Pick", wood: "Chop", stone: "Mine", fish: "Fish", net: "Catch", visit: "Lands", cheer: "Ranks", chat: "Chat", build: "Build", wear: "Dress", chest: "Open", share: "Share" };
+const QUEST_GO: Record<string, string> = { pick: "Pick", desk: "Trade", deskwin: "Trade", crowd: "Trade", net: "Catch", visit: "Lands", cheer: "Ranks", chat: "Chat", build: "Build", wear: "Dress", chest: "Open", share: "Share" };
 export function TodayPanel({ me, onClaim, claiming, onGo, onChest, onShare, invite }: { me: Me; onClaim: () => void; claiming: boolean; onGo: (id: string) => void; onChest: (t: ChestTier) => void; onShare: () => void; invite: string }) {
   const q = me.quests, done = q.list.filter((x) => x.done).length;
   const [copied, setCopied] = useState(false);
@@ -69,7 +69,7 @@ export function TodayPanel({ me, onClaim, claiming, onGo, onChest, onShare, invi
           {q.list.map((x) => (
             <li key={x.id} className={x.done ? "done" : ""}>
               <span className="tg-q-ic">{x.done ? <Icon n="check" size={13} /> : <Icon n="target" size={13} />}</span>
-              <div className="tg-q-t"><b>{x.text}</b><span className="tg-q-bar"><i style={{ width: `${(x.n / x.goal) * 100}%` }} /></span><small className="mono">{x.n}/{x.goal} · +{x.xp} XP · +{x.bricks} bricks</small></div>
+              <div className="tg-q-t"><b>{x.text}</b><span className="tg-q-bar"><i style={{ width: `${(x.n / x.goal) * 100}%` }} /></span><small className="mono">{x.n}/{x.goal} · +{x.xp} XP · +{x.bricks} coins</small></div>
               {!x.done && QUEST_GO[x.id] && <button type="button" className="tg-btn tg-btn-sm" onClick={() => onGo(x.id)}>{QUEST_GO[x.id]}</button>}
             </li>
           ))}
@@ -86,21 +86,21 @@ export function TodayPanel({ me, onClaim, claiming, onGo, onChest, onShare, invi
             </button>
           ))}
         </div>
-        <p className="tg-fine">Chests come from quests, levels (every 5), achievements, golden fish and invites. Inside: bricks, wood and stone, or something new to wear.</p>
+        <p className="tg-fine">Chests come from quests, levels (every 5), achievements and invites. Inside: coins, or something new to wear.</p>
       </section>
       <section className="tg-box">
         <h3><Icon n="users" size={13} /> Invite friends</h3>
-        <p className="tg-sub">Friends who join from your link get <b>+{REFERRAL.newBricks} bricks</b> and a chest. When they play their first day you get <b>+{REFERRAL.refBricks} bricks</b> and a <b>{REFERRAL.refChest} chest</b>.</p>
+        <p className="tg-sub">Friends who join from your link get <b>+{REFERRAL.newBricks} coins</b> and a chest. When they play their first day you get <b>+{REFERRAL.refBricks} coins</b> and a <b>{REFERRAL.refChest} chest</b>.</p>
         <div className="tg-row"><input className="tg-search mono" readOnly value={invite} onFocus={(e) => e.currentTarget.select()} /><button type="button" className="tg-btn" onClick={copy}><Icon n={copied ? "check" : "link"} size={13} />{copied ? "Copied" : "Copy"}</button></div>
         <button type="button" className="tg-btn tg-btn-x" onClick={onShare}><Icon n="x" size={13} />Share your land on X</button>
       </section>
-      <p className="tg-fine">Cheer other lands from the leaderboard: +{CHEER.xp} XP each (up to {CHEER.perDay} a day) and their owner gets +{CHEER.ownerBricks} bricks. You cheered {me.cheeredToday} today.</p>
+      <p className="tg-fine">Cheer other lands from the leaderboard: +{CHEER.xp} XP each (up to {CHEER.perDay} a day) and their owner gets +{CHEER.ownerBricks} coins. You cheered {me.cheeredToday} today.</p>
     </div>
   );
 }
 
 // ------------------------------------------------------------------ opening a chest
-type Got = { tier: ChestTier; bricks?: number; wood?: number; stone?: number; cosmetic?: string };
+type Got = { tier: ChestTier; bricks?: number; cosmetic?: string };
 export function ChestModal({ tier, call, onDone, onClose }: { tier: ChestTier; call: Call; onDone: (me: Me) => void; onClose: (tryOn: boolean) => void }) {
   const [got, setGot] = useState<Got | null>(null), [err, setErr] = useState<string | null>(null), [open, setOpen] = useState(false);
   const ran = useRef(false);
@@ -116,7 +116,7 @@ export function ChestModal({ tier, call, onDone, onClose }: { tier: ChestTier; c
       {err ? <p className="tg-err">{err}</p> : !open ? <p className="tg-sub">Opening…</p> : c ? (
         <><p className="tg-sub">Something new to wear</p><p className="tg-got" style={{ color: RARITY[c.rarity] }}>{c.name}</p><span className="tg-tag" style={{ color: RARITY[c.rarity] }}>{c.rarity} · {c.slot}</span></>
       ) : (
-        <><p className="tg-got">{got?.bricks ? `+${n0(got.bricks)} bricks` : `+${got?.wood} wood, +${got?.stone} stone`}</p></>
+        <><p className="tg-got">{`+${n0(got?.bricks ?? 0)} coins`}</p></>
       )}
       {(open || err) && <button type="button" className="tg-btn tg-btn-go tg-wide" onClick={() => onClose(!!c)}>{c ? "Try it on" : "Nice"}</button>}
     </div></div>
@@ -142,7 +142,7 @@ export function Turntable({ nft, palette, wear, className = "" }: { nft: number;
   useEffect(() => { pv.current?.setWear(latest.current); }, [wearKey]);
   return <canvas ref={ref} className={`tg-turn ${className}`} aria-label="Your Trenchie, drag to turn" />;
 }
-const SLOTS: [Slot, string][] = [["hat", "Hats"], ["eyes", "Eyes"], ["neck", "Neck"], ["back", "Back"], ["aura", "Aura"], ["outline", "Outline"]];
+const SLOTS: [Slot, string][] = [["hat", "Hats"], ["eyes", "Eyes"], ["neck", "Neck"], ["back", "Back"], ["aura", "Aura"], ["outline", "Outline"], ["trail", "Trail"]];
 export function Wardrobe({ me, palette, call, onMe }: { me: Me; palette: Palette; call: Call; onMe: (m: Me) => void }) {
   const [slot, setSlot] = useState<Slot>("hat");
   const [trying, setTrying] = useState<string | null | undefined>(undefined);
@@ -152,7 +152,7 @@ export function Wardrobe({ me, palette, call, onMe }: { me: Me; palette: Palette
   const sel = trying !== undefined ? trying : me.wear[slot] ?? null, c = sel ? cosmetic(sel) : null;
   const run = async (op: string, body: Record<string, unknown>) => { setBusy(true); setErr(null); try { const j = await call(op, body); onMe(j.me); return true; } catch (e) { setErr((e as Error).message); return false; } finally { setBusy(false); } };
   const wear = async (id: string | null) => { if (await run("wear", { slot, id })) setTrying(undefined); };
-  const how = (id: string) => { const x = cosmetic(id)!; if (x.cost) return `${n0(x.cost)} bricks${(x.level ?? 1) > level ? ` · Lv ${x.level}` : ""}`; if (x.chest) return "From chests"; if (x.ach) return `Achievement: ${ACHIEVEMENTS.find((a) => a.id === x.ach)?.name ?? x.ach}`; return `Lv ${x.level}`; };
+  const how = (id: string) => { const x = cosmetic(id)!; if (x.cost) return `${n0(x.cost)} coins${(x.level ?? 1) > level ? ` · Lv ${x.level}` : ""}`; if (x.chest) return "From chests"; if (x.ach) return `Achievement: ${ACHIEVEMENTS.find((a) => a.id === x.ach)?.name ?? x.ach}`; return `Lv ${x.level}`; };
   return (
     <div className="tg-ward">
       <div className="tg-turnwrap"><Turntable nft={me.nft} palette={palette} wear={preview} /><span className="tg-turn-hint">Drag to turn</span></div>
@@ -173,7 +173,7 @@ export function Wardrobe({ me, palette, call, onMe }: { me: Me; palette: Palette
         <div className="tg-cos-act">
           {!trying ? <button type="button" className="tg-btn tg-btn-go tg-wide" disabled={busy || !me.wear[slot]} onClick={() => wear(null)}>Take it off</button>
             : have.has(trying) ? <button type="button" className="tg-btn tg-btn-go tg-wide" disabled={busy || me.wear[slot] === trying} onClick={() => wear(trying)}>{me.wear[slot] === trying ? "Wearing it" : `Wear ${c?.name}`}</button>
-            : c?.cost && (c.level ?? 1) <= level ? <button type="button" className="tg-btn tg-btn-go tg-wide" disabled={busy || me.bricks < c.cost} onClick={async () => { if (await run("cosmetic/buy", { id: trying })) await wear(trying); }}><Icon n="brick" size={13} />Buy for {n0(c.cost)} bricks</button>
+            : c?.cost && (c.level ?? 1) <= level ? <button type="button" className="tg-btn tg-btn-go tg-wide" disabled={busy || me.bricks < c.cost} onClick={async () => { if (await run("cosmetic/buy", { id: trying })) await wear(trying); }}><Icon n="coin" size={13} />Buy for {n0(c.cost)} coins</button>
             : <p className="tg-sub">Trying it on. {how(trying)} unlocks it.</p>}
         </div>
       )}

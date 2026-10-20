@@ -5,7 +5,8 @@
  * moths and fireflies at night.
  *
  * Your Trenchie walks a navigation grid on smooth curved routes, uses what you own (desk, bed, swing, cinema, pool,
- * trampoline...), rides its vehicle round the road, and gathers when you tell it to. Its outfit is built on it. The
+ * trampoline...), rides its vehicle round the road, and goes to its trading desk when you trade. Tap the ground to walk
+ * it there, tap something to use it; after 30 seconds on its own it goes back to living its life. Its outfit is built on it. The
  * nameplate, speech bubble and the forest, quarry, pond and butterfly tags are HTML pinned to 3D points every frame.
  */
 import * as THREE from "three";
@@ -15,17 +16,19 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass";
 import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
 import { artPalette, drawArt } from "@/lib/art-vector";
-import { BUTTERFLIES, GATHER, ITEMS, type Resource } from "@/lib/trenchies-catalog";
+import { BUTTERFLIES, ITEMS, ROOM_SLOTS } from "@/lib/trenchies-catalog";
 import { makeWilds, type Wilds } from "./wilds";
 import { makeTrenchie } from "./trenchie3d";
 import { makeVehicle, rollWheels } from "./vehicles";
 import { Nav, along, lengths, smooth, type Pt, type R } from "./nav";
 import { CYAN, GOLD, Kit, NEON, newRegistry, type Kind, type Registry, type Spot } from "./kit";
-import { CHOP, DOCK, DOOR_X, FIXED, FOREST, GARDEN_FP, GARDEN_ROOMS, HOUSE_ROOMS, LAND, MINE, PARK, POND, QUARRY, ROAD, Packer, core } from "./layout";
+import { CHOP, DOCK, DOOR_X, FIXED, FOREST, GARDEN_FP, GARDEN_ROOMS, LAND, PARK, POND, ROAD, Packer, core } from "./layout";
 import { buildHouse, drawLots, gardenBuilding, nextLots } from "./rooms";
 import { GARDEN } from "./garden";
 import type { Ctx } from "./indoor";
-import { Butterflies, forest, ground, meadow, pond, quarry, stones, type Fell, type Pond } from "./nature";
+import { Butterflies, forest, ground, meadow, pond, stones, type Pond } from "./nature";
+import { STATUES } from "./statues";
+import { Weather, skyFor, type Sky } from "./weather";
 import { FLYERS, WALKERS, animatePet, makePet, type Pet } from "./pets";
 import { animateWear, dress } from "./wear";
 import type { Grow, Look, Pins } from "./types";
@@ -93,7 +96,6 @@ export class World3D {
   private reg: Registry = newRegistry();
   private kit: Kit;
   private wilds: Wilds;
-  private fells: Partial<Record<"wood" | "stone", Fell>> = {};
   private pondO: Pond | null = null;
   private bugs: Butterflies | null = null;
   private trenchie: THREE.Group | null = null;
@@ -101,17 +103,22 @@ export class World3D {
   private vehicle: THREE.Group | null = null;
   private park = { x: PARK.x, y: PARK.y, yaw: Math.PI / 2, garage: false };
   private pets: PetRun[] = [];
-  private bobber: THREE.Mesh | null = null; private fishLine: THREE.Line | null = null;
   private guests = new Map<string, { tr: THREE.Group; w: Walker; wait: number; step: number; plate: HTMLElement; bubble: HTMLElement; until: number; yaw: number }>();
   private follow: string | null = null;
-  private catchArc: { m: THREE.Mesh; t: number; from: THREE.Vector3; to: THREE.Vector3 } | null = null;
   private zs: { s: THREE.Sprite; t: number }[] = [];
   private confetti: { m: THREE.Mesh; v: THREE.Vector3; t: number }[] = [];
-  private chips: { m: THREE.Mesh; v: THREE.Vector3; t: number }[] = [];
-  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
+  private trail: { m: THREE.Mesh; t: number; v: THREE.Vector3 }[] = []; private trailAt = 0;
+  private weather = new Weather(LAND);
+  /** The last time you steered your Trenchie yourself (it goes back to living its life 30 s later). */
+  private steered = -1e9;
+  /** While a trading panel is open, the Trenchie sits at its desk. */
+  private atDesk = false;
+  /** Live Bitcoin prices for the desk screens. */
+  private ticker: [number, number][] = [];
+  /** Placing a garden piece: the next tap on the ground is reported here instead of walking. */
+  onGround: ((x: number, y: number) => void) | null = null;  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
   private grow: Grow = { wood: 0, stone: 0, fish: 0 };
-  private felling: Partial<Record<Resource, number>> = {};
-  private busy: Partial<Record<Resource | "net", boolean>> = {};
+  private busy: Partial<Record<"net", boolean>> = {};
   private pins: Pins = {};
   private me: Walker;
   private mode: Mode = "idle";
@@ -127,27 +134,27 @@ export class World3D {
   private netAt: Pt = NET;
   private door: Pt = { x: DOOR_X, y: 9 };
   hourOverride: number | null = null;
-  onGathered: ((res: Resource) => void) | null = null;
 
-  constructor(private canvas: HTMLCanvasElement, look: Look, nft: number) {
+  constructor(private canvas: HTMLCanvasElement, look: Look, nft: number, opts: { lite?: boolean } = {}) {
     this.look = look; this.nft = nft;
-    const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }));
+    const lite = !!opts.lite;
+    const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !lite, powerPreference: "high-performance" }));
     r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
-    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.setPixelRatio(Math.min(lite ? 1.5 : 2, window.devicePixelRatio || 1));
     this.scene.background = new THREE.Color(0x07100c);
     this.scene.fog = new THREE.Fog(0x07100c, 46, 120);
     this.wilds = makeWilds(LAND / 2); this.scene.add(this.wilds.group);
     this.camera.position.set(30, 28, 30); this.camera.lookAt(0, 0, 0);
     this.controls = new OrbitControls(this.camera, canvas);
     Object.assign(this.controls, { enablePan: false, enableDamping: true, dampingFactor: 0.08, minZoom: 0.36, maxZoom: 3, minPolarAngle: 0.5, maxPolarAngle: 1.15, minAzimuthAngle: Math.PI / 4 - 0.75, maxAzimuthAngle: Math.PI / 4 + 0.75, rotateSpeed: 0.5, zoomSpeed: 0.8 });
-    this.key.position.set(10, 26, 6); this.key.castShadow = true; this.key.shadow.mapSize.set(2048, 2048);
+    this.key.position.set(10, 26, 6); this.key.castShadow = true; this.key.shadow.mapSize.set(lite ? 1024 : 2048, lite ? 1024 : 2048);
     Object.assign(this.key.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 90 }); this.key.shadow.bias = -0.0006;
     this.scene.add(this.key, this.key.target, this.hemi, new THREE.AmbientLight(0xffffff, 0.12));
     this.composer = new EffectComposer(r);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.6, 0.4, 0.86);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(lite ? 256 : 512, lite ? 256 : 512), lite ? 0.45 : 0.6, 0.4, 0.86);
     this.composer.addPass(this.bloom);
-    this.scene.add(this.statics, this.dyn);
+    this.scene.add(this.statics, this.dyn, this.weather.group);
     this.kit = new Kit(LAND, this.statics, this.nav, this.reg);
     this.sky();
     const c = core(look.house); this.me = new Walker(DOOR_X, c.y + c.d + 1.4, 1.25);
@@ -191,16 +198,16 @@ export class World3D {
     const k = this.kit, look = this.look;
     const ctx: Ctx = { has: (id) => this.has(id), nft: this.nft, trophies: look.trophies ?? 1, art: (g, s) => drawArt(g, this.nft, s), mainColor: look.palette.main };
     ground(k, this.reg.pools);
-    const house = buildHouse(k, ctx, look.house); this.door = house.door;
+    const house = buildHouse(k, ctx, look.house, look.items, look.layout ?? {}, look.paint ?? {}); this.door = house.door;
     let park: { x: number; y: number; yaw: number } | undefined;
     for (const id of Object.keys(GARDEN_ROOMS)) if (this.has(id)) { const o = gardenBuilding(k, ctx, id); if (o.park) park = o.park; }
-    drawLots(k, nextLots(house.rooms, (id) => this.has(id), look.level ?? 1));
+    drawLots(k, nextLots(house.rooms, look.items, look.layout ?? {}, look.level ?? 1));
     // paths: front door to the road, and out to the forest, the pond and the quarry
     const fy = house.door.y - 0.3, junction = 21.2;
     stones(k, { x: DOOR_X, y: fy + 0.2 }, { x: DOOR_X, y: LAND - ROAD - 0.75 });
     stones(k, { x: CHOP.sx + 0.6, y: junction }, { x: DOOR_X - 0.6, y: junction });
     stones(k, { x: DOOR_X + 0.6, y: DOCK.y }, { x: DOCK.x0 - 0.2, y: DOCK.y });
-    stones(k, { x: DOOR_X + 0.6, y: 22.7 }, { x: MINE.sx - 0.2, y: 22.7 }); stones(k, { x: MINE.sx, y: 22.2 }, { x: MINE.sx, y: MINE.sy + 0.5 });
+    stones(k, { x: DOOR_X + 0.6, y: 22.7 }, { x: 36.4, y: 22.7 });
     // the drive (or the garage)
     this.park = park ? { ...park, garage: true } : { x: PARK.x, y: PARK.y, yaw: Math.PI / 2, garage: false };
     if (!park) k.box(PARK.x - 1.6, PARK.y - 0.75, -0.01, 4.4, 1.5, 0.02, k.std(0x1c2024, 0.9, 0.1), false).castShadow = false;
@@ -208,7 +215,7 @@ export class World3D {
     const keepOut: R[] = [{ x: CHOP.x - 1.2, y: CHOP.y - 1.2, w: 2.4, d: 2.4 }];
     if (this.has("treehouse")) { const t = GARDEN_ROOMS.treehouse; keepOut.push({ x: t.x - 0.6, y: t.y - 0.6, w: t.w + 1.2, d: t.d + 2.2 }, { x: t.x + t.w / 2 - 0.6, y: t.y + t.d, w: FOREST.x + FOREST.w - (t.x + t.w / 2) + 0.6, d: 1.2 }); }
     if (this.has("swing")) { const s = FIXED.swing; keepOut.push({ x: s.x - 1.6, y: s.y - 0.8, w: s.w + 2.2, d: s.d + 1.6 }); }
-    this.fells.wood = forest(k, keepOut); this.fells.stone = quarry(k); this.pondO = pond(k);
+    forest(k, keepOut); this.pondO = pond(k);
     // the garden
     this.netAt = NET;
     this.outdoor(house.door, keepOut);
@@ -226,10 +233,6 @@ export class World3D {
       const st = { x: DOOR_X + 1.5 + Math.random() * 2, y: house.door.y + 1.5 + Math.random() * 2 };
       this.pets.push({ p, w: new Walker(st.x, st.y, p.speed), wait: 1 + Math.random() * 3, ph: Math.random() * 6, perch: 0, orbit: Math.random() * 6 });
     }
-    if (this.bobber) { this.dyn.remove(this.bobber); this.bobber.geometry.dispose(); }
-    if (this.fishLine) { this.dyn.remove(this.fishLine); this.fishLine.geometry.dispose(); }
-    this.bobber = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), this.kit.glow(0xff5470, 1.6)); this.bobber.visible = false; this.dyn.add(this.bobber);
-    this.fishLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xdfe6e2, transparent: true, opacity: 0.7 })); this.fishLine.visible = false; this.fishLine.frustumCulled = false; this.dyn.add(this.fishLine);
     if (!this.trenchie) { this.trenchie = makeTrenchie(this.nft, this.look.palette, HT); this.dyn.add(this.trenchie); this.tool = null; }
     dress(this.trenchie, this.look.wear);
     this.merge();
@@ -237,11 +240,11 @@ export class World3D {
   /** Areas the garden packer must leave alone (so the plan stays stable as you build more). */
   private gardenBlocks(door: Pt): R[] {
     const out: R[] = [
-      ...Object.values(HOUSE_ROOMS).map((r) => ({ x: r.x - 0.3, y: r.y - 0.3, w: r.w + 0.6, d: r.d + 0.6 })), { ...core("palace"), y: core("palace").y - 0.3, d: core("palace").d + 0.9 },
+      ...Object.values(ROOM_SLOTS).map((r) => ({ x: r.x - 0.3, y: r.y - 0.3, w: r.w + 0.6, d: r.d + 0.6 })), { ...core("palace"), y: core("palace").y - 0.3, d: core("palace").d + 0.9 },
       ...Object.values(GARDEN_ROOMS).map((r) => ({ x: r.x - 0.4, y: r.y - 0.4, w: r.w + 0.8, d: r.d + 1.2 })),
-      { x: FOREST.x, y: FOREST.y, w: FOREST.w + 0.4, d: FOREST.d }, { x: QUARRY.x - 0.6, y: QUARRY.y - 0.6, w: QUARRY.w + 1.2, d: QUARRY.d + 1.6 },
+      { x: FOREST.x, y: FOREST.y, w: FOREST.w + 0.4, d: FOREST.d },
       { x: POND.x - POND.rx - 0.7, y: POND.y - POND.ry - 0.7, w: POND.rx * 2 + 1.4, d: POND.ry * 2 + 1.4 }, { x: DOCK.x0 - 1.4, y: DOCK.y - 0.9, w: DOCK.x1 - DOCK.x0 + 1.4, d: 1.8 },
-      { x: DOOR_X - 0.9, y: door.y - 1, w: 1.8, d: LAND - door.y }, { x: CHOP.sx, y: 20.3, w: DOOR_X - CHOP.sx, d: 1.8 }, { x: DOOR_X, y: 22.1, w: MINE.sx - DOOR_X + 0.6, d: 1.2 }, { x: DOOR_X, y: DOCK.y - 0.6, w: DOCK.x0 - DOOR_X, d: 1.2 },
+      { x: DOOR_X - 0.9, y: door.y - 1, w: 1.8, d: LAND - door.y }, { x: CHOP.sx, y: 20.3, w: DOOR_X - CHOP.sx, d: 1.8 }, { x: DOOR_X, y: 22.1, w: 36.4 - DOOR_X + 0.6, d: 1.2 }, { x: DOOR_X, y: DOCK.y - 0.6, w: DOCK.x0 - DOOR_X, d: 1.2 },
       { x: PARK.x - 2, y: PARK.y - 1.1, w: 5.4, d: 2.6 }, { x: NET.x - 1.2, y: NET.y - 1.2, w: 2.4, d: 2.4 },
       ...Object.values(FIXED).map((r) => ({ x: r.x - 0.3, y: r.y - 0.3, w: r.w + 0.6, d: r.d + 0.6 })),
     ];
@@ -256,12 +259,16 @@ export class World3D {
     // the rest packed into the garden, nearest the house first
     const P = new Packer({ x: 12.6, y: 12.4, w: 29.8, d: 29.6 });
     for (const b of this.gardenBlocks(door)) P.block(b, 0.2);
-    const owned = ITEMS.filter((it) => it.kind === "outdoor" && this.has(it.id) && !FIXED[it.id]).sort((a, b) => a.level - b.level || a.cost - b.cost);
-    const near = { x: DOOR_X + 4, y: door.y + 6 };
+    const owned = ITEMS.filter((it) => (it.kind === "outdoor" || it.kind === "statue") && this.has(it.id) && !FIXED[it.id]).sort((a, b) => a.level - b.level || a.cost - b.cost);
+    const near = { x: DOOR_X + 4, y: door.y + 6 }, place = this.look.place ?? {};
+    // pieces you placed yourself go first, where you put them (if they still fit there)
+    owned.sort((a, b) => Number(!!place[b.id]) - Number(!!place[a.id]));
+    const spotFor = (id: string, w: number, d: number) => { const at = place[id]; const r = at ? P.at({ x: at.x - w / 2, y: at.y - d / 2, w, d }, 0.3) : null; return r ?? P.place(w, d, id.startsWith("s_") ? { x: 33, y: 30 } : near, 0.7); };
     for (const it of owned) {
+      if (it.kind === "statue") { const def = STATUES[it.id]; if (!def) continue; const r = spotFor(it.id, def.fp[0], def.fp[1]); if (!r) continue; def.build(k.frame(r, "back"), k, ctx); k.nav.block({ x: r.x + 0.1, y: r.y + 0.1, w: r.w - 0.2, d: r.d - 0.2 }, 0.1); continue; }
       if (it.id === "trees") { for (let i = 0; i < 5; i++) { const r = P.place(1.4, 1.4, { x: 16 + i * 5, y: 38 - (i % 2) * 14 }, 0.6); if (r) { const f = k.frame(r, "back"); f.c(0.7, 0.7, 0, 0.08, 1.0, M.darkwood, 7, 0.06); f.put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 1), k.flat(0x2a6a3a)), 0.7, 0.7, 1.2); f.put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), k.flat(0x3c8a45)), 0.92, 0.75, 1.62); k.nav.blockCircle({ x: r.x + 0.7, y: r.y + 0.7 }, 0.12); } } continue; }
       const def = GARDEN[it.id], fp = GARDEN_FP[it.id]; if (!def || !fp) continue;
-      const r = P.place(fp[0], fp[1], near, 0.7); if (!r) continue;
+      const r = spotFor(it.id, fp[0], fp[1]); if (!r) continue;
       const f = k.frame(r, "back"); def.build(f, k, ctx);
       if (!["flowers", "blanket", "zen", "minigolf", "tennis", "sandbox", "pumpkins", "veggies"].includes(it.id)) k.nav.block({ x: r.x + 0.15, y: r.y + 0.15, w: r.w - 0.3, d: r.d - 0.3 }, 0.08);
       if (it.id === "flowers") this.netAt = { x: r.x + fp[0] / 2, y: r.y + fp[1] + 0.9 };
@@ -328,9 +335,18 @@ export class World3D {
   private placeCar(x: number, y: number, yaw: number) { if (!this.vehicle) return; const p = W(x, y); this.vehicle.position.set(p.x, this.vehicle.userData.hover ? 0.18 : 0, p.z); this.vehicle.rotation.y = yaw - Math.PI / 2; this.carYaw = yaw; }
 
   // ------------------------------------------------------------------ behaviour
+  private deskSpot() { return this.reg.spots.find((x) => x.act === "office") ?? this.reg.spots.find((x) => x.act === "desk") ?? null; }
+  private bedSpot() { return this.reg.spots.find((x) => x.act === "bed") ?? null; }
+  private get steering() { return this.t - this.steered < 30; }
   private choose() {
     if (this.mode === "ride" || this.mode === "party") return;
+    // you're steering it: it waits for you (for 30 s after your last tap)
+    if (this.steering) { this.until = this.t + 1; return; }
+    // trading: off to the desk
+    if (this.atDesk) { const d = this.deskSpot(); if (d) { if (this.spot !== d || this.mode === "idle") this.walkTo(d); return; } }
     const night = this.night(), office = this.has("office");
+    // at night it goes to bed and stays there
+    if (night) { const b = this.bedSpot(); if (b) { this.walkTo(b); return; } }
     const opts: [Spot | "wander" | "ride" | "pet" | "bugs", number][] = [];
     for (const s of this.reg.spots) { let w = night ? (s.night ?? 0) + (s.act === "toilet" ? 0.4 : 0) : s.w; if (s.tag === "desk" && s.act === "desk" && office) w *= 0.5; opts.push([s, w]); }
     if (!night) { opts.push(["wander", 1.2], ["ride", 1.2], ["bugs", 0.7]); if (this.pets.some((p) => !p.p.fly && p.p.kind !== "cat")) opts.push(["pet", 0.6]); }
@@ -362,26 +378,38 @@ export class World3D {
     const cols = [NEON, 0xffffff, CYAN, GOLD];
     for (let i = 0; i < 110; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.015), this.kit.glow(cols[i % 4], 1.4)); const p = W(this.pose.x, this.pose.y); m.position.set(p.x, 1.0, p.z); this.dyn.add(m); this.confetti.push({ m, v: new THREE.Vector3((Math.random() - 0.5) * 3.6, 2 + Math.random() * 3, (Math.random() - 0.5) * 3.6), t: 2.4 }); }
   }
+  /** A trading panel opened (or closed): the Trenchie goes and sits at its desk while it's open. */
+  setDesk(on: boolean) {
+    if (on === this.atDesk) return; this.atDesk = on;
+    if (on) { this.steered = -1e9; const d = this.deskSpot(); if (d && this.mode !== "ride") { if (this.mode === "party") this.mode = "idle"; this.walkTo(d); } }
+    else if (this.mode === "do") { this.mode = "exit"; this.blend = 0; }
+  }
+  /** Live Bitcoin prices ([seconds, price]) for the screens on the desk. */
+  setTicker(series: [number, number][]) { this.ticker = series.slice(-300); }
+  /** The sky over this land right now. */
+  get weatherNow(): Sky { return skyFor(this.look.name); }
   poke() { if (this.spot?.pose.kind === "lie" && this.mode === "do") { this.say("zzz… five more minutes"); return; } this.say(); this.hop = 0.35; }
+  /** A tap on the land: your Trenchie (says hi), something to use (it goes and uses it), or the ground (it walks there). */
   click(nx: number, ny: number) {
     if (!this.trenchie) return;
     this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
-    if (this.raycaster.intersectObject(this.trenchie, true).length) this.poke();
+    if (!this.onGround && this.raycaster.intersectObject(this.trenchie, true).length) { this.poke(); return; }
+    const hit = new THREE.Vector3(); if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
+    const x = hit.x + LAND / 2, y = hit.z + LAND / 2; if (x < 0.5 || y < 0.5 || x > LAND - 0.5 || y > LAND - 0.5) return;
+    if (this.onGround) { this.onGround(x, y); return; }
+    if (this.mode === "ride") return;
+    this.steered = this.t; this.atDesk = false;
+    // a spot close to the tap: use it; otherwise just walk there
+    let best: Spot | null = null, bd = 1.3;
+    for (const sp of this.reg.spots) { const d = Math.min(Math.hypot(sp.pose.x - x, sp.pose.y - y), Math.hypot(sp.at.x - x, sp.at.y - y)); if (d < bd) { bd = d; best = sp; } }
+    const target: Spot = best ?? (() => { const q = this.nav.nearestFree({ x, y }); return { act: "idle", at: q, pose: { x: q.x, y: q.y, z: 0, yaw: this.me.yaw, kind: "stand" as Kind }, min: 30, max: 30, w: 0 }; })();
+    this.marker(best ? best.pose.x : x, best ? best.pose.y : y);
+    this.walkTo(target);
   }
-  /** Walk over and chop, mine or fish (the server has already paid out). */
-  gather(res: Resource, got: number) {
-    if (this.mode === "ride") this.endRide();
-    this.busy[res] = true;
-    const kind: Kind = res === "wood" ? "chop" : res === "stone" ? "mine" : "fish";
-    let s: Spot;
-    if (res === "fish") s = { act: "fishing", at: { x: DOCK.x0 - 0.5, y: DOCK.y }, pose: { x: DOCK.x1 - 0.35, y: DOCK.y, z: 0.21, yaw: Math.PI / 2, kind }, min: 5, max: 5, w: 0 };
-    else { const c = res === "wood" ? CHOP : MINE, side = { x: c.sx, y: c.sy }; s = { act: res === "wood" ? "chop" : "mine", at: side, pose: { x: side.x, y: side.y, z: 0, yaw: Math.atan2(c.x - side.x, c.y - side.y), kind }, min: 3.2, max: 3.2, w: 0 }; }
-    this.walkTo(s, () => {
-      this.felling[res] = this.t; this.busy[res] = false;
-      if (res === "fish" && this.bobber) { const m = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.24, 6), this.kit.glow(GOLD, 1.5)); m.rotation.z = Math.PI / 2; const from = this.bobber.position.clone(), to = W(this.pose.x, this.pose.y).setY(0.9); m.position.copy(from); this.dyn.add(m); this.catchArc = { m, t: 0, from, to }; }
-      this.popText(`+${got} ${res}`);
-      this.onGathered?.(res);
-    });
+  private markerM: THREE.Mesh | null = null; private markerT = -9;
+  private marker(x: number, y: number) {
+    if (!this.markerM) { this.markerM = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(NEON).multiplyScalar(1.6), transparent: true, depthWrite: false })); this.markerM.rotation.x = -Math.PI / 2; (this.markerM.material as unknown as { toneMapped: boolean }).toneMapped = false; this.dyn.add(this.markerM); }
+    const p = W(x, y); this.markerM.position.set(p.x, 0.03, p.z); this.markerT = this.t;
   }
   /** Walk to the flowers and swing the net (the server has already decided what was caught). */
   net(got: string[]) {
@@ -436,7 +464,8 @@ export class World3D {
         if (this.t >= this.until) {
           const cb = this.onArrive; this.onArrive = null;
           if (cb) { cb(); if (this.mode !== "do") break; }
-          if (s?.pose.kind === "lie" && this.night() && Math.random() < 0.85) { this.until = this.t + 30; break; }
+          if (s?.act === "bed" && this.night() && !this.steering && !this.atDesk) { this.until = this.t + 30; break; }
+          if (this.atDesk && s === this.deskSpot()) { this.until = this.t + 5; break; }
           this.mode = "exit"; this.blend = 0;
         }
         break;
@@ -532,9 +561,14 @@ export class World3D {
   private sync(dt: number) {
     const night = this.night(), tr = this.trenchie;
     const h = this.hour(), day = h < 5 ? 0 : h < 8 ? (h - 5) / 3 : h < 18 ? 1 : h < 21.5 ? 1 - (h - 18) / 3.5 : 0;
-    this.key.intensity = 0.32 + 0.5 * day; this.hemi.intensity = 0.16 + 0.16 * day;
-    (this.scene.background as THREE.Color).setRGB(0.012 + 0.02 * day, 0.026 + 0.03 * day, 0.02 + 0.025 * day); (this.scene.fog as THREE.Fog).color.copy(this.scene.background as THREE.Color);
+    this.weather.update(dt, this.controls.target, this.weatherNow);
+    const gloom = this.weather.gloom, dawn = h >= 5 && h < 8 ? 1 - Math.abs(h - 6.5) / 1.5 : h >= 18 && h < 21.5 ? 1 - Math.abs(h - 19.5) / 2 : 0;
+    this.key.intensity = (0.32 + 0.55 * day) * (1 - gloom * 0.6); this.hemi.intensity = (0.16 + 0.18 * day) * (1 - gloom * 0.3);
+    this.key.color.setRGB(1, 1 - dawn * 0.25, 1 - dawn * 0.45);
+    const bg = this.scene.background as THREE.Color;
+    bg.setRGB(0.012 + 0.03 * day + dawn * 0.05, 0.026 + 0.04 * day + dawn * 0.02, 0.02 + 0.05 * day); bg.lerp(new THREE.Color(0.05, 0.055, 0.06), gloom * 0.5); (this.scene.fog as THREE.Fog).color.copy(bg);
     this.bloom.strength = 0.55 + 0.35 * (1 - day);
+    if (this.markerM) { const a = Math.max(0, 1 - (this.t - this.markerT) / 1.2); (this.markerM.material as THREE.MeshBasicMaterial).opacity = a; this.markerM.scale.setScalar(1 + (1 - a) * 0.8); this.markerM.visible = a > 0; }
     for (const mm of this.reg.nightMats) { const k = (mm.userData.k as number) ?? 1; mm.color.setRGB(night ? 1.8 : 0.62 + 0.5 * (1 - day), night ? 1.3 : 0.5 + 0.35 * (1 - day), night ? 0.62 : 0.32 + 0.1 * (1 - day)).multiplyScalar(k); }
     for (const pm of this.reg.pools) pm.opacity = 0.18 + 0.5 * (1 - day);
     this.wilds.update(1 - day);
@@ -545,24 +579,7 @@ export class World3D {
     for (const w of this.reg.water) { const k = 0.8 + Math.sin(this.t * 1.5) * 0.08; w.color.setRGB(0.17 * k, 0.83 * k, 1 * k); }
     if (this.t - this.lastScreen > 0.15) { this.lastScreen = this.t; this.drawScreens(); }
     this.bugs?.update(dt, this.t, 1 - day);
-    // forest, quarry and pond: ready, felled, or growing back
-    const now = Date.now();
-    const frac = (res: Resource) => { const nx = this.grow[res]; if (!nx || nx <= now) return 1; return Math.max(0, 1 - (nx - now) / (GATHER[res].every * 1000)); };
-    if (this.pondO) {
-      for (const f of this.pondO.fish) { f.a += f.v * dt; f.m.position.set(Math.cos(f.a) * f.r * 1.4, 0.09 + Math.sin(this.t * 2 + f.r) * 0.01, Math.sin(f.a) * f.r * 0.8); f.m.rotation.y = -f.a - (f.v > 0 ? 0 : Math.PI); }
-      const ready = frac("fish") >= 1 && !this.busy.fish; this.pondO.ring.color.set(CYAN).multiplyScalar(ready ? 1.1 + Math.sin(this.t * 3) * 0.5 : 0.25);
-    }
-    if (this.catchArc) { const c = this.catchArc; c.t += dt / 0.9; const k = Math.min(1, c.t); c.m.position.lerpVectors(c.from, c.to, k); c.m.position.y += Math.sin(k * Math.PI) * 1.2; c.m.rotation.z += dt * 12; if (k >= 1) { this.dyn.remove(c.m); c.m.geometry.dispose(); this.catchArc = null; } }
-    for (const res of ["wood", "stone"] as const) {
-      const F = this.fells[res]; if (!F) continue;
-      const { full, stump } = F, fell = this.felling[res], f = this.busy[res] ? 1 : frac(res);
-      if (fell !== undefined && this.t - fell < 1.1 && res === "wood") { const k = ease((this.t - fell) / 1.1); full.visible = true; stump.visible = true; full.rotation.z = (-k * Math.PI) / 2.1; full.scale.setScalar(1 - k * 0.15); full.position.y = k * 0.1; continue; }
-      if (fell !== undefined && this.t - fell < 0.6 && res === "stone") { const k = (this.t - fell) / 0.6; full.visible = true; stump.visible = true; full.scale.setScalar(1 - ease(k)); continue; }
-      full.rotation.z = 0; full.position.y = 0;
-      const ready = f >= 1;
-      full.visible = f > 0.06; stump.visible = !ready; full.scale.setScalar(ready ? 1 + Math.sin(this.t * 2) * 0.006 : 0.25 + 0.75 * f);
-      const k = ready ? 1.1 + Math.sin(this.t * 3) * 0.5 : 0.25; F.ring.color.set(res === "wood" ? NEON : CYAN).multiplyScalar(k);
-    }
+    if (this.pondO) for (const f of this.pondO.fish) { f.a += f.v * dt; f.m.position.set(Math.cos(f.a) * f.r * 1.4, 0.09 + Math.sin(this.t * 2 + f.r) * 0.01, Math.sin(f.a) * f.r * 0.8); f.m.rotation.y = -f.a - (f.v > 0 ? 0 : Math.PI); }
     // the Trenchie
     if (tr) {
       const riding = this.mode === "ride" && this.car && this.vehicle;
@@ -590,20 +607,13 @@ export class World3D {
       }
       animateWear(tr, this.t, this.mode === "walk" ? Math.min(1, this.me.v) : 0);
       // tools: axe, pickaxe, rod, net
-      const kind = this.spot?.pose.kind, gathering = (kind === "chop" || kind === "mine" || kind === "fish" || kind === "net") && (this.mode === "do" || this.mode === "enter");
+      const kind = this.spot?.pose.kind, gathering = kind === "net" && (this.mode === "do" || this.mode === "enter");
       if (gathering && (!this.tool || this.tool.userData.kind !== kind)) { if (this.tool) tr.remove(this.tool); this.tool = this.makeTool(kind!); tr.add(this.tool); }
       if (!gathering && this.tool) { tr.remove(this.tool); this.tool = null; }
-      if (this.tool && kind === "fish") this.tool.rotation.x = 0.9 + Math.sin(this.t * 1.6) * 0.06;
-      else if (this.tool && kind === "net") { this.tool.rotation.x = -0.4 + Math.sin(this.t * 4.2) * 0.9; this.tool.rotation.z = Math.sin(this.t * 2.1) * 0.4; }
-      else if (this.tool) { this.tool.rotation.x = -0.6 + Math.sin(this.t * 6) * 1.0; if (this.mode === "do" && Math.sin(this.t * 6) < -0.97 && Math.random() < 0.5) this.chip(kind === "chop"); }
+      if (this.tool && kind === "net") { this.tool.rotation.x = -0.4 + Math.sin(this.t * 4.2) * 0.9; this.tool.rotation.z = Math.sin(this.t * 2.1) * 0.4; }
       if (kind === "net" && this.mode === "do" && this.bugs && Math.random() < dt * 0.8) this.bugs.catchAt(W(this.pose.x, this.pose.y).setY(1.0), 1);
-      if (this.bobber && this.pondO) {
-        const on = kind === "fish" && this.mode === "do"; this.bobber.visible = on;
-        if (on) { const q = W(this.pondO.bobberAt.x, this.pondO.bobberAt.y); this.bobber.position.set(q.x, 0.14 + Math.max(0, Math.sin(this.t * 3)) * 0.03 - (this.until - this.t < 1 ? 0.06 : 0), q.z); }
-        if (this.fishLine) { this.fishLine.visible = on && !!this.tool; if (on && this.tool) { this.tool.updateMatrixWorld(); const tip = this.tool.localToWorld(new THREE.Vector3(0, 1.32, 0)); const a = this.fishLine.geometry.attributes.position as THREE.BufferAttribute; a.setXYZ(0, tip.x, tip.y, tip.z); a.setXYZ(1, this.bobber.position.x, this.bobber.position.y, this.bobber.position.z); a.needsUpdate = true; } }
-      }
+      this.trailStep(dt);
     }
-    this.chips = this.chips.filter((c) => { c.t -= dt; c.v.y -= 7 * dt; c.m.position.addScaledVector(c.v, dt); c.m.rotation.x += dt * 9; if (c.t <= 0 || c.m.position.y < 0.02) { this.dyn.remove(c.m); c.m.geometry.dispose(); return false; } return true; });
     const asleep = this.mode === "do" && this.spot?.pose.kind === "lie" && night;
     if (asleep && Math.random() < dt * 0.6) { const s = this.zSprite(); this.dyn.add(s); this.zs.push({ s, t: 0 }); }
     this.zs = this.zs.filter((z) => { z.t += dt; const p = W(this.pose.x + z.t * 0.3, this.pose.y - 0.4); z.s.position.set(p.x, 0.9 + this.pose.z + z.t * 0.45, p.z); (z.s.material as THREE.SpriteMaterial).opacity = 1 - z.t / 2.6; if (z.t > 2.6) { this.dyn.remove(z.s); return false; } return true; });
@@ -628,6 +638,13 @@ export class World3D {
         s.tex.needsUpdate = true; continue;
       }
       ctx.strokeStyle = "rgba(57,255,136,0.10)"; ctx.lineWidth = 1; for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, (H2 * i) / 5); ctx.lineTo(W2, (H2 * i) / 5); ctx.stroke(); }
+      if ((s.kind === 0 || s.kind === 1) && this.ticker.length > 10) { // the live Bitcoin price
+        const pts = this.ticker, lo = Math.min(...pts.map((x) => x[1])), hi = Math.max(...pts.map((x) => x[1])), span = hi - lo || 1, up = pts[pts.length - 1][1] >= pts[0][1];
+        ctx.beginPath(); pts.forEach(([, v], i) => { const px = (i / (pts.length - 1)) * W2, py = H2 - 14 - ((v - lo) / span) * (H2 - 40); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+        ctx.strokeStyle = up ? "#39ff88" : "#ff5470"; ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = up ? "#39ff88" : "#ff5470"; ctx.font = "600 15px 'JetBrains Mono', monospace"; ctx.fillText(`BTC $${Math.round(pts[pts.length - 1][1]).toLocaleString("en-US")}`, 10, 22);
+        s.tex.needsUpdate = true; continue;
+      }
       if (s.kind === 1) {
         for (let i = 0; i < 18; i++) { const v = Math.sin(i * 1.7 + s.off + this.t * 0.4), up = v > -0.2, x = 8 + i * 13.5, y = H2 * 0.5 - Math.sin(i * 0.35 + this.t * 0.3 + s.off) * 30; ctx.fillStyle = up ? "#39ff88" : "#ff5470"; ctx.fillRect(x, y - 14 * Math.abs(v), 7, 10 + 20 * Math.abs(v)); ctx.fillRect(x + 3, y - 24, 1, 46); }
       } else {
@@ -639,6 +656,21 @@ export class World3D {
       s.tex.needsUpdate = true;
     }
   }
+  /** Your trail cosmetic: little things left behind as you walk. */
+  private trailStep(dt: number) {
+    const kind = this.look.wear?.trail, tr = this.trenchie;
+    if (kind && tr && this.mode === "walk" && this.me.v > 0.3 && this.t - this.trailAt > 0.09) {
+      this.trailAt = this.t;
+      const look: Record<string, [THREE.BufferGeometry, number, number]> = {
+        "trail-dust": [new THREE.SphereGeometry(0.06, 6, 4), 0xc9c2b4, 0.9], "trail-leaves": [new THREE.CircleGeometry(0.06, 5), 0x6fbf4a, 1], "trail-hearts": [new THREE.OctahedronGeometry(0.06, 0), 0xff4f8a, 1.4],
+        "trail-coins": [new THREE.CylinderGeometry(0.06, 0.06, 0.015, 12), 0xffcf3a, 1.3], "trail-sparkle": [new THREE.OctahedronGeometry(0.05, 0), 0xffffff, 2], "trail-fire": [new THREE.ConeGeometry(0.05, 0.14, 6), 0xff8a3d, 1.8], "trail-candles": [new THREE.BoxGeometry(0.05, 0.16, 0.05), 0x39ff88, 1.6],
+      };
+      const [g, c, s] = look[kind] ?? look["trail-dust"];
+      const m = new THREE.Mesh(g, this.kit.glow(c, s)); m.position.copy(tr.position).setY(0.06); m.rotation.set(Math.random() * 3, Math.random() * 3, 0); this.dyn.add(m);
+      this.trail.push({ m, t: 0, v: new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.4 + Math.random() * 0.5, (Math.random() - 0.5) * 0.4) });
+    }
+    this.trail = this.trail.filter((p) => { p.t += dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.y += dt * 4; p.m.scale.setScalar(Math.max(0.01, 1 - p.t / 1.1)); if (p.t > 1.1) { this.dyn.remove(p.m); p.m.geometry.dispose(); return false; } return true; });
+  }
   private makeTool(kind: string) {
     const g = new THREE.Group(), M = this.M; g.position.set(0.33, 0.55, 0.12); g.userData.kind = kind;
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 8), this.kit.std(0x2a2522, 0.8)); handle.position.y = 0.27; g.add(handle);
@@ -648,10 +680,6 @@ export class World3D {
     else { const head = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 6, 16, Math.PI), M.metal); head.position.set(0, 0.48, 0); head.rotation.y = Math.PI / 2; g.add(head); }
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.02, 0.02), this.kit.glow(NEON, 1.6)); tip.position.set(0, 0.56, kind === "chop" ? 0.15 : 0.14); g.add(tip);
     return g;
-  }
-  private chip(wood: boolean) {
-    const c = wood ? CHOP : MINE;
-    for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), wood ? this.kit.std(0xd9c7a8, 0.8) : this.kit.glow(CYAN, 1.2)); const p = W((c.x + c.sx) / 2, (c.y + c.sy) / 2); m.position.set(p.x, 0.5, p.z); this.dyn.add(m); this.chips.push({ m, v: new THREE.Vector3((Math.random() - 0.5) * 2, 1.5 + Math.random() * 1.5, (Math.random() - 0.5) * 2), t: 1.2 }); }
   }
   private zSprite() {
     const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d")!; g.font = "600 44px 'Space Grotesk', sans-serif"; g.fillStyle = "#ffffff"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("z", 32, 34);
@@ -681,7 +709,8 @@ export class World3D {
       if (P.bubble && this.t >= this.bubbleUntil) P.bubble.classList.remove("on");
       place(P.pop, head.clone().setY(head.y + 0.2), this.t < this.popUntil);
     }
-    place(P.tree, W(CHOP.x, CHOP.y).setY(3.6)); place(P.rock, W(MINE.x, MINE.y).setY(1.6)); place(P.pond, W(POND.x, POND.y).setY(0.9)); place(P.net, W(this.netAt.x, this.netAt.y).setY(1.3));
+    const desk = this.reg.spots.find((x) => x.tag === "desk"); if (desk) place(P.desk, W(desk.pose.x, desk.pose.y).setY(2.1));
+    place(P.net, W(this.netAt.x, this.netAt.y).setY(1.3));
     for (const g of this.guests.values()) { const h = g.tr.position.clone().setY(HT + 0.12); place(g.plate, h.clone()); place(g.bubble, h.clone(), this.t < g.until); if (this.t >= g.until) g.bubble.classList.remove("on"); }
   }
 

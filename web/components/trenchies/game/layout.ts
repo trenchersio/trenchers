@@ -3,14 +3,15 @@
  *
  *   back:   the house in a row across the land, its rooms built on as wings to the left and right, and a second
  *           row of rooms in front of the outer wings (each needs the room behind it, so the plan always joins up)
- *   left:   the forest, a long strip of trees down the left side (chop it for wood), with the treehouse inside
+ *   left:   the forest, a long strip of trees down the left side, with the treehouse inside
  *   middle: the path from the front door to the road, the pond with its dock, the garden
- *   right:  the quarry (mine it for stone), the garage, the helipad
+ *   right:  the garage, the helipad and room for statues
  *
  * Rooms join each other through doorways; when a wing isn't next to the house yet, a hallway closes the gap.
  * Walls: the far ones (back, left) are full height, the near ones (front, right) are low, so you always see in.
  */
 import type { R } from "./nav";
+import { FLOORS, PAINTS, ROOM_SLOTS, roomLayout } from "@/lib/trenchies-catalog";
 
 export const LAND = 44, CX = 22, HOUSE_Y = 3.6, DEPTH = 4.4, FRONT_Y = HOUSE_Y + DEPTH;
 export const ROAD = 0.95, ROAD_IN = 1.6;
@@ -28,22 +29,19 @@ export const HOUSES: Record<string, HouseTier> = {
 export const core = (house: string): R => { const h = HOUSES[house] ?? HOUSES.shack; return { x: CX - h.w / 2, y: HOUSE_Y, w: h.w, d: h.d }; };
 export const DOOR_X = CX;
 
-/** Rooms built onto the house: fixed slots so the plan never shuffles as you add more. side -1 left, +1 right; row 0 next to the house, row 1 in front. */
-export type RoomSlot = R & { side: -1 | 1; row: 0 | 1; behind?: string; floor: number; wall: number };
-export const HOUSE_ROOMS: Record<string, RoomSlot> = {
-  bathroom: { x: 13.8, y: HOUSE_Y, w: 3.2, d: DEPTH, side: -1, row: 0, floor: 0xd8dde0, wall: 0x9aa6ad },
-  kitchen: { x: 9.6, y: HOUSE_Y, w: 4.2, d: DEPTH, side: -1, row: 0, floor: 0x3a3f44, wall: 0xcfc6b8 },
-  gym: { x: 5.8, y: HOUSE_Y, w: 3.8, d: DEPTH, side: -1, row: 0, floor: 0x26292c, wall: 0x3c4148 },
-  sauna: { x: 2.2, y: HOUSE_Y, w: 3.6, d: DEPTH, side: -1, row: 0, floor: 0x8a6440, wall: 0x9c7048 },
-  library: { x: 5.8, y: FRONT_Y, w: 3.8, d: 4.0, side: -1, row: 1, behind: "gym", floor: 0x5b3d2a, wall: 0x4a3a30 },
-  servers: { x: 9.6, y: FRONT_Y, w: 3.4, d: 3.6, side: -1, row: 1, behind: "kitchen", floor: 0x1a1d20, wall: 0x2a2f36 },
-  bedroom: { x: 27.0, y: HOUSE_Y, w: 4.2, d: DEPTH, side: 1, row: 0, floor: 0x6b5a4a, wall: 0x46505e },
-  office: { x: 31.2, y: HOUSE_Y, w: 4.2, d: DEPTH, side: 1, row: 0, floor: 0x2a2d31, wall: 0x343a44 },
-  gameroom: { x: 35.4, y: HOUSE_Y, w: 4.4, d: DEPTH, side: 1, row: 0, floor: 0x2b1f3a, wall: 0x3a2a4f },
-  vault: { x: 39.8, y: HOUSE_Y, w: 2.4, d: DEPTH, side: 1, row: 0, floor: 0x2f3438, wall: 0x5b636a },
-  cinema: { x: 35.4, y: FRONT_Y, w: 4.4, d: 4.2, side: 1, row: 1, behind: "gameroom", floor: 0x3a1418, wall: 0x241014 },
-  studio: { x: 31.2, y: FRONT_Y, w: 4.2, d: 3.8, side: 1, row: 1, behind: "office", floor: 0x2a2a30, wall: 0x22252b },
+/** How each room looks when first built (you can repaint walls and floors). */
+export const ROOM_STYLE: Record<string, { floor: number; wall: number }> = {
+  bathroom: { floor: 0xd8dde0, wall: 0x9aa6ad }, kitchen: { floor: 0x3a3f44, wall: 0xcfc6b8 }, gym: { floor: 0x26292c, wall: 0x3c4148 }, sauna: { floor: 0x8a6440, wall: 0x9c7048 },
+  library: { floor: 0x5b3d2a, wall: 0x4a3a30 }, servers: { floor: 0x1a1d20, wall: 0x2a2f36 }, bedroom: { floor: 0x6b5a4a, wall: 0x46505e }, office: { floor: 0x2a2d31, wall: 0x343a44 },
+  gameroom: { floor: 0x2b1f3a, wall: 0x3a2a4f }, vault: { floor: 0x2f3438, wall: 0x5b636a }, cinema: { floor: 0x3a1418, wall: 0x241014 }, studio: { floor: 0x2a2a30, wall: 0x22252b },
 };
+export type PlacedRoom = R & { id: string; slot: string; side: -1 | 1; row: 0 | 1; floor: number; wall: number };
+/** Every built room in its slot (your own plan first, then the defaults), with its colours. */
+export function placeRooms(items: string[], layout: Record<string, string> = {}, paint: Record<string, { wall?: number; floor?: number }> = {}): PlacedRoom[] {
+  const map = roomLayout(items, layout);
+  return Object.entries(map).map(([id, slot]) => { const s = ROOM_SLOTS[slot], st = ROOM_STYLE[id] ?? { floor: 0x2a2d31, wall: 0x3a4048 }, pt = paint[id] ?? {};
+    return { id, slot, x: s.x, y: s.y, w: s.w, d: s.d, side: s.side, row: s.row, floor: pt.floor ? FLOORS[pt.floor] : st.floor, wall: pt.wall ? PAINTS[pt.wall] : st.wall }; });
+}
 
 /** Buildings out in the garden. */
 export const GARDEN_ROOMS: Record<string, R & { h: number }> = {
@@ -56,11 +54,9 @@ export const GARDEN_ROOMS: Record<string, R & { h: number }> = {
 };
 
 export const FOREST: R = { x: 2.0, y: 13.0, w: 9.6, d: 28.8 };
-/** The big oak at the forest edge you chop, and where you stand to chop it. */
+/** The big oak at the forest edge, and where you stand to admire it. */
 export const CHOP = { x: 10.4, y: 20.6, sx: 11.45, sy: 21.15 };
-/** The boulder at the front of the quarry you mine, and where you stand. */
-export const MINE = { x: 37.2, y: 16.4, sx: 37.5, sy: 17.75 };
-export const QUARRY: R = { x: 35.0, y: 13.6, w: 6.4, d: 4.2 };
+
 export const POND = { x: 31.0, y: 31.0, rx: 3.4, ry: 2.4 };
 /** The dock runs from x0 out over the water to x1; you fish from its end. */
 export const DOCK = { x0: 25.9, x1: 28.9, y: 31.0 };
@@ -102,6 +98,11 @@ export class Packer {
   constructor(public area: R) {}
   block(r: R, pad = 0.3) { this.rects.push({ ...r, pad }); }
   private hit(r: R, pad: number) { return this.rects.some((b) => r.x < b.x + b.w + Math.max(pad, b.pad) && r.x + r.w + Math.max(pad, b.pad) > b.x && r.y < b.y + b.d + Math.max(pad, b.pad) && r.y + r.d + Math.max(pad, b.pad) > b.y); }
+  /** Exactly this rectangle, if it's inside the area and free. */
+  at(r: R, pad = 0.3): R | null {
+    const A = this.area; if (r.x < A.x || r.y < A.y || r.x + r.w > A.x + A.w || r.y + r.d > A.y + A.d || this.hit(r, pad)) return null;
+    this.block(r, pad); return r;
+  }
   place(w: number, d: number, near: { x: number; y: number }, pad = 0.5, step = 0.5): R | null {
     const cands: { r: R; k: number }[] = [];
     for (let y = this.area.y; y + d <= this.area.y + this.area.d; y += step) for (let x = this.area.x; x + w <= this.area.x + this.area.w; x += step) {

@@ -2,29 +2,34 @@
  * Trenchies: levels, XP rules, everything you can unlock, and the reward loops. Shared word for word by the engine
  * (engine/src/trenchies-catalog.ts) and the site (web/lib/trenchies-catalog.ts): keep both copies the same.
  *
+ * Two currencies: XP (levels, never spent) and coins (spent on everything you build and buy). Calls you get right
+ * on the trading desk and your daily picks pay both.
+ *
  * The loops, from fastest to slowest:
+ *   every 5 min    the trading desk: Bitcoin up or down, live, in 5-minute rounds
  *   every 20 min   catch butterflies in the garden (a collection with rare species)
- *   every 2-5 h    fish the pond, chop the forest, mine the quarry (materials for bigger builds)
  *   every day      lock in 3 picks, claim the daily reward (7-day calendar), finish 3 daily quests, cheer lands
- *   every week     the best pickers split the prize pot
- *   long term      levels (to 40), ~160 things to build, cosmetics, achievements, land value and cheers boards
+ *   every week     the best traders split the prize pot
+ *   long term      levels (to 40), 180+ things to build, statues, cosmetics, achievements
  */
-export type ItemKind = "house" | "room" | "vehicle" | "indoor" | "outdoor" | "pet";
+export type ItemKind = "house" | "room" | "vehicle" | "indoor" | "outdoor" | "statue" | "pet";
 export type Item = {
   id: string; kind: ItemKind; name: string; level: number; cost: number; blurb: string;
   /** Line icon used in the shop. */
   glyph: string;
   /** Needs at least this house (index in HOUSE_ORDER). */
   needsHouse?: number;
-  /** Building materials, gathered from the forest and the quarry on your land. */
-  wood?: number; stone?: number;
+  /** Only for players who earned this achievement first (the long, hard ones). */
+  needsAch?: string;
+  /** Statues and collectibles: how rare it is (shown in the shop). */
+  rarity?: "common" | "rare" | "epic" | "legendary";
   /** Rooms: built onto the house (a new wing with a doorway) or as a building in the garden. */
   site?: "house" | "garden";
   /** Furniture: the room it goes in when you have that room (else the main house). */
   room?: string;
   /** Your Trenchie can hang out here (a chill spot). */
   chill?: boolean;
-  /** Pets: needs another item first (the dog house needs the dog, and so on). */
+  /** Needs another item first (the dog house needs the dog, and so on). */
   needs?: string;
 };
 
@@ -36,33 +41,33 @@ const I = (id: string, kind: ItemKind, name: string, level: number, cost: number
 export const ITEMS: Item[] = [
   // ---------------------------------------------------------------- houses: each one replaces the last
   I("shack", "house", "Starter Shack", 1, 0, "house", "A bed, a desk, a toilet. Everyone starts somewhere."),
-  I("cabin", "house", "Trench Cabin", 3, 300, "house", "Clean walls and a window to watch the charts from.", { wood: 30 }),
-  I("house", "house", "Modern House", 6, 900, "house", "More floor, two windows, room for a couch.", { wood: 40, stone: 30 }),
-  I("loft", "house", "Glass Loft", 9, 1800, "house", "Floor-to-ceiling glass and a polished floor.", { wood: 20, stone: 60 }),
-  I("villa", "house", "Chain Villa", 13, 3500, "house", "White stone, big rooms, space for a pool.", { wood: 60, stone: 120 }),
-  I("mansion", "house", "Whale Mansion", 18, 8000, "house", "Black glass, gold trim. The top of the trench.", { wood: 100, stone: 200 }),
-  I("palace", "house", "Trench Palace", 30, 20000, "crown", "Marble, gold and a hall big enough for every trophy.", { wood: 200, stone: 400 }),
+  I("cabin", "house", "Trench Cabin", 3, 300, "house", "Clean walls and a window to watch the charts from."),
+  I("house", "house", "Modern House", 6, 900, "house", "More floor, two windows, room for a couch."),
+  I("loft", "house", "Glass Loft", 9, 1800, "house", "Floor-to-ceiling glass and a polished floor."),
+  I("villa", "house", "Chain Villa", 13, 3500, "house", "White stone, big rooms, space for a pool."),
+  I("mansion", "house", "Whale Mansion", 18, 8000, "house", "Black glass, gold trim. The top of the trench."),
+  I("palace", "house", "Trench Palace", 30, 40000, "crown", "Marble, gold and a hall big enough for every trophy.", { needsAch: "deskwin100" }),
 
   // ---------------------------------------------------------------- rooms built onto the house (a new wing with a door through)
-  I("bathroom", "room", "Bathroom", 2, 180, "bath", "Shower, sink, and the toilet moves in here.", { site: "house", wood: 20, stone: 10 }),
-  I("kitchen", "room", "Kitchen", 4, 400, "cup", "Counters, a fridge and a stove. Snack breaks between candles.", { site: "house", wood: 30, stone: 20 }),
-  I("bedroom", "room", "Bedroom Suite", 5, 520, "bed", "A proper bedroom with a big bed and wardrobe.", { site: "house", wood: 40, stone: 20 }),
-  I("office", "room", "Trading Office", 7, 800, "screen", "A wall of screens, just for the charts.", { site: "house", wood: 40, stone: 30 }),
-  I("gym", "room", "Home Gym", 10, 1200, "gym", "Rack, bench and a mirror. Strong hands.", { site: "house", wood: 30, stone: 40 }),
-  I("library", "room", "Library", 11, 1400, "book", "Shelves to the ceiling and a reading chair. Built in front of the gym.", { site: "house", needs: "gym", wood: 80, stone: 20 }),
-  I("servers", "room", "Server Room", 12, 1600, "server", "Racks of blinking lights humming all night. Built in front of the kitchen.", { site: "house", needs: "kitchen", wood: 20, stone: 50 }),
-  I("gameroom", "room", "Game Room", 13, 1900, "joystick", "Neon, carpet and room for every table game.", { site: "house", wood: 40, stone: 40 }),
-  I("cinema", "room", "Home Cinema", 15, 2600, "screen", "A big screen, rows of seats and a popcorn smell. Built in front of the game room.", { site: "house", needs: "gameroom", wood: 60, stone: 40 }),
-  I("sauna", "room", "Sauna", 17, 3000, "fire", "Hot stones and cedar benches.", { site: "house", wood: 90, stone: 40 }),
-  I("studio", "room", "Music Studio", 19, 3600, "music", "Foam walls, a mixing desk and a mic. Built in front of the office.", { site: "house", needs: "office", wood: 50, stone: 50 }),
-  I("vault", "room", "Vault", 21, 5000, "lock", "A steel door, and what's behind it is yours.", { site: "house", stone: 160 }),
+  I("bathroom", "room", "Bathroom", 2, 180, "bath", "Shower, sink, and the toilet moves in here.", { site: "house" }),
+  I("kitchen", "room", "Kitchen", 4, 400, "cup", "Counters, a fridge and a stove. Snack breaks between candles.", { site: "house" }),
+  I("bedroom", "room", "Bedroom Suite", 5, 520, "bed", "A proper bedroom with a big bed and wardrobe.", { site: "house" }),
+  I("office", "room", "Trading Office", 7, 800, "screen", "A wall of screens, just for the charts.", { site: "house" }),
+  I("gym", "room", "Home Gym", 10, 1200, "gym", "Rack, bench and a mirror. Strong hands.", { site: "house" }),
+  I("library", "room", "Library", 11, 1400, "book", "Shelves to the ceiling and a reading chair.", { site: "house" }),
+  I("servers", "room", "Server Room", 12, 1600, "server", "Racks of blinking lights humming all night.", { site: "house" }),
+  I("gameroom", "room", "Game Room", 13, 1900, "joystick", "Neon, carpet and room for every table game.", { site: "house" }),
+  I("cinema", "room", "Home Cinema", 15, 2600, "screen", "A big screen, rows of seats and a popcorn smell.", { site: "house" }),
+  I("sauna", "room", "Sauna", 17, 3000, "fire", "Hot stones and cedar benches.", { site: "house" }),
+  I("studio", "room", "Music Studio", 19, 3600, "music", "Foam walls, a mixing desk and a mic.", { site: "house" }),
+  I("vault", "room", "Vault", 21, 5000, "lock", "A steel door, and what's behind it is yours.", { site: "house" }),
   // ---------------------------------------------------------------- buildings in the garden
-  I("shed", "room", "Garden Shed", 3, 220, "shed", "Tools, a workbench and a light that stays on.", { site: "garden", wood: 30 }),
-  I("garage", "room", "Garage", 8, 950, "garage", "Your ride parks inside, under the lights.", { site: "garden", wood: 30, stone: 60 }),
-  I("treehouse", "room", "Treehouse", 12, 1500, "tree", "Up in the forest, with a rope ladder.", { site: "garden", wood: 120 }),
-  I("greenhouse", "room", "Greenhouse", 14, 2000, "leaf", "Glass walls, rows of plants, warm light.", { site: "garden", wood: 60, stone: 20 }),
-  I("observatory", "room", "Observatory", 20, 6000, "star", "A dome and a telescope pointed at the moon.", { site: "garden", wood: 50, stone: 120 }),
-  I("helipad", "room", "Helipad", 25, 12000, "heli", "For the days you can't wait for the bike.", { site: "garden", wood: 20, stone: 200 }),
+  I("shed", "room", "Garden Shed", 3, 220, "shed", "Tools, a workbench and a light that stays on.", { site: "garden" }),
+  I("garage", "room", "Garage", 8, 950, "garage", "Your ride parks inside, under the lights.", { site: "garden" }),
+  I("treehouse", "room", "Treehouse", 12, 1500, "tree", "Up in the forest, with a rope ladder.", { site: "garden" }),
+  I("greenhouse", "room", "Greenhouse", 14, 2000, "leaf", "Glass walls, rows of plants, warm light.", { site: "garden" }),
+  I("observatory", "room", "Observatory", 20, 6000, "star", "A dome and a telescope pointed at the moon.", { site: "garden" }),
+  I("helipad", "room", "Helipad", 25, 12000, "heli", "For the days you can't wait for the bike.", { site: "garden" }),
 
   // ---------------------------------------------------------------- rides
   I("bike", "vehicle", "City Bike", 1, 0, "bike", "Gets you to the next pump."),
@@ -153,48 +158,68 @@ export const ITEMS: Item[] = [
   I("flowers", "outdoor", "Butterfly Garden", 3, 200, "leaf", "Wild flowers: more butterflies, rarer ones too.", { chill: true }),
   I("sandbox", "outdoor", "Sandbox", 3, 110, "build", "Castles, but tiny.", { chill: true }),
   I("flag", "outdoor", "Flag Pole", 3, 150, "spark", "Your Trencher's colours, flying."),
-  I("fence", "outdoor", "Fence", 4, 200, "fence", "Clean white lines around your land.", { wood: 30 }),
-  I("bench", "outdoor", "Garden Bench", 4, 160, "chair", "Somewhere to sit and think about entries.", { wood: 15, chill: true }),
-  I("picnic", "outdoor", "Picnic Table", 4, 180, "rug", "Lunch outside.", { wood: 20, chill: true }),
-  I("veggies", "outdoor", "Vegetable Patch", 4, 160, "leaf", "Grow your own greens.", { wood: 10 }),
-  I("stringlights", "outdoor", "String Lights", 4, 180, "lamp", "Warm bulbs over the garden.", { wood: 5 }),
-  I("garden", "outdoor", "Flower Beds", 5, 260, "leaf", "Neat rows of colour.", { wood: 10 }),
-  I("swingset", "outdoor", "Swing Set", 5, 320, "moon", "Two swings and a slide.", { wood: 25, chill: true }),
-  I("bbq", "outdoor", "BBQ Grill", 5, 300, "fire", "Burgers on green days.", { stone: 10, chill: true }),
+  I("fence", "outdoor", "Fence", 4, 200, "fence", "Clean white lines around your land."),
+  I("bench", "outdoor", "Garden Bench", 4, 160, "chair", "Somewhere to sit and think about entries.", { chill: true }),
+  I("picnic", "outdoor", "Picnic Table", 4, 180, "rug", "Lunch outside.", { chill: true }),
+  I("veggies", "outdoor", "Vegetable Patch", 4, 160, "leaf", "Grow your own greens."),
+  I("stringlights", "outdoor", "String Lights", 4, 180, "lamp", "Warm bulbs over the garden."),
+  I("garden", "outdoor", "Flower Beds", 5, 260, "leaf", "Neat rows of colour."),
+  I("swingset", "outdoor", "Swing Set", 5, 320, "moon", "Two swings and a slide.", { chill: true }),
+  I("bbq", "outdoor", "BBQ Grill", 5, 300, "fire", "Burgers on green days.", { chill: true }),
   I("tent", "outdoor", "Camping Tent", 5, 280, "build", "Sleep under the stars.", { chill: true }),
-  I("firepit", "outdoor", "Fire Pit", 6, 380, "fire", "A warm glow on cold nights.", { stone: 15, chill: true }),
+  I("firepit", "outdoor", "Fire Pit", 6, 380, "fire", "A warm glow on cold nights.", { chill: true }),
   I("trampoline", "outdoor", "Trampoline", 6, 420, "ball", "Bounce like a good chart.", { chill: true }),
   I("pumpkins", "outdoor", "Pumpkin Patch", 6, 300, "leaf", "Orange and round, like a sunset candle."),
   I("telescope", "outdoor", "Garden Telescope", 6, 450, "star", "Stargazing on clear nights.", { chill: true }),
-  I("hammock", "outdoor", "Hammock", 7, 420, "moon", "Naps between trades.", { wood: 10, chill: true }),
-  I("beehive", "outdoor", "Beehive", 7, 500, "spark", "Busy bees and a little honey.", { wood: 15 }),
+  I("hammock", "outdoor", "Hammock", 7, 420, "moon", "Naps between trades.", { chill: true }),
+  I("beehive", "outdoor", "Beehive", 7, 500, "spark", "Busy bees and a little honey."),
   I("palms", "outdoor", "Palm Trees", 7, 600, "tree", "Holiday vibes, all year."),
-  I("hoop", "outdoor", "Basketball Hoop", 8, 500, "ball", "Shoots hoops while the chart loads.", { wood: 10, stone: 10, chill: true }),
-  I("coop", "outdoor", "Chicken Coop", 8, 650, "shed", "Three chickens with opinions.", { wood: 40 }),
-  I("doghouse", "outdoor", "Dog House", 8, 450, "house", "A roof for the good boy.", { wood: 20, needs: "dog" }),
+  I("hoop", "outdoor", "Basketball Hoop", 8, 500, "ball", "Shoots hoops while the chart loads.", { chill: true }),
+  I("coop", "outdoor", "Chicken Coop", 8, 650, "shed", "Three chickens with opinions."),
+  I("doghouse", "outdoor", "Dog House", 8, 450, "house", "A roof for the good boy.", { needs: "dog" }),
   I("solar", "outdoor", "Solar Panels", 9, 700, "sun", "Clean power for the server room."),
-  I("cinemascreen", "outdoor", "Outdoor Cinema", 9, 900, "screen", "A big screen under the stars. Movie night.", { wood: 20, chill: true }),
-  I("pergola", "outdoor", "Pergola", 9, 820, "build", "Shade, vines and a lounge chair.", { wood: 50, chill: true }),
+  I("cinemascreen", "outdoor", "Outdoor Cinema", 9, 900, "screen", "A big screen under the stars. Movie night.", { chill: true }),
+  I("pergola", "outdoor", "Pergola", 9, 820, "build", "Shade, vines and a lounge chair.", { chill: true }),
   I("cherry", "outdoor", "Cherry Blossom", 10, 1000, "tree", "Pink petals drifting down."),
-  I("fountain", "outdoor", "Fountain", 11, 1300, "drop", "Running water in the front garden.", { stone: 40 }),
-  I("gazebo", "outdoor", "Gazebo", 11, 1400, "house", "A round roof and a view.", { wood: 60, chill: true }),
-  I("zen", "outdoor", "Zen Garden", 12, 1500, "leaf", "Raked sand, three stones, no FUD.", { stone: 50, chill: true }),
-  I("skate", "outdoor", "Skate Ramp", 12, 1600, "build", "Ollie over the dip.", { wood: 60, chill: true }),
-  I("pool", "outdoor", "Pool", 13, 2200, "drop", "Needs the Chain Villa or bigger.", { needsHouse: 4, stone: 60, chill: true }),
+  I("fountain", "outdoor", "Fountain", 11, 1300, "drop", "Running water in the front garden."),
+  I("gazebo", "outdoor", "Gazebo", 11, 1400, "house", "A round roof and a view.", { chill: true }),
+  I("zen", "outdoor", "Zen Garden", 12, 1500, "leaf", "Raked sand, three stones, no FUD.", { chill: true }),
+  I("skate", "outdoor", "Skate Ramp", 12, 1600, "build", "Ollie over the dip.", { chill: true }),
+  I("pool", "outdoor", "Pool", 13, 2200, "drop", "Needs the Chain Villa or bigger.", { needsHouse: 4, chill: true }),
   I("dish", "outdoor", "Satellite Dish", 13, 1200, "fan", "Picks up every signal."),
-  I("bridge", "outdoor", "Koi Bridge", 13, 1500, "drop", "A red bridge over the pond.", { wood: 40 }),
-  I("hottub", "outdoor", "Hot Tub", 14, 2400, "drop", "Bubbles and neon at night.", { wood: 20, stone: 30, chill: true }),
-  I("minigolf", "outdoor", "Mini Golf", 14, 2200, "ball", "Nine holes of pure focus.", { stone: 30, chill: true }),
+  I("bridge", "outdoor", "Koi Bridge", 13, 1500, "drop", "A red bridge over the pond."),
+  I("hottub", "outdoor", "Hot Tub", 14, 2400, "drop", "Bubbles and neon at night.", { chill: true }),
+  I("minigolf", "outdoor", "Mini Golf", 14, 2200, "ball", "Nine holes of pure focus.", { chill: true }),
   I("turbine", "outdoor", "Wind Turbine", 15, 2800, "fan", "Spins all day, powers the screens."),
-  I("letters", "outdoor", "Giant TRENCHERS Letters", 15, 3000, "spark", "Lit up for the street.", { stone: 40 }),
-  I("tennis", "outdoor", "Tennis Court", 16, 3600, "ball", "Game, set, match.", { stone: 80, chill: true }),
+  I("letters", "outdoor", "Giant TRENCHERS Letters", 15, 3000, "spark", "Lit up for the street."),
+  I("tennis", "outdoor", "Tennis Court", 16, 3600, "ball", "Game, set, match.", { chill: true }),
   I("billboard", "outdoor", "Billboard", 17, 4000, "frame", "Your Trencher, your level, lit up for the street."),
-  I("windmill", "outdoor", "Windmill", 18, 4400, "fan", "Old sails, new money.", { wood: 80, stone: 40 }),
-  I("waterfall", "outdoor", "Waterfall", 20, 5600, "drop", "Rocks and falling water into the pond.", { stone: 120 }),
-  I("statue", "outdoor", "Trencher Statue", 22, 9000, "crown", "Your Trencher in stone, in the middle of the garden.", { stone: 150 }),
-  I("maze", "outdoor", "Hedge Maze", 23, 7000, "leaf", "Get lost on purpose.", { wood: 60, chill: true }),
-  I("balloon", "outdoor", "Hot Air Balloon", 26, 12000, "moon", "Tied down, floating over the land.", { wood: 40 }),
-  I("rocket", "outdoor", "Moon Rocket", 35, 30000, "bolt", "On the pad, pointed up. Destination obvious.", { stone: 300 }),
+  I("windmill", "outdoor", "Windmill", 18, 4400, "fan", "Old sails, new money."),
+  I("waterfall", "outdoor", "Waterfall", 20, 5600, "drop", "Rocks and falling water into the pond."),
+  I("statue", "outdoor", "Trencher Statue", 22, 9000, "crown", "Your Trencher in stone, in the middle of the garden."),
+  I("maze", "outdoor", "Hedge Maze", 23, 7000, "leaf", "Get lost on purpose.", { chill: true }),
+  I("balloon", "outdoor", "Hot Air Balloon", 26, 12000, "moon", "Tied down, floating over the land."),
+  I("rocket", "outdoor", "Moon Rocket", 35, 30000, "bolt", "On the pad, pointed up. Destination obvious."),
+
+  // ---------------------------------------------------------------- statues and collectibles for the garden (the rare ones take a long time)
+  I("s_owl", "statue", "Owl Totem", 4, 800, "moon", "Carved wood, watching the night session.", { rarity: "common" }),
+  I("s_lion", "statue", "Stone Lion", 6, 1500, "crown", "Guards the gate. Never sells.", { rarity: "common" }),
+  I("s_bull", "statue", "Bull Statue", 7, 2200, "bolt", "Head down, horns up. Green days only.", { rarity: "rare" }),
+  I("s_bear", "statue", "Bear Statue", 7, 2200, "paw", "Big, patient, a little grumpy.", { rarity: "rare" }),
+  I("s_diamond", "statue", "Diamond Hands", 9, 3200, "spark", "Two hands holding a giant gem. They don't let go.", { rarity: "rare" }),
+  I("s_moon", "statue", "Moon Globe", 11, 4200, "moon", "A glowing moon on a plinth. Destination noted.", { rarity: "rare" }),
+  I("s_whale", "statue", "Whale Fountain", 13, 6500, "drop", "A whale breaching, water spouting.", { rarity: "epic" }),
+  I("s_candle", "statue", "Golden Candle", 15, 9000, "chart", "One giant green candle, cast in gold.", { rarity: "epic" }),
+  I("s_obelisk", "statue", "Crystal Obelisk", 17, 12000, "spark", "Humming crystal, lit from inside.", { rarity: "epic" }),
+  I("s_torii", "statue", "Torii Gate", 19, 15000, "build", "A red gate to walk through slowly.", { rarity: "epic" }),
+  I("s_lighthouse", "statue", "Lighthouse", 21, 18000, "lamp", "Its beam sweeps the land all night.", { rarity: "epic" }),
+  I("s_ufo", "statue", "Landed UFO", 24, 24000, "hover", "Lights blinking. Nobody's come out yet.", { rarity: "epic" }),
+  I("s_dragon", "statue", "Dragon Statue", 28, 36000, "fire", "Jade scales, ruby eyes, a wisp of smoke.", { rarity: "legendary" }),
+  I("s_ticker", "statue", "Ticker Tower", 20, 20000, "chart", "A tower of scrolling prices. Only after 250 desk calls.", { rarity: "legendary", needsAch: "desk250" }),
+  I("s_throne", "statue", "Diamond Throne", 25, 45000, "crown", "Only for a 10-call winning streak on the desk.", { rarity: "legendary", needsAch: "deskstreak10" }),
+  I("s_portal", "statue", "Neon Portal", 30, 60000, "spark", "Only for traders who beat the crowd 25 times.", { rarity: "legendary", needsAch: "crowd25" }),
+  I("s_goldbull", "statue", "Golden Bull", 32, 80000, "bolt", "Solid gold. Only after 100 winning desk calls.", { rarity: "legendary", needsAch: "deskwin100" }),
+  I("s_champion", "statue", "Champion Trophy", 1, 0, "trophy", "Only for weekly prize winners. You can't buy this one.", { rarity: "legendary", needsAch: "champion" }),
 
   // ---------------------------------------------------------------- pets: they follow you around
   I("bunny", "pet", "Bunny", 3, 300, "paw", "Hops around the flower beds."),
@@ -214,8 +239,45 @@ export const item = (id: string) => ITEMS.find((i) => i.id === id);
 export const RENAMED: Record<string, string> = { scooter: "moped" };
 export const MAX_LEVEL = 40;
 
+// ------------------------------------------------------------------------------------------------ your house plan
+/**
+ * Rooms are built onto the house in slots: 4 on each side of the house (row 0) and a second row in front of them
+ * (row 1, only where the room behind is built). Every room has a default slot, but you can move any room into any
+ * free slot (or swap two), so no two houses have to look the same. Tile units, y towards the front.
+ */
+export type RoomSlot = { x: number; y: number; w: number; d: number; side: -1 | 1; row: 0 | 1; behind?: string };
+const HY = 3.6, HD = 4.4, FY = HY + HD;
+export const ROOM_SLOTS: Record<string, RoomSlot> = {
+  L1: { x: 13.8, y: HY, w: 3.2, d: HD, side: -1, row: 0 }, L2: { x: 9.6, y: HY, w: 4.2, d: HD, side: -1, row: 0 }, L3: { x: 5.8, y: HY, w: 3.8, d: HD, side: -1, row: 0 }, L4: { x: 2.2, y: HY, w: 3.6, d: HD, side: -1, row: 0 },
+  R1: { x: 27.0, y: HY, w: 4.2, d: HD, side: 1, row: 0 }, R2: { x: 31.2, y: HY, w: 4.2, d: HD, side: 1, row: 0 }, R3: { x: 35.4, y: HY, w: 4.4, d: HD, side: 1, row: 0 }, R4: { x: 39.8, y: HY, w: 2.6, d: HD, side: 1, row: 0 },
+  L1f: { x: 13.8, y: FY, w: 3.2, d: 3.8, side: -1, row: 1, behind: "L1" }, L2f: { x: 9.6, y: FY, w: 4.2, d: 3.8, side: -1, row: 1, behind: "L2" }, L3f: { x: 5.8, y: FY, w: 3.8, d: 4.0, side: -1, row: 1, behind: "L3" }, L4f: { x: 2.2, y: FY, w: 3.6, d: 3.8, side: -1, row: 1, behind: "L4" },
+  R1f: { x: 27.0, y: FY, w: 4.2, d: 3.8, side: 1, row: 1, behind: "R1" }, R2f: { x: 31.2, y: FY, w: 4.2, d: 3.8, side: 1, row: 1, behind: "R2" }, R3f: { x: 35.4, y: FY, w: 4.4, d: 4.2, side: 1, row: 1, behind: "R3" },
+};
+export const DEFAULT_SLOT: Record<string, string> = {
+  bathroom: "L1", kitchen: "L2", gym: "L3", sauna: "L4", bedroom: "R1", office: "R2", gameroom: "R3", vault: "R4",
+  servers: "L2f", library: "L3f", studio: "R2f", cinema: "R3f",
+};
+/** Where each built room goes: your own choices first, then the defaults, then the nearest free slot. */
+export function roomLayout(items: string[], custom: Record<string, string> = {}): Record<string, string> {
+  const rooms = Object.keys(DEFAULT_SLOT).filter((r) => items.includes(r)), out: Record<string, string> = {}, used = new Set<string>();
+  const ok = (slot: string) => { const s = ROOM_SLOTS[slot]; return !!s && !used.has(slot) && (!s.behind || used.has(s.behind)); };
+  const take = (r: string, slot: string) => { out[r] = slot; used.add(slot); };
+  // row 0 first (row 1 needs the room behind it), custom before default
+  for (const row of [0, 1] as const) for (const pass of ["custom", "default"] as const) for (const r of rooms) {
+    if (out[r]) continue; const slot = pass === "custom" ? custom[r] : DEFAULT_SLOT[r];
+    if (slot && ROOM_SLOTS[slot]?.row === row && ok(slot)) take(r, slot);
+  }
+  const order = ["L1", "R1", "L2", "R2", "L3", "R3", "L4", "R4", "L1f", "R1f", "L2f", "R2f", "L3f", "R3f", "L4f"];
+  for (const r of rooms) if (!out[r]) { const slot = order.find(ok); if (slot) take(r, slot); }
+  return out;
+}
+/** Wall paints you can give any room (the first is "as built"). */
+export const PAINTS = [0, 0xe8e4dc, 0xcfd8dc, 0x9fb8a8, 0x7a8fa6, 0x2c3547, 0x1b1f25, 0x6b4a33, 0xc9a27a, 0x8e3b46, 0x4b3a6b, 0x2f6e5a, 0xd8a7b1, 0xf2d58a];
+export const FLOORS = [0, 0x8a6a4a, 0x5a4636, 0xd9d2c3, 0x2a2d31, 0x3a4a5a, 0xe9e6df, 0x1d1f22, 0x6b5a7a, 0x3d5a45];
+export const PAINT_COST = 50;
+
 // ------------------------------------------------------------------------------------------------ cosmetics
-export type Slot = "hat" | "eyes" | "neck" | "back" | "aura" | "outline";
+export type Slot = "hat" | "eyes" | "neck" | "back" | "aura" | "outline" | "trail";
 export type Rarity = "common" | "rare" | "epic" | "legendary";
 /** How a cosmetic is unlocked: free, at a level, bought with bricks, from chests only, or by an achievement. */
 export type Cosmetic = { id: string; slot: Slot; name: string; rarity: Rarity; level?: number; cost?: number; chest?: boolean; ach?: string; color?: string };
@@ -231,6 +293,14 @@ export const COSMETICS: Cosmetic[] = [
   K("propeller", "hat", "Propeller Cap", "rare", { chest: true }),
   K("viking", "hat", "Viking Helmet", "epic", { chest: true }),
   K("wizard", "hat", "Wizard Hat", "epic", { chest: true }),
+  K("bucket", "hat", "Bucket Hat", "common", { cost: 250 }),
+  K("beret", "hat", "Beret", "common", { cost: 350 }),
+  K("catears", "hat", "Cat Ears", "rare", { chest: true }),
+  K("flowercrown", "hat", "Flower Crown", "rare", { ach: "allbugs" }),
+  K("pirate", "hat", "Pirate Hat", "rare", { cost: 1400 }),
+  K("samurai", "hat", "Samurai Helmet", "epic", { chest: true }),
+  K("astronaut", "hat", "Astronaut Helmet", "epic", { level: 20, cost: 5000 }),
+  K("horns", "hat", "Bull Horns", "legendary", { ach: "deskwin100" }),
   K("crown", "hat", "Crown", "legendary", { ach: "hattrick" }),
   K("halo", "hat", "Halo", "legendary", { ach: "streak30" }),
   K("shades", "eyes", "Shades", "common", { cost: 200 }),
@@ -239,42 +309,75 @@ export const COSMETICS: Cosmetic[] = [
   K("glasses3d", "eyes", "3D Glasses", "rare", { chest: true }),
   K("monocle", "eyes", "Monocle", "rare", { cost: 800 }),
   K("visor", "eyes", "Laser Visor", "epic", { chest: true }),
+  K("aviators", "eyes", "Aviators", "common", { cost: 400 }),
+  K("starshades", "eyes", "Star Shades", "rare", { chest: true }),
+  K("pixel", "eyes", "Pixel Shades", "epic", { ach: "crowd10" }),
+  K("goggles", "eyes", "VR Goggles", "epic", { level: 15, cost: 3500 }),
   K("scarf", "neck", "Scarf", "common", { cost: 200 }),
   K("bowtie", "neck", "Bow Tie", "common", { cost: 300 }),
   K("bandana", "neck", "Bandana", "rare", { chest: true }),
   K("lei", "neck", "Flower Lei", "rare", { chest: true }),
   K("medal", "neck", "Gold Medal", "epic", { ach: "top50" }),
   K("chain", "neck", "Gold Chain", "epic", { cost: 1500 }),
+  K("tie", "neck", "Trader's Tie", "common", { cost: 300 }),
+  K("headset", "neck", "Desk Headset", "rare", { ach: "desk25" }),
+  K("diamondchain", "neck", "Diamond Chain", "legendary", { ach: "deskstreak10" }),
   K("backpack", "back", "Backpack", "common", { cost: 250 }),
   K("cape", "back", "Cape", "rare", { cost: 1200 }),
-  K("rod", "back", "Fishing Rod", "rare", { ach: "fish25" }),
+  K("rod", "back", "Fishing Rod", "rare", { cost: 900 }),
   K("wings", "back", "Butterfly Wings", "epic", { ach: "allbugs" }),
   K("angel", "back", "Angel Wings", "epic", { chest: true }),
   K("jetpack", "back", "Jetpack", "legendary", { level: 25, cost: 4000 }),
+  K("guitarback", "back", "Guitar", "common", { cost: 500 }),
+  K("surfboard", "back", "Surfboard", "rare", { cost: 1200 }),
+  K("balloons", "back", "Balloons", "rare", { chest: true }),
+  K("sword", "back", "Katana", "epic", { chest: true }),
+  K("dragonwings", "back", "Dragon Wings", "legendary", { level: 30, cost: 12000 }),
   K("aura-green", "aura", "Green Aura", "common", { level: 5 }),
   K("aura-cyan", "aura", "Cyan Aura", "rare", { chest: true }),
   K("aura-pink", "aura", "Pink Aura", "rare", { chest: true }),
   K("aura-gold", "aura", "Gold Aura", "epic", { ach: "wins5" }),
   K("aura-rainbow", "aura", "Rainbow Aura", "legendary", { chest: true }),
+  K("aura-fire", "aura", "Fire Aura", "epic", { ach: "deskstreak5" }),
+  K("aura-snow", "aura", "Snow Aura", "rare", { cost: 2500 }),
+  K("aura-bolt", "aura", "Lightning Aura", "epic", { chest: true }),
   K("line-white", "outline", "White Outline", "common", { level: 1, color: "#e8ece9" }),
   K("line-neon", "outline", "Neon Outline", "common", { level: 3, color: "#39ff88" }),
   K("line-pink", "outline", "Pink Outline", "rare", { chest: true, color: "#ff4fd8" }),
   K("line-gold", "outline", "Gold Outline", "epic", { level: 20, color: "#ffcf3a" }),
+  K("line-cyan", "outline", "Cyan Outline", "rare", { cost: 900, color: "#6ee7ff" }),
+  K("line-violet", "outline", "Violet Outline", "rare", { chest: true, color: "#b388ff" }),
+  K("trail-dust", "trail", "Dust Trail", "common", { level: 2 }),
+  K("trail-leaves", "trail", "Leaf Trail", "common", { cost: 400 }),
+  K("trail-hearts", "trail", "Heart Trail", "rare", { chest: true }),
+  K("trail-coins", "trail", "Coin Trail", "rare", { ach: "deskwin10" }),
+  K("trail-sparkle", "trail", "Sparkle Trail", "epic", { cost: 3000, level: 12 }),
+  K("trail-fire", "trail", "Fire Trail", "epic", { chest: true }),
+  K("trail-candles", "trail", "Green Candle Trail", "legendary", { ach: "deskwin100" }),
 ];
 export const cosmetic = (id: string) => COSMETICS.find((c) => c.id === id);
 /** Free from the start or at a level (no bricks, no chest). */
 export const cosmeticFree = (c: Cosmetic, level: number) => !c.cost && !c.chest && !c.ach && (c.level ?? 1) <= level;
 
-// ------------------------------------------------------------------------------------------------ gathering
-/** The forest, the quarry and the pond on every land: tap to gather, then they regrow (or the fish come back). */
-export const GATHER = {
-  wood: { every: 3 * 3600, min: 10, max: 20, xp: 6, label: "wood" },
-  stone: { every: 5 * 3600, min: 6, max: 12, xp: 6, label: "stone" },
-  fish: { every: 2 * 3600, min: 1, max: 3, xp: 10, label: "fish" },
+// ------------------------------------------------------------------------------------------------ the trading desk
+/**
+ * The trading desk: Bitcoin's live price, second by second, in 5-minute rounds. Call Up or Down for the next
+ * round before it starts; when it ends, a close above the open means Up won (below: Down; equal: a push).
+ * Right calls pay XP and coins, calls against the crowd pay extra and winning streaks pay more. Each UTC day your
+ * first `paidPerDay` calls pay in full; after that a call still counts for streaks and stats but pays 1 XP.
+ */
+export const DESK = {
+  round: 300,
+  paidPerDay: 24,
+  play: { xp: 1, coins: 0 },
+  win: { xp: 10, coins: 10 },
+  /** Extra when you were on the smaller side and right. */
+  crowd: { xp: 5, coins: 5 },
+  /** Extra per win in a row after the first, up to `max` steps. */
+  streak: { xp: 2, coins: 2, max: 5 },
 } as const;
-/** Now and then the catch is a golden fish: bonus XP and a chest. */
-export const GOLDEN_FISH = { chance: 0.08, xp: 40 };
-export type Resource = keyof typeof GATHER;
+export type Call = "up" | "down";
+export const deskRound = (t: number) => Math.floor(t / DESK.round);
 
 /** Butterflies in the garden: a net swing every 20 minutes, each species with its own rarity. */
 export const NET_EVERY = 20 * 60;
@@ -297,8 +400,11 @@ export const bug = (id: string) => BUTTERFLIES.find((b) => b.id === id);
 // ------------------------------------------------------------------------------------------------ picks and XP
 /** XP for a pick that finishes 1st, 2nd or 3rd of all coins picked that day. */
 export const RANK_XP = [100, 60, 40];
+/** Coins for the same: picks pay coins as well as XP. */
+export const RANK_COINS = [60, 40, 25];
 /** For taking part (picks submitted for the day). */
 export const PLAY_XP = 10;
+export const PLAY_COINS = 5;
 /** Streak bonus: +5 XP per day in a row, up to +50. */
 export const streakXp = (streak: number) => Math.min(streak, 10) * 5;
 /** All three picks in the top 3. */
@@ -318,19 +424,20 @@ export const roundStart = (r: number) => r * DAY;
 export const roundLabel = (r: number) => new Date(r * DAY * 1000).toISOString().slice(0, 10);
 
 // ------------------------------------------------------------------------------------------------ rewards
-export type Reward = { bricks?: number; xp?: number; wood?: number; stone?: number; chest?: ChestTier };
+/** `bricks` are the coins you spend (the field kept its first name). */
+export type Reward = { bricks?: number; xp?: number; chest?: ChestTier };
 export type ChestTier = "common" | "rare" | "epic";
 /** The daily reward calendar: come back every day; miss one and it starts again at day 1. */
 export const DAILY: Reward[] = [
-  { bricks: 25 }, { bricks: 40 }, { wood: 15, stone: 10 }, { bricks: 60 }, { chest: "common" }, { bricks: 100 }, { chest: "rare", bricks: 50 },
+  { bricks: 25 }, { bricks: 40 }, { }, { bricks: 60 }, { chest: "common" }, { bricks: 100 }, { chest: "rare", bricks: 50 },
 ];
 /** Three quests a day: the first is always the picks; two more are drawn for you. Each pays XP and bricks; all three, a chest. */
 export type Quest = { id: string; text: string; goal: number; xp: number; bricks: number };
 export const QUESTS: Quest[] = [
   { id: "pick", text: "Lock in your 3 picks", goal: 1, xp: 15, bricks: 40 },
-  { id: "wood", text: "Chop wood in the forest", goal: 1, xp: 15, bricks: 40 },
-  { id: "stone", text: "Mine the quarry", goal: 1, xp: 15, bricks: 40 },
-  { id: "fish", text: "Go fishing", goal: 1, xp: 15, bricks: 40 },
+  { id: "desk", text: "Make 5 calls on the trading desk", goal: 5, xp: 15, bricks: 40 },
+  { id: "deskwin", text: "Win 3 calls on the trading desk", goal: 3, xp: 15, bricks: 40 },
+  { id: "crowd", text: "Win a call against the crowd", goal: 1, xp: 15, bricks: 40 },
   { id: "net", text: "Catch butterflies twice", goal: 2, xp: 15, bricks: 40 },
   { id: "visit", text: "Visit 2 other lands", goal: 2, xp: 15, bricks: 40 },
   { id: "cheer", text: "Cheer 3 lands", goal: 3, xp: 15, bricks: 40 },
@@ -343,20 +450,22 @@ export const QUESTS: Quest[] = [
 export const QUEST_ALL: Reward = { chest: "common", xp: 20 };
 /** Cheering a land: once per land per day. You get XP (up to 10 a day), the owner gets bricks. */
 export const CHEER = { xp: 3, ownerBricks: 5, perDay: 10 };
+/** A level up pays coins too: this many per level reached. */
+export const LEVEL_COINS = 20;
 /** Inviting a friend: both get bricks when they spawn; you get a rare chest once they've played their first day. */
 export const REFERRAL = { newBricks: 100, refBricks: 150, refChest: "rare" as ChestTier };
 /** Every 5 levels: a chest. */
 export const levelChest = (level: number): ChestTier | null => (level % 10 === 0 ? "epic" : level % 5 === 0 ? "rare" : null);
 
 /** What a chest can hold: bricks, materials or a cosmetic you don't have yet (by rarity). */
-export const CHESTS: Record<ChestTier, { bricks: [number, number]; mats: [number, number]; odds: { bricks: number; mats: number; cosmetic: number }; rarities: Rarity[] }> = {
-  common: { bricks: [40, 120], mats: [10, 30], odds: { bricks: 0.6, mats: 0.25, cosmetic: 0.15 }, rarities: ["common", "rare"] },
-  rare: { bricks: [120, 320], mats: [30, 60], odds: { bricks: 0.4, mats: 0.25, cosmetic: 0.35 }, rarities: ["rare", "epic"] },
-  epic: { bricks: [300, 800], mats: [60, 120], odds: { bricks: 0.3, mats: 0.15, cosmetic: 0.55 }, rarities: ["epic", "legendary"] },
+export const CHESTS: Record<ChestTier, { bricks: [number, number]; odds: { bricks: number; cosmetic: number }; rarities: Rarity[] }> = {
+  common: { bricks: [60, 160], odds: { bricks: 0.8, cosmetic: 0.2 }, rarities: ["common", "rare"] },
+  rare: { bricks: [180, 420], odds: { bricks: 0.6, cosmetic: 0.4 }, rarities: ["rare", "epic"] },
+  epic: { bricks: [450, 1000], odds: { bricks: 0.4, cosmetic: 0.6 }, rarities: ["epic", "legendary"] },
 };
 
 // ------------------------------------------------------------------------------------------------ achievements
-export type Stat = "picks" | "hits" | "wins" | "hatTricks" | "bestStreak" | "wood" | "stone" | "fish" | "golden" | "bugs" | "species" | "owned" | "cheersGiven" | "cheersGot" | "visits" | "referrals" | "level" | "joined" | "dailyBest" | "visitors";
+export type Stat = "picks" | "hits" | "wins" | "hatTricks" | "bestStreak" | "calls" | "deskWins" | "deskStreak" | "crowdWins" | "podiums" | "bugs" | "species" | "owned" | "cheersGiven" | "cheersGot" | "visits" | "referrals" | "level" | "joined" | "dailyBest" | "visitors";
 export type Achievement = { id: string; name: string; text: string; stat: Stat; goal: number; xp: number; chest?: ChestTier; cosmetic?: string };
 export const ACHIEVEMENTS: Achievement[] = [
   { id: "first", name: "First Picks", text: "Play your first day", stat: "picks", goal: 1, xp: 20 },
@@ -368,11 +477,16 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "streak7", name: "On a Roll", text: "A 7-day pick streak", stat: "bestStreak", goal: 7, xp: 100, chest: "rare" },
   { id: "streak30", name: "Unbreakable", text: "A 30-day pick streak", stat: "bestStreak", goal: 30, xp: 500, chest: "epic", cosmetic: "halo" },
   { id: "daily7", name: "Every Day", text: "Claim the daily reward 7 days in a row", stat: "dailyBest", goal: 7, xp: 80 },
-  { id: "wood100", name: "Lumberjack", text: "Chop 100 wood", stat: "wood", goal: 100, xp: 60 },
-  { id: "wood1000", name: "Forester", text: "Chop 1,000 wood", stat: "wood", goal: 1000, xp: 250, chest: "rare" },
-  { id: "stone100", name: "Miner", text: "Mine 100 stone", stat: "stone", goal: 100, xp: 60 },
-  { id: "fish25", name: "Angler", text: "Catch 25 fish", stat: "fish", goal: 25, xp: 80, cosmetic: "rod" },
-  { id: "golden", name: "Golden Catch", text: "Catch a golden fish", stat: "golden", goal: 1, xp: 60 },
+  { id: "desk1", name: "First Call", text: "Make a call on the trading desk", stat: "calls", goal: 1, xp: 20 },
+  { id: "desk25", name: "Desk Regular", text: "Make 25 desk calls", stat: "calls", goal: 25, xp: 80, cosmetic: "headset" },
+  { id: "desk250", name: "Desk Veteran", text: "Make 250 desk calls", stat: "calls", goal: 250, xp: 300, chest: "epic" },
+  { id: "deskwin10", name: "Sharp Caller", text: "Win 10 desk calls", stat: "deskWins", goal: 10, xp: 100, cosmetic: "trail-coins" },
+  { id: "deskwin100", name: "Desk Legend", text: "Win 100 desk calls", stat: "deskWins", goal: 100, xp: 600, chest: "epic", cosmetic: "horns" },
+  { id: "deskstreak5", name: "Hot Hand", text: "Win 5 desk calls in a row", stat: "deskStreak", goal: 5, xp: 150, cosmetic: "aura-fire" },
+  { id: "deskstreak10", name: "Untouchable", text: "Win 10 desk calls in a row", stat: "deskStreak", goal: 10, xp: 500, chest: "epic", cosmetic: "diamondchain" },
+  { id: "crowd10", name: "Contrarian", text: "Win 10 calls against the crowd", stat: "crowdWins", goal: 10, xp: 150, cosmetic: "pixel" },
+  { id: "crowd25", name: "Lone Wolf", text: "Win 25 calls against the crowd", stat: "crowdWins", goal: 25, xp: 400, chest: "epic" },
+  { id: "champion", name: "Champion", text: "Finish top 3 in a weekly prize", stat: "podiums", goal: 1, xp: 300, chest: "epic" },
   { id: "bugs50", name: "Net Gains", text: "Catch 50 butterflies", stat: "bugs", goal: 50, xp: 100 },
   { id: "allbugs", name: "Collector", text: "Catch every kind of butterfly", stat: "species", goal: 11, xp: 400, chest: "epic", cosmetic: "wings" },
   { id: "build10", name: "Builder", text: "Own 10 things", stat: "owned", goal: 10, xp: 60 },

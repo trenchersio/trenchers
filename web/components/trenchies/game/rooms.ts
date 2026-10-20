@@ -12,7 +12,8 @@
  */
 import * as THREE from "three";
 import { CYAN, GOLD, NEON, PINK, WARM, type Frame, type Kit, type Wall } from "./kit";
-import { DOOR_X, GARDEN_ROOMS, HOUSES, HOUSE_ROOMS, HOUSE_Y, core } from "./layout";
+import { DOOR_X, GARDEN_ROOMS, HOUSES, HOUSE_Y, core, placeRooms, type PlacedRoom } from "./layout";
+import { FLOORS, PAINTS, ROOM_SLOTS, roomLayout } from "@/lib/trenchies-catalog";
 import { INDOOR, MODIFIERS, type Ctx } from "./indoor";
 import type { R } from "./nav";
 import { ITEMS, item as catItem } from "@/lib/trenchies-catalog";
@@ -26,32 +27,34 @@ const LABEL: Record<string, string> = {
 };
 
 // ------------------------------------------------------------------ the plan
-export function plan(house: string, has: (id: string) => boolean): Room[] {
+export function plan(house: string, placed: PlacedRoom[], corePaint: { wall?: number; floor?: number } = {}): Room[] {
   const H = HOUSES[house] ?? HOUSES.shack, c = core(house);
-  const rooms: Room[] = [{ id: "core", r: c, floor: H.floor, wall: H.wall, h: H.h, kind: "core" }];
-  const wing = (id: string) => { const s = HOUSE_ROOMS[id]; rooms.push({ id, r: { x: s.x, y: s.y, w: s.w, d: s.d }, floor: s.floor, wall: s.wall, h: H.h, kind: "wing" }); };
+  const rooms: Room[] = [{ id: "core", r: c, floor: corePaint.floor ? FLOORS[corePaint.floor] : H.floor, wall: corePaint.wall ? PAINTS[corePaint.wall] : H.wall, h: H.h, kind: "core" }];
+  const wing = (p: PlacedRoom) => rooms.push({ id: p.id, r: { x: p.x, y: p.y, w: p.w, d: p.d }, floor: p.floor, wall: p.wall, h: H.h, kind: "wing" });
   for (const side of [-1, 1] as const) {
-    const slots = Object.entries(HOUSE_ROOMS).filter(([, s]) => s.side === side && s.row === 0).sort((a, b) => (side < 0 ? b[1].x - a[1].x : a[1].x - b[1].x));
+    const row0 = placed.filter((p) => p.side === side && p.row === 0).sort((a, b) => (side < 0 ? b.x - a.x : a.x - b.x));
     let edge = side < 0 ? c.x : c.x + c.w;
-    for (const [id, s] of slots) {
-      if (!has(id)) continue;
-      const near = side < 0 ? s.x + s.w : s.x;
-      if (Math.abs(near - edge) > 0.05) { const a = Math.min(near, edge), b = Math.max(near, edge); rooms.push({ id: `hall-${id}`, r: { x: a, y: HOUSE_Y + 1.4, w: b - a, d: 1.6 }, floor: H.floor, wall: H.wall, h: H.h, kind: "hall" }); }
-      wing(id); edge = side < 0 ? s.x : s.x + s.w;
+    for (const p of row0) {
+      const near = side < 0 ? p.x + p.w : p.x;
+      if (Math.abs(near - edge) > 0.05) { const a = Math.min(near, edge), b = Math.max(near, edge); rooms.push({ id: `hall-${p.id}`, r: { x: a, y: HOUSE_Y + 1.4, w: b - a, d: 1.6 }, floor: rooms[0].floor, wall: rooms[0].wall, h: H.h, kind: "hall" }); }
+      wing(p); edge = side < 0 ? p.x : p.x + p.w;
     }
   }
-  for (const [id, s] of Object.entries(HOUSE_ROOMS)) if (s.row === 1 && has(id) && s.behind && has(s.behind)) wing(id);
+  for (const p of placed) if (p.row === 1) wing(p);
   return rooms;
 }
-/** Rooms you could build next (shown as marked-out lots): not built, not crossed by a hallway, and close to your level. */
-export function nextLots(rooms: Room[], has: (id: string) => boolean, level: number) {
+/** Rooms you could build next (shown as marked-out lots where they'd go), close to your level. */
+export function nextLots(rooms: Room[], items: string[], layout: Record<string, string>, level: number) {
   const out: { id: string; r: R; name: string; level: number; cost: number }[] = [];
-  const cross = (r: R) => rooms.some((m) => m.r.x < r.x + r.w - 0.1 && m.r.x + m.r.w > r.x + 0.1 && m.r.y < r.y + r.d - 0.1 && m.r.y + m.r.d > r.y + 0.1);
-  const cands = [...Object.entries(HOUSE_ROOMS).map(([id, s]) => ({ id, r: s as R, ok: !s.behind || has(s.behind) })), ...Object.entries(GARDEN_ROOMS).map(([id, r]) => ({ id, r: r as R, ok: true }))];
-  for (const c of cands) {
-    const it = catItem(c.id); if (!it || has(c.id) || !c.ok || cross(c.r) || it.level > level + 6) continue;
-    out.push({ id: c.id, r: { x: c.r.x, y: c.r.y, w: c.r.w, d: c.r.d }, name: it.name, level: it.level, cost: it.cost });
+  const cross = (r: R) => rooms.some((m) => m.r.x < r.x + r.w - 0.1 && m.r.x + m.r.w > r.x + 0.1 && m.r.y < r.y + r.d - 0.1 && m.r.y + m.r.d > r.y + 0.1) || out.some((o) => o.r.x === r.x && o.r.y === r.y);
+  const house = ITEMS.filter((i) => i.kind === "room" && i.site === "house" && !items.includes(i.id)).sort((a, b) => a.level - b.level);
+  for (const it of house) {
+    if (it.level > level + 6) continue;
+    const slot = roomLayout([...items, it.id], layout)[it.id], s = slot ? ROOM_SLOTS[slot] : null; if (!s) continue;
+    const r = { x: s.x, y: s.y, w: s.w, d: s.d }; if (cross(r)) continue;
+    out.push({ id: it.id, r, name: it.name, level: it.level, cost: it.cost });
   }
+  for (const [id, g] of Object.entries(GARDEN_ROOMS)) { const it = catItem(id); if (!it || items.includes(id) || it.level > level + 6 || cross(g)) continue; out.push({ id, r: { x: g.x, y: g.y, w: g.w, d: g.d }, name: it.name, level: it.level, cost: it.cost }); }
   return out.sort((a, b) => a.level - b.level).slice(0, 5);
 }
 
@@ -313,8 +316,8 @@ const LOUNGES = ["core", "bedroom", "gameroom", "library", "kitchen", "office", 
 
 // ------------------------------------------------------------------ the whole house
 export type HouseOut = { rooms: Room[]; door: { x: number; y: number }; placed: Set<string> };
-export function buildHouse(k: Kit, c: Ctx, house: string): HouseOut {
-  const H = HOUSES[house] ?? HOUSES.shack, rooms = plan(house, c.has), cr = rooms[0].r;
+export function buildHouse(k: Kit, c: Ctx, house: string, items: string[], layout: Record<string, string> = {}, paint: Record<string, { wall?: number; floor?: number }> = {}): HouseOut {
+  const H = HOUSES[house] ?? HOUSES.shack, rooms = plan(house, placeRooms(items, layout, paint), paint.core), cr = rooms[0].r;
   const { doors, hangs } = shell(k, rooms, { trim: H.trim, glass: (r) => r.kind === "core" && !!H.glass, door: DOOR_X, led: c.has("ledstrip") });
   // the front step
   k.box(DOOR_X - 0.7, cr.y + cr.d + 0.07, -0.01, 1.4, 0.45, 0.06, k.M.white);
@@ -400,7 +403,7 @@ export function drawLots(k: Kit, list: ReturnType<typeof nextLots>) {
     for (let x = r.x; x < r.x + r.w - 0.1; x += 0.5) { k.box(x, r.y, 0.005, 0.3, 0.04, 0.004, line, false); k.box(x, r.y + r.d - 0.04, 0.005, 0.3, 0.04, 0.004, line, false); }
     for (let y = r.y; y < r.y + r.d - 0.1; y += 0.5) { k.box(r.x, y, 0.005, 0.04, 0.3, 0.004, line, false); k.box(r.x + r.w - 0.04, y, 0.005, 0.04, 0.3, 0.004, line, false); }
     for (const [x, y] of [[r.x, r.y], [r.x + r.w - 0.08, r.y], [r.x, r.y + r.d - 0.08], [r.x + r.w - 0.08, r.y + r.d - 0.08]]) k.box(x, y, 0, 0.08, 0.08, 0.28, k.glow(NEON, 0.9), false);
-    const t = k.tex(512, 256, (g) => { g.textAlign = "center"; g.fillStyle = "rgba(220,228,224,0.85)"; let fs = 56; do { g.font = `600 ${fs}px 'Space Grotesk', sans-serif`; fs -= 4; } while (g.measureText(l.name.toUpperCase()).width > 470 && fs > 20); g.fillText(l.name.toUpperCase(), 256, 120); g.fillStyle = "rgba(57,255,136,0.85)"; g.font = "500 38px 'JetBrains Mono', monospace"; g.fillText(`LV ${l.level} · ${l.cost.toLocaleString("en-US")} BRICKS`, 256, 185); });
+    const t = k.tex(512, 256, (g) => { g.textAlign = "center"; g.fillStyle = "rgba(220,228,224,0.85)"; let fs = 56; do { g.font = `600 ${fs}px 'Space Grotesk', sans-serif`; fs -= 4; } while (g.measureText(l.name.toUpperCase()).width > 470 && fs > 20); g.fillText(l.name.toUpperCase(), 256, 120); g.fillStyle = "rgba(57,255,136,0.85)"; g.font = "500 38px 'JetBrains Mono', monospace"; g.fillText(`LV ${l.level} · ${l.cost.toLocaleString("en-US")} COINS`, 256, 185); });
     const m = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }); (m as unknown as { toneMapped: boolean }).toneMapped = false;
     const sz = Math.min(r.w - 0.4, 3.4), pl = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz / 2), m); pl.rotation.x = -Math.PI / 2; const p = k.W(r.x + r.w / 2, r.y + r.d / 2); pl.position.set(p.x, 0.012, p.z); k.root.add(pl);
   }

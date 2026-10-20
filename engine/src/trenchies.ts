@@ -7,7 +7,8 @@ import { NFT_OWNER_ABI } from "./abis";
 import type { Backtest } from "./backtest";
 import { formatEther } from "viem";
 import type { PrizePot } from "./prizes";
-import { ACHIEVEMENTS, CHEER, COSMETICS, DAY, GATHER, GOLDEN_FISH, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PICKS, PLAY_XP, PRIZE_SPLIT, QUESTS, RANK_XP, REFERRAL, RENAMED, X_XP, cosmetic, item, landValue, levelOf, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type ChestTier, type Resource, type Slot } from "./trenchies-catalog";
+import { ACHIEVEMENTS, CHEER, COSMETICS, DAY, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_SPLIT, QUESTS, RANK_COINS, RANK_XP, REFERRAL, RENAMED, ROOM_SLOTS, X_XP, cosmetic, deskRound, item, landValue, levelOf, roomLayout, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type Call, type ChestTier, type Slot } from "./trenchies-catalog";
+import type { BtcFeed } from "./btc";
 import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, emptyProgress, ensureQuests, gain, note, openChest, stat, swingNet, type Progress } from "./trenchies-rewards";
 
 /**
@@ -23,21 +24,29 @@ import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, 
 export const loginText = (addr: string, time: string) => `Sign in to Trenchies\n\nWallet: ${addr}\nTime: ${time}\n\nThis only proves you hold this wallet. It costs nothing and sends no transaction.`;
 
 type Pick = { token: Address; symbol: string; pct: number | null; rank: number | null };
-type Result = { round: number; picks: Pick[]; xp: number; parts: { label: string; xp: number }[]; at: number };
+type Result = { round: number; picks: Pick[]; xp: number; coins?: number; parts: { label: string; xp: number }[]; at: number };
+type DeskLog = { r: number; call: Call; result: "win" | "loss" | "push" | "void"; open: number | null; close: number | null; xp: number; coins: number; crowd: boolean };
+type DeskRound = { calls: Record<string, Call>; open?: number | null; close?: number | null; done?: boolean };
 type Player = Progress & {
   addr: string; name: string; nft: number; held: boolean; createdAt: number;
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
-  wood: number; stone: number; fish: number; next: Partial<Record<Resource | "net", number>>;
+  next: Partial<Record<"net", number>>;
+  /** The trading desk: current winning streak, best ever, calls paid in full today, recent results. */
+  desk: { streak: number; best: number; day: number; paid: number; log: DeskLog[] };
+  /** Your own house plan (room to slot), wall and floor paint per room, and where garden things stand. */
+  layout: Record<string, string>; paint: Record<string, { wall?: number; floor?: number }>; place: Record<string, { x: number; y: number }>;
   /** Who may join this player's land (their Trenchie spawns here and they can chat), and who's asked to. */
   members: string[]; requests: { addr: string; at: number }[];
+  /** Public land: anyone can walk in and chat. Private (the default): only members the owner accepted. */
+  open?: boolean;
   /** Who invited them (a referral), and whether the inviter has been paid for it. */
   referredBy?: string; refPaid?: boolean;
   /** Today's visits and cheers (each land counts once a day). */
   visited: { day: number; lands: string[] }; cheered: { day: number; lands: string[] };
   /** Phone reminders already sent, so nothing repeats. */
-  notified: { picks?: number; daily?: number; ready?: Partial<Record<Resource, number>>; lastAt?: number };
+  notified: { picks?: number; daily?: number; lastAt?: number };
   lastSeen: number;
   x?: { handle: string; at: number }; xPending?: { handle: string; code: string; at: number };
   results: Result[]; seen: number | null;
@@ -48,7 +57,7 @@ type Msg = { id: number; by: string; nft: number; text: string; at: number };
 type Prize = { week: number; label: string; feesWei: string; potWei: string; winners: { name: string; addr: string; nft: number; xp: number; share: number; wei: string }[]; at: number; paid: string | null };
 type Host = {
   pub: PublicClient; nft: Address; prices: Backtest; symbolOf: (t: Address) => Promise<string>; log: (m: string) => void;
-  pot?: PrizePot; announce?: (ids: number[], text: string) => void; notify?: (addr: string, msg: { title: string; body: string; url: string; tag?: string }) => void; site?: string;
+  pot?: PrizePot; btc?: BtcFeed; announce?: (ids: number[], text: string) => void; notify?: (addr: string, msg: { title: string; body: string; url: string; tag?: string }) => void; site?: string;
 };
 
 const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
@@ -68,6 +77,7 @@ export class Trenchies {
   private coinCache: { at: number; list: unknown[] } | null = null;
   private chats = new Map<string, Msg[]>();
   private prizes = new Map<number, Prize>();
+  private desk = new Map<number, DeskRound>();
   private presence = new Map<string, Map<string, number>>();
   private lastSay = new Map<string, number>();
   private msgId = Date.now();
@@ -76,11 +86,13 @@ export class Trenchies {
   constructor(private host: Host) {
     try {
       if (existsSync(FILE)) {
-        const j = JSON.parse(readFileSync(FILE, "utf8")) as { players: Player[]; rounds: [number, Round][]; chats?: Record<string, Msg[]>; prizes?: Prize[] };
+        const j = JSON.parse(readFileSync(FILE, "utf8")) as { players: Player[]; rounds: [number, Round][]; chats?: Record<string, Msg[]>; prizes?: Prize[]; desk?: [number, DeskRound][] };
+        for (const [r, v] of j.desk ?? []) this.desk.set(r, v);
         for (const [k, v] of Object.entries(j.chats ?? {})) this.chats.set(k, v);
         for (const z of j.prizes ?? []) this.prizes.set(z.week, z);
         for (const p of j.players ?? []) {
-          p.wood ??= 0; p.stone ??= 0; p.fish ??= 0; p.next ??= {}; p.members ??= []; p.requests ??= [];
+          p.next ??= {}; p.members ??= []; p.requests ??= [];
+          p.desk ??= { streak: 0, best: 0, day: -1, paid: 0, log: [] }; p.layout ??= {}; p.paint ??= {}; p.place ??= {};
           const e = emptyProgress();
           for (const k of Object.keys(e) as (keyof typeof e)[]) (p as Record<string, unknown>)[k] ??= e[k];
           p.visited ??= { day: -1, lands: [] }; p.cheered ??= { day: -1, lands: [] }; p.notified ??= {}; p.lastSeen ??= p.createdAt;
@@ -96,7 +108,8 @@ export class Trenchies {
       const keep = [...this.rounds.entries()].sort((a, b) => b[0] - a[0]).slice(0, 90);
       mkdirSync(dirname(FILE), { recursive: true });
       const prizes = [...this.prizes.values()].sort((a, b) => b.week - a.week).slice(0, 52);
-      writeFileSync(`${FILE}.tmp`, JSON.stringify({ players: [...this.players.values()], rounds: keep, chats: Object.fromEntries(this.chats), prizes }));
+      const desk = [...this.desk.entries()].sort((a, b) => b[0] - a[0]).slice(0, 600);
+      writeFileSync(`${FILE}.tmp`, JSON.stringify({ players: [...this.players.values()], rounds: keep, chats: Object.fromEntries(this.chats), prizes, desk }));
       renameSync(`${FILE}.tmp`, FILE);
     } catch { /* keep in memory */ }
   }
@@ -157,9 +170,10 @@ export class Trenchies {
       if (res.some((x) => x.rank === 1)) p.wins++;
       p.hits += hits;
       const xp = parts.reduce((s, x) => s + x.xp, 0);
-      gain(p, xp, "picks");
+      const earned = PLAY_COINS + res.reduce((s, x) => s + (x.rank ? RANK_COINS[x.rank - 1] : 0), 0);
+      gain(p, xp, "picks"); p.bricks += earned;
       p.stats.bestStreak = Math.max(p.stats.bestStreak ?? 0, p.streak);
-      p.results.unshift({ round: r, picks: res, xp, parts, at: Date.now() }); p.results = p.results.slice(0, 30);
+      p.results.unshift({ round: r, picks: res, xp, coins: earned, parts, at: Date.now() }); p.results = p.results.slice(0, 30);
       checkAchievements(p);
       // a friend you invited has now played a whole day: your referral reward
       if (p.referredBy && !p.refPaid) {
@@ -173,13 +187,14 @@ export class Trenchies {
   }
 
   private pub(p: Player) {
-    return { name: p.name, nft: p.nft, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt, wear: p.wear };
+    return { name: p.name, nft: p.nft, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt, wear: p.wear, layout: p.layout, paint: p.paint, place: p.place, isOpen: !!p.open };
   }
   private me(p: Player, now: number) {
     const open = roundOf(now) + 1, live = roundOf(now), last = live - 1;
     const st = this.standings(live, now);
     return {
-      ...this.pub(p), bricks: p.bricks, held: p.held, wood: p.wood, stone: p.stone, fish: p.fish, next: { wood: p.next.wood ?? 0, stone: p.next.stone ?? 0, fish: p.next.fish ?? 0 },
+      ...this.pub(p), bricks: p.bricks, held: p.held,
+      desk: { streak: p.desk.streak, best: p.desk.best, paidLeft: Math.max(0, DESK.paidPerDay - (p.desk.day === roundOf(now) ? p.desk.paid : 0)) },
       requests: p.requests.length, lands: [...this.players.values()].filter((h) => h.members.includes(p.addr)).map((h) => this.mini(h)),
       ...this.progress(p, now),
       week: this.weekRank(p.addr, now), xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
@@ -246,7 +261,7 @@ export class Trenchies {
       if (!(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
       if (p) { p.nft = nft; p.name = name; p.held = true; }
       else {
-        const np: Player = { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", wood: 0, stone: 0, fish: 0, next: {}, members: [], requests: [], results: [], seen: null,
+        const np: Player = { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", next: {}, members: [], requests: [], results: [], seen: null, desk: { streak: 0, best: 0, day: -1, paid: 0, log: [] }, layout: {}, paint: {}, place: {},
           ...emptyProgress(), visited: { day: -1, lands: [] }, cheered: { day: -1, lands: [] }, notified: {}, lastSeen: Date.now() };
         // invited by a friend (their Trenchie name): you both get bricks now, they get a chest once you've played a day
         const ref = this.byName(b.ref);
@@ -287,12 +302,11 @@ export class Trenchies {
       if (op === "buy") {
         if (p.items.includes(it.id)) { send(400, { error: "You already own this." }); return true; }
         if (levelOf(p.xp) < it.level) { send(400, { error: `Reach level ${it.level} first.` }); return true; }
-        if (p.bricks < it.cost) { send(400, { error: `You need ${it.cost - p.bricks} more bricks.` }); return true; }
-        if ((it.wood ?? 0) > p.wood) { send(400, { error: `You need ${(it.wood ?? 0) - p.wood} more wood. Chop the tree on your land.` }); return true; }
-        if ((it.stone ?? 0) > p.stone) { send(400, { error: `You need ${(it.stone ?? 0) - p.stone} more stone. Mine the rock on your land.` }); return true; }
+        if (p.bricks < it.cost) { send(400, { error: `You need ${it.cost - p.bricks} more coins.` }); return true; }
+        if (it.needsAch && !p.achievements.includes(it.needsAch)) { send(400, { error: `This one is only for "${ACHIEVEMENTS.find((a) => a.id === it.needsAch)?.name ?? it.needsAch}".` }); return true; }
         if (it.needsHouse !== undefined && HOUSE_ORDER.indexOf(p.house) < it.needsHouse) { send(400, { error: `This needs the ${item(HOUSE_ORDER[it.needsHouse])?.name} or bigger.` }); return true; }
         if (it.needs && !p.items.includes(it.needs)) { send(400, { error: `This needs the ${item(it.needs)?.name} first.` }); return true; }
-        p.bricks -= it.cost; p.wood -= it.wood ?? 0; p.stone -= it.stone ?? 0; p.items.push(it.id);
+        p.bricks -= it.cost; p.items.push(it.id);
         bump(p, roundOf(now), "build"); checkAchievements(p);
       } else if (!p.items.includes(it.id)) { send(400, { error: "Buy it first." }); return true; }
       if (it.kind === "house") p.house = it.id;
@@ -301,22 +315,43 @@ export class Trenchies {
       send(200, { me: this.me(p, now) });
       return true;
     }
-    if (op === "gather") {
-      const res = String(b.res ?? "") as Resource, g = GATHER[res];
-      if (!g) { send(400, { error: "Gather wood or stone." }); return true; }
-      const at = p.next[res] ?? 0;
-      if (Date.now() < at) { send(400, { error: `It's still regrowing.`, next: at }); return true; }
-      const got = g.min + Math.floor(Math.random() * (g.max - g.min + 1));
-      const golden = res === "fish" && Math.random() < GOLDEN_FISH.chance, xp = g.xp + (golden ? GOLDEN_FISH.xp : 0);
-      p[res] += got; p.next[res] = Date.now() + g.every * 1000;
-      stat(p, res, got); if (golden) { stat(p, "golden"); p.chests.common++; note(p, "chest", "A golden fish! It came with a common chest"); }
-      gain(p, xp, res); bump(p, roundOf(now), res); checkAchievements(p);
-      this.save();
-      send(200, { me: this.me(p, now), got, res, xp, golden });
-      return true;
+    if (op === "gather") { send(410, { error: "Gathering is gone: try the trading desk." }); return true; }
+    if (op === "desk") { send(200, this.deskView(p, Number(q.get("since") ?? 0))); return true; }
+    if (op === "desk/call") {
+      const call = String(b.call ?? "") as Call; if (call !== "up" && call !== "down") { send(400, { error: "Call up or down." }); return true; }
+      if (!this.host.btc?.latest) { send(503, { error: "The price feed is starting. Try again in a moment." }); return true; }
+      const r = deskRound(now) + 1, rd = this.deskRound(r), first = !rd.calls[p.addr];
+      rd.calls[p.addr] = call; if (first) bump(p, roundOf(now), "desk");
+      this.save(); send(200, this.deskView(p, Number(b.since ?? 0))); return true;
+    }
+    if (op === "layout") {
+      const room = String(b.room ?? ""), slot = String(b.slot ?? ""), S = ROOM_SLOTS[slot];
+      if (!p.items.includes(room) || item(room)?.site !== "house") { send(400, { error: "Build that room first." }); return true; }
+      if (!S) { send(400, { error: "Unknown spot." }); return true; }
+      const cur = roomLayout(p.items, p.layout), from = cur[room], other = Object.keys(cur).find((r) => cur[r] === slot);
+      const next = { ...cur, [room]: slot }; if (other && other !== room && from) next[other] = from;
+      const used = new Set(Object.values(next));
+      for (const sl of used) { const x = ROOM_SLOTS[sl]; if (x.behind && !used.has(x.behind)) { send(400, { error: "A room in the front row needs a room behind it." }); return true; } }
+      const check = roomLayout(p.items, next); if (check[room] !== slot) { send(400, { error: "That spot doesn't work for this room." }); return true; }
+      p.layout = next; this.save(); send(200, { me: this.me(p, now) }); return true;
+    }
+    if (op === "paint") {
+      const room = String(b.room ?? ""), wall = b.wall === undefined ? undefined : Number(b.wall), floor = b.floor === undefined ? undefined : Number(b.floor);
+      if (room !== "core" && (!p.items.includes(room) || item(room)?.site !== "house")) { send(400, { error: "Build that room first." }); return true; }
+      if ((wall !== undefined && !(wall >= 0 && wall < PAINTS.length)) || (floor !== undefined && !(floor >= 0 && floor < FLOORS.length))) { send(400, { error: "Unknown colour." }); return true; }
+      if (p.bricks < PAINT_COST) { send(400, { error: `Paint costs ${PAINT_COST} coins.` }); return true; }
+      p.bricks -= PAINT_COST; p.paint[room] = { ...p.paint[room], ...(wall !== undefined ? { wall } : {}), ...(floor !== undefined ? { floor } : {}) };
+      this.save(); send(200, { me: this.me(p, now) }); return true;
+    }
+    if (op === "place") {
+      const id = String(b.id ?? ""), it = item(id);
+      if (!it || !p.items.includes(id) || (it.kind !== "outdoor" && it.kind !== "statue")) { send(400, { error: "You can move garden things you own." }); return true; }
+      if (b.x === null) delete p.place[id];
+      else { const x = Number(b.x), y = Number(b.y); if (!(x >= 12 && x <= 42.4 && y >= 12 && y <= 42.4)) { send(400, { error: "Put it inside your garden." }); return true; } p.place[id] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }; }
+      this.save(); send(200, { me: this.me(p, now) }); return true;
     }
     if (op === "leaderboard") {
-      const kind = q.get("kind") ?? "xp", score = (x: Player) => kind === "value" ? landValue(x.items) : kind === "cheers" ? (x.stats.cheersGot ?? 0) : kind === "bugs" ? Object.values(x.bugs).reduce((s, n) => s + n, 0) : x.xp;
+      const kind = q.get("kind") ?? "xp", score = (x: Player) => kind === "desk" ? (x.stats.deskWins ?? 0) : kind === "value" ? landValue(x.items) : kind === "cheers" ? (x.stats.cheersGot ?? 0) : kind === "bugs" ? Object.values(x.bugs).reduce((s, n) => s + n, 0) : x.xp;
       const all = [...this.players.values()].sort((x, y) => score(y) - score(x) || y.xp - x.xp);
       send(200, { kind, players: all.slice(0, 100).map((x, i) => ({ rank: i + 1, ...this.pub(x), score: score(x) })), me: all.findIndex((x) => x.addr === addr) + 1 });
       return true;
@@ -340,7 +375,7 @@ export class Trenchies {
     }
     if (op === "wear") {
       const slot = String(b.slot ?? "") as Slot, id = b.id === null || b.id === "" ? null : String(b.id ?? "");
-      if (!["hat", "eyes", "neck", "back", "aura", "outline"].includes(slot)) { send(400, { error: "Unknown slot." }); return true; }
+      if (!["hat", "eyes", "neck", "back", "aura", "outline", "trail"].includes(slot)) { send(400, { error: "Unknown slot." }); return true; }
       if (id !== null && (cosmetic(id)?.slot !== slot || !canWear(p, id))) { send(400, { error: "You don't have that yet." }); return true; }
       if (id === null) delete p.wear[slot]; else p.wear[slot] = id;
       bump(p, roundOf(now), "wear"); this.save(); send(200, { me: this.me(p, now) }); return true;
@@ -356,7 +391,7 @@ export class Trenchies {
       p.cheered.lands.push(h.addr);
       if (p.cheered.lands.length <= CHEER.perDay) gain(p, CHEER.xp, "cheer");
       stat(p, "cheersGiven"); h.bricks += CHEER.ownerBricks; stat(h, "cheersGot");
-      note(h, "cheer", `${p.name} cheered your land (+${CHEER.ownerBricks} bricks)`);
+      note(h, "cheer", `${p.name} cheered your land (+${CHEER.ownerBricks} coins)`);
       bump(p, today, "cheer"); checkAchievements(p); checkAchievements(h);
       this.save(); send(200, { me: this.me(p, now), cheers: h.stats.cheersGot ?? 0 }); return true;
     }
@@ -436,7 +471,7 @@ export class Trenchies {
   }
   /**
    * Phone reminders (only for players who turned notifications on, at most one every 2 hours each):
-   * picks closing within 2 hours, the daily reward waiting, the forest, quarry or pond ready again.
+   * picks closing within 2 hours, and the daily reward waiting.
    */
   remind(now = Date.now() / 1000) {
     if (!this.host.notify) return;
@@ -448,13 +483,68 @@ export class Trenchies {
       let msg: { title: string; body: string; tag: string } | null = null;
       if (lockIn < 2 * 3600 && !(this.rounds.get(open)?.picks[p.addr]) && p.notified.picks !== open) { msg = { title: "Picks close soon", body: `Lock in your 3 picks for tomorrow: ${Math.max(1, Math.round(lockIn / 60))} minutes left.`, tag: "trenchies-picks" }; p.notified.picks = open; }
       else if (hour >= 8 && p.daily.last !== today && p.notified.daily !== today) { msg = { title: "Your daily reward is waiting", body: `Day ${dailyState(p, today).day + 1} of 7. Don't break the run.`, tag: "trenchies-daily" }; p.notified.daily = today; }
-      else {
-        const ready = (Object.keys(GATHER) as Resource[]).filter((r) => (p.next[r] ?? 0) > 0 && (p.next[r] ?? 0) <= Date.now() && p.notified.ready?.[r] !== p.next[r]);
-        if (ready.length) { const words: Record<Resource, string> = { wood: "the forest has regrown", stone: "the quarry is ready", fish: "the fish are back" }; msg = { title: "Ready to gather", body: `On your land: ${ready.map((r) => words[r]).join(", ")}.`, tag: "trenchies-ready" }; p.notified.ready = { ...p.notified.ready, ...Object.fromEntries(ready.map((r) => [r, p.next[r]])) }; }
-      }
       if (msg) { p.notified.lastAt = Date.now(); changed = true; this.host.notify(p.addr, { ...msg, url }); }
     }
     if (changed) this.save();
+  }
+
+  // ------------------------------------------------------------------ the trading desk (Bitcoin, 5-minute rounds)
+
+  private deskRound(r: number) { let x = this.desk.get(r); if (!x) this.desk.set(r, (x = { calls: {} })); return x; }
+  private crowd(rd: DeskRound | undefined) { const v = Object.values(rd?.calls ?? {}); return { up: v.filter((c) => c === "up").length, down: v.filter((c) => c === "down").length }; }
+  /** The desk as one player sees it: live price and chart, the running round, the next one (calls open), recent results. */
+  private deskView(p: Player, since: number) {
+    const now = Date.now() / 1000, cur = deskRound(now), btc = this.host.btc, from = Math.max(since + 1, now - 300);
+    const live = this.desk.get(cur), next = this.desk.get(cur + 1);
+    const start = cur * DESK.round, open = btc?.priceAt(start) ?? null;
+    return {
+      now, price: btc?.latest?.price ?? null, feed: btc?.view().source ?? "off", series: btc ? btc.series(from, now) : [],
+      live: { round: cur, start, end: start + DESK.round, open, call: live?.calls[p.addr] ?? null, crowd: this.crowd(live) },
+      next: { round: cur + 1, start: start + DESK.round, call: next?.calls[p.addr] ?? null, crowd: this.crowd(next) },
+      streak: p.desk.streak, best: p.desk.best, paidLeft: Math.max(0, DESK.paidPerDay - (p.desk.day === roundOf(now) ? p.desk.paid : 0)),
+      log: p.desk.log.slice(-12).reverse(),
+      top: this.deskBoard(),
+    };
+  }
+  private deskBoardCache: { at: number; list: unknown[] } | null = null;
+  private deskBoard() {
+    if (this.deskBoardCache && Date.now() - this.deskBoardCache.at < 30_000) return this.deskBoardCache.list;
+    const list = [...this.players.values()].filter((x) => (x.stats.deskWins ?? 0) > 0).sort((a, b) => (b.stats.deskWins ?? 0) - (a.stats.deskWins ?? 0) || b.desk.best - a.desk.best).slice(0, 10)
+      .map((x, i) => ({ rank: i + 1, ...this.mini(x), wins: x.stats.deskWins ?? 0, calls: x.stats.calls ?? 0, best: x.desk.best }));
+    this.deskBoardCache = { at: Date.now(), list }; return list;
+  }
+  /** Every few seconds: settles desk rounds that have ended (once the price two seconds after the close is in). */
+  deskTick(now = Date.now() / 1000) {
+    const btc = this.host.btc; if (!btc) return;
+    let changed = false;
+    for (const [r, rd] of this.desk) {
+      if (rd.done || (r + 1) * DESK.round > now - 2) continue;
+      rd.open = btc.priceAt(r * DESK.round); rd.close = btc.priceAt((r + 1) * DESK.round); rd.done = true; changed = true;
+      const cr = this.crowd(rd), today = roundOf(now);
+      const result: "up" | "down" | "flat" | "void" = rd.open === null || rd.close === null ? "void" : rd.close > rd.open ? "up" : rd.close < rd.open ? "down" : "flat";
+      for (const [addr, call] of Object.entries(rd.calls)) {
+        const p = this.players.get(addr); if (!p) continue;
+        if (p.desk.day !== today) p.desk = { ...p.desk, day: today, paid: 0 };
+        const paid = p.desk.paid < DESK.paidPerDay; if (result !== "void") p.desk.paid++;
+        let xp = 0, coins = 0, crowd = false, res: DeskLog["result"];
+        if (result === "void") res = "void";
+        else if (result === "flat") { res = "push"; xp = paid ? DESK.play.xp : 0; }
+        else if (call === result) {
+          res = "win"; p.desk.streak++; p.desk.best = Math.max(p.desk.best, p.desk.streak);
+          const st = Math.min(DESK.streak.max, p.desk.streak - 1); crowd = (call === "up" ? cr.up : cr.down) < (call === "up" ? cr.down : cr.up);
+          if (paid) { xp = DESK.win.xp + st * DESK.streak.xp + (crowd ? DESK.crowd.xp : 0); coins = DESK.win.coins + st * DESK.streak.coins + (crowd ? DESK.crowd.coins : 0); } else xp = 1;
+          stat(p, "deskWins"); if (crowd) { stat(p, "crowdWins"); bump(p, today, "crowd"); } bump(p, today, "deskwin");
+          p.stats.deskStreak = Math.max(p.stats.deskStreak ?? 0, p.desk.streak);
+        } else { res = "loss"; p.desk.streak = 0; xp = paid ? DESK.play.xp : 0; }
+        if (res !== "void") stat(p, "calls");
+        if (xp) gain(p, xp, "desk"); p.bricks += coins;
+        p.desk.log = [...p.desk.log.slice(-29), { r, call, result: res, open: rd.open ?? null, close: rd.close ?? null, xp, coins, crowd }];
+        checkAchievements(p);
+      }
+    }
+    // forget old rounds (keep two days)
+    for (const r of this.desk.keys()) if (r < deskRound(now) - 600) this.desk.delete(r);
+    if (changed) { this.deskBoardCache = null; this.save(); }
   }
 
   // ------------------------------------------------------------------ lands: join requests, members, chat
@@ -464,13 +554,13 @@ export class Trenchies {
   private land(op: string, p: Player, b: Record<string, unknown>, q: URLSearchParams, send: (c: number, x: unknown) => void) {
     const h = this.byName(b.name ?? q.get("name"));
     if (!h) { send(404, { error: "No Trenchie by that name." }); return true; }
-    const own = h.addr === p.addr, member = h.members.includes(p.addr);
+    const own = h.addr === p.addr, member = h.members.includes(p.addr) || !!h.open;
     const out = () => {
       const here = this.presence.get(h.addr) ?? new Map<string, number>(), t = Date.now();
       return {
-        land: { ...this.pub(h), last: h.results[0] ?? null }, role: own ? "owner" : member ? "member" : h.requests.some((r) => r.addr === p.addr) ? "pending" : "visitor",
+        open: !!h.open, land: { ...this.pub(h), last: h.results[0] ?? null }, role: own ? "owner" : member ? "member" : h.requests.some((r) => r.addr === p.addr) ? "pending" : "visitor",
         members: h.members.map((a) => this.players.get(a)).filter((x): x is Player => !!x).map((x) => this.mini(x)),
-        present: h.members.filter((a) => (here.get(a) ?? 0) > t - HERE).map((a) => this.players.get(a)).filter((x): x is Player => !!x).map((x) => this.mini(x)),
+        present: [...here.keys()].filter((a) => a !== h.addr && (here.get(a) ?? 0) > t - HERE && (h.open || h.members.includes(a))).map((a) => this.players.get(a)).filter((x): x is Player => !!x).map((x) => this.mini(x)),
         ownerHere: (here.get(h.addr) ?? 0) > t - HERE,
         chat: (this.chats.get(h.addr) ?? []).slice(-60),
         requests: own ? h.requests.map((r) => { const x = this.players.get(r.addr); return x ? { ...this.mini(x), at: r.at } : null; }).filter(Boolean) : undefined,
@@ -481,8 +571,13 @@ export class Trenchies {
       if (own || member) { let m = this.presence.get(h.addr); if (!m) this.presence.set(h.addr, (m = new Map())); m.set(p.addr, Date.now()); }
       send(200, out()); return true;
     }
+    if (op === "land/open") {
+      if (!own) { send(403, { error: "Only the owner can change this." }); return true; }
+      h.open = b.open === true; this.post(h, { by: "", nft: 0, text: h.open ? "This land is now public: anyone can walk in" : "This land is now private: members only" });
+      this.save(); send(200, out()); return true;
+    }
     if (op === "land/request") {
-      if (own || member) { send(400, { error: "You're already on this land." }); return true; }
+      if (own || member) { send(400, { error: h.open ? "This land is public: walk right in." : "You're already on this land." }); return true; }
       if (h.members.length >= MAX_MEMBERS) { send(400, { error: "This land is full." }); return true; }
       if (!h.requests.some((r) => r.addr === p.addr)) {
         h.requests = [...h.requests.slice(-19), { addr: p.addr, at: Date.now() }];
@@ -505,7 +600,7 @@ export class Trenchies {
     }
     if (op === "land/leave") {
       const who = own ? this.byName(b.who) : p;
-      if (!who || who.addr === h.addr || !h.members.includes(who.addr)) { send(400, { error: "Not a member." }); return true; }
+      if (!who || who.addr === h.addr || (!h.members.includes(who.addr) && !h.open)) { send(400, { error: "Not a member." }); return true; }
       h.members = h.members.filter((a) => a !== who.addr); this.presence.get(h.addr)?.delete(who.addr);
       this.post(h, { by: "", nft: 0, text: own ? `${who.name} was removed` : `${who.name} left the land` });
       this.save(); send(200, out()); return true;
@@ -548,6 +643,7 @@ export class Trenchies {
     const top = this.weekBoard(w).slice(0, PRIZE_SPLIT.length), total = PRIZE_SPLIT.slice(0, top.length).reduce((s, x) => s + x, 0) || 1;
     const winners = top.map((x, i) => { const share = Math.round((PRIZE_SPLIT[i] / total) * 1000) / 10; return { name: x.p.name, addr: x.p.addr, nft: x.p.nft, xp: x.xp, share, wei: ((pot * BigInt(Math.round(share * 10))) / 1000n).toString() }; });
     this.prizes.set(w, { week: w, label: weekLabel(w), feesWei: fees.toString(), potWei: pot.toString(), winners, at: Date.now(), paid: null });
+    for (const x of top) { stat(x.p, "podiums"); checkAchievements(x.p); note(x.p, "ach", `Top ${PRIZE_SPLIT.length} this week: the Champion Trophy is yours to place`); }
     this.save();
     this.host.log(`Trenchies: week ${weekLabel(w)} settled, pot ${formatEther(pot)} ETH, winners ${winners.map((x) => x.name).join(", ") || "none"}`);
     if (winners.length && pot > 0n) {

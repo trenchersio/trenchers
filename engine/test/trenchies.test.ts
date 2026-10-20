@@ -26,7 +26,9 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   const pub = { readContract: async ({ args }: { args: [bigint] }) => owners[Number(args[0])] ?? "0x0000000000000000000000000000000000000001" };
   const posts: string[] = [];
   const pot = { potWei: () => 1000n, feesIn: () => 20000n, view: () => ({ potEth: "0.000000000000001" }) };
-  const g = new Trenchies({ pub: pub as never, nft: "0x0000000000000000000000000000000000000002", prices: prices as never, symbolOf: async (t) => `C${t.slice(-1)}`, log: () => {}, pot: pot as never, announce: (_ids, t) => { posts.push(t); } });
+  const { BtcFeed } = await import("../src/btc");
+  const btc = new BtcFeed(); btc.add(Date.now() / 1000, 60000);
+  const g = new Trenchies({ pub: pub as never, nft: "0x0000000000000000000000000000000000000002", prices: prices as never, symbolOf: async (t) => `C${t.slice(-1)}`, log: () => {}, pot: pot as never, btc, announce: (_ids, t) => { posts.push(t); } });
   const srv = createServer((req, res) => { void g.handle(req, res, req.url!.split("?")[0]); }).listen(0);
   t.after(() => srv.close());
   const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}/trenchies/`;
@@ -57,18 +59,27 @@ test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit
   // Shop
   assert.equal((await post("buy", { token: tok, id: "super" })).status, 400, "level-locked");
   const buy = await post("buy", { token: tok, id: "moped" }); assert.equal(buy.status, 200, JSON.stringify(buy.j)); assert.equal(buy.j.me.vehicle, "moped"); assert.equal(buy.j.me.bricks, st.bricks - 150);
-  // The tree on your land: gather wood, then it regrows.
-  const w1 = await post("gather", { token: tok, res: "wood" }); assert.equal(w1.status, 200); assert.ok(w1.j.got >= 10 && w1.j.got <= 20, `wood ${w1.j.got}`); assert.equal(w1.j.me.wood, w1.j.got);
-  assert.equal((await post("gather", { token: tok, res: "wood" })).status, 400, "the tree has to regrow first");
-  assert.ok(w1.j.me.next.wood > Date.now() + 2.9 * 3600 * 1000);
+  // Picks pay coins as well as XP: 5 for playing, 60 for #1, 40 for #2
+  assert.equal(st.results[0].coins, 105);
+  assert.equal((await post("gather", { token: tok, res: "wood" })).status, 410, "gathering is gone");
+  // The trading desk: call the next 5-minute Bitcoin round, it runs, it settles
+  const { DESK, deskRound } = await import("../src/trenchies-catalog");
+  const c1 = await post("desk/call", { token: tok, call: "up" }); assert.equal(c1.status, 200, JSON.stringify(c1.j)); assert.equal(c1.j.next.call, "up");
+  await post("desk/call", { token: tok2, call: "down" }); await post("desk/call", { token: tok2, call: "down" });
+  const nr = deskRound(Date.now() / 1000) + 1, t0 = nr * DESK.round;
+  btc.add(t0 - 1, 60000); btc.add(t0 + DESK.round - 1, 60500);
+  const before = (await post("state", { token: tok })).j.me;
+  g.deskTick(t0 + DESK.round + 5);
+  const dv = (await fetch(`${base}desk?token=${tok}`).then((r) => r.json())) as any;
+  assert.equal(dv.log[0].result, "win"); assert.equal(dv.log[0].coins, DESK.win.coins); assert.equal(dv.streak, 1);
+  const dv2 = (await fetch(`${base}desk?token=${tok2}`).then((r) => r.json())) as any; assert.equal(dv2.log[0].result, "loss"); assert.equal(dv2.streak, 0);
+  const after = (await post("state", { token: tok })).j.me; assert.equal(after.bricks, before.bricks + DESK.win.coins);
   assert.equal((await post("buy", { token: tok, id: "fence" })).status, 400, "level and materials are checked");
   const lb = (await fetch(`${base}leaderboard?token=${tok}`).then((r) => r.json())) as any;
   assert.equal(lb.players[0].name, "Ser_Me"); assert.equal(lb.me, 1);
   const v = (await fetch(`${base}visit?token=${tok2}&name=ser_me`).then((r) => r.json())) as any;
   assert.equal(v.player.vehicle, "moped");
   assert.equal((await fetch(`${base}state?token=bad`)).status, 401);
-  // The fishing pond
-  const f1 = await post("gather", { token: tok, res: "fish" }); assert.equal(f1.status, 200); assert.ok(f1.j.got >= 1 && f1.j.got <= 3); assert.ok(f1.j.xp === 10 || f1.j.xp === 50);
   // Lands: ask to join, the owner accepts, then both can chat; strangers can't.
   const get = (op: string, t: string, name: string) => fetch(`${base}${op}?token=${t}&name=${name}`).then(async (r) => ({ status: r.status, j: await r.json() as any }));
   assert.equal((await get("land", tok2, "Ser_Me")).j.role, "visitor");

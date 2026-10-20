@@ -35,7 +35,7 @@ test("progression: daily calendar, quests, chests, butterflies, wardrobe", async
   assert.ok(R.canWear(p, "cap")); assert.equal(R.buyCosmetic(p, "partyhat"), "This one only comes from chests.");
   p.bricks = 1000; assert.equal(R.buyCosmetic(p, "beanie"), null); assert.ok(R.canWear(p, "beanie"));
   // achievements fire from stats
-  p.stats.wood = 150; R.checkAchievements(p); assert.ok(p.achievements.includes("wood100"));
+  p.stats.deskWins = 12; R.checkAchievements(p); assert.ok(p.achievements.includes("deskwin10")); assert.ok(p.wardrobe.includes("trail-coins"));
 });
 
 test("engine: daily, quests, cheers, referral, wear, public page", async () => {
