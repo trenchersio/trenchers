@@ -9,23 +9,14 @@ import { CopyBtn } from "./Endpoint";
 
 const EXAMPLE = "pearl/zai-org/GLM-5.3";
 
-/** A pearl: a small lit sphere, drawn here (not anyone's logo). */
-function PearlMark({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="ipartner-mark">
-      <defs>
-        <radialGradient id="ipearl-g" cx="38%" cy="34%" r="70%"><stop offset="0" stopColor="#ffffff" /><stop offset=".45" stopColor="#e7ecf1" /><stop offset=".8" stopColor="#b7c2cf" /><stop offset="1" stopColor="#8d99a8" /></radialGradient>
-      </defs>
-      <rect width="40" height="40" rx="10" fill="#141a22" />
-      <circle cx="20" cy="21" r="11" fill="url(#ipearl-g)" />
-      <ellipse cx="16.5" cy="17" rx="3.4" ry="2.2" fill="#fff" opacity=".85" transform="rotate(-30 16.5 17)" />
-    </svg>
-  );
-}
+const PLANNED = ["deepseek-ai/DeepSeek-V4-Pro-0813", "deepseek-ai/DeepSeek-V4.1-Flash", "zai-org/GLM-5.3", "zai-org/GLM-5.3-Flash", "Qwen/Qwen3.8-27B", "Qwen/Qwen3.8-Flash-Next", "google/gemma-4-31B-it"];
+// eslint-disable-next-line @next/next/no-img-element
+const PearlMark = ({ size }: { size: number }) => <img src="/partners/pearl.webp" alt="" width={size} height={size} className="ipartner-mark" />;
 
 export function PearlOption({ endpoint, prefix, models, on }: { endpoint: string; prefix: string; models: Model[] | null; on: boolean }) {
   const [open, setOpen] = useState(false);
   const pearl = (models ?? []).filter((m) => m.id.startsWith("pearl/"));
+  const live = on && pearl.length > 0;
   const example = pearl.find((m) => m.id === EXAMPLE)?.id ?? pearl[0]?.id ?? EXAMPLE;
   const key = `${prefix}_live_…`;
   const py = `from openai import OpenAI\n\nclient = OpenAI(base_url="${endpoint}", api_key="${key}")\nreply = client.chat.completions.create(\n    model="${example}",\n    messages=[{"role": "user", "content": "gm"}],\n    extra_body={"reasoning": {"effort": "medium"}},\n)`;
@@ -41,18 +32,19 @@ export function PearlOption({ endpoint, prefix, models, on }: { endpoint: string
     <div className="ipartner">
       <button type="button" className="ipartner-btn" aria-haspopup="dialog" onClick={() => setOpen(true)}>
         <PearlMark size={34} />
-        <span><b>Use it via Pearl</b><em>Open-weight models on Pearl&apos;s network. Still paid in $TRENCHERS.</em></span>
-        <i className="mono" aria-hidden="true">→</i>
+        <span><b>Use it via Pearl</b><em>Open-weight models on Pearl&apos;s network. {live ? "Still paid" : "Paid"} in $TRENCHERS.</em></span>
+        {live ? <i className="mono" aria-hidden="true">→</i> : <i className="ipartner-cta mono">Coming soon</i>}
       </button>
       {open && createPortal(
         <div className="ipartner-back" onClick={() => setOpen(false)}>
           <div className="ipartner-modal" role="dialog" aria-modal="true" aria-labelledby="ipearl-t" onClick={(e) => e.stopPropagation()}>
             <div className="ipartner-head">
               <PearlMark size={40} />
-              <div><h3 id="ipearl-t">Use it via Pearl</h3><p>Open-weight models on Pearl&apos;s network. Still paid in $TRENCHERS.</p></div>
+              <div>{/* eslint-disable-next-line @next/next/no-img-element */}<h3 id="ipearl-t"><img src="/partners/pearl-wordmark.webp" alt="Pearl" height={22} className="ipartner-word" />{!live && <small className="ipartner-soon mono">Coming soon</small>}</h3><p>Open-weight models on Pearl&apos;s network. {live ? "Still paid" : "Paid"} in $TRENCHERS.</p></div>
               <button type="button" className="ipartner-x" aria-label="Close" onClick={() => setOpen(false)} autoFocus>✕</button>
             </div>
             <div className="ipartner-body">
+              {!live && <p className="ipartner-note">Pearl models are coming soon. We&apos;re waiting on access to Pearl&apos;s API; this is how it will work once it&apos;s on.</p>}
               <p>Buy credit exactly as usual. Then ask for a model as <code>pearl/&lt;id&gt;</code>, for example <code>{example}</code>. <a href="https://platform.pearlresearch.ai/docs" target="_blank" rel="noreferrer">Pearl</a> runs open-weight models (DeepSeek, GLM, Qwen, Gemma) on its own distributed GPUs, with reasoning, tool calling, JSON mode and up to 1M tokens of context.</p>
               <ul>
                 <li>Same key, same balance: paid from your $TRENCHERS credit, and every $TRENCHERS is still burned.</li>
@@ -62,13 +54,13 @@ export function PearlOption({ endpoint, prefix, models, on }: { endpoint: string
                 <li>Models without <code>pearl/</code> in front work exactly as before.</li>
               </ul>
               <div className="ipartner-models">
-                <div className="ipartner-copy"><span className="mono">Pearl models on the desk</span><span className="mono">{pearl.length || "–"}</span></div>
-                {pearl.length ? (
+                <div className="ipartner-copy"><span className="mono">{live ? "Pearl models on the desk" : "Planned Pearl models"}</span><span className="mono">{live ? pearl.length : "soon"}</span></div>
+                {live ? (
                   <ul>{pearl.map((m) => <li key={m.id}><code>{m.id}</code><span className="mono">{ctx(m.context_length)}</span><CopyBtn text={m.id} label="Copy" /></li>)}</ul>
-                ) : <p className="inf-fine">{on ? "Pearl is switched on; its models appear here as soon as their prices are loaded." : "Pearl models appear here once the option is switched on."}</p>}
+                ) : <ul>{PLANNED.map((id) => <li key={id}><code>pearl/{id}</code></li>)}</ul>}
               </div>
               <div className="ipartner-code">
-                <div className="ipartner-copy"><span className="mono">Python</span><CopyBtn text={py} /></div>
+                <div className="ipartner-copy"><span className="mono">Python{live ? "" : " · once live"}</span><CopyBtn text={py} /></div>
                 <pre className="mono">{py}</pre>
                 <div className="ipartner-copy"><span className="mono">curl</span><CopyBtn text={curl} /></div>
                 <pre className="mono">{curl}</pre>

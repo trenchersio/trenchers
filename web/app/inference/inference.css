@@ -623,3 +623,9 @@
 .ipartner-models li code { flex: 1; min-width: 0; font-size: 12px; }
 .ipartner-models li .mono { color: var(--quiet); font-size: 11px; }
 .ipartner-models .inf-fine { margin: 0; padding: 10px 12px; background: rgba(6,8,7,.6); }
+.ipartner-soon { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: rgba(110,200,255,.12); color: #8fd3ff; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; vertical-align: 2px; }
+.ipartner-head h3 { display: flex; align-items: center; }
+.ipartner-word { height: 22px; width: auto; display: block; }
+.ipartner-note { padding: 10px 12px; border: 1px solid rgba(110,200,255,.25); border-radius: 10px; background: rgba(110,200,255,.06); color: #C9D6DF; }
+.ipartner-btn i.ipartner-cta { flex: none; padding: 6px 11px; border: 1px solid rgba(110,200,255,.4); border-radius: 999px; background: rgba(110,200,255,.1); color: #8fd3ff; font-size: 11.5px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+.ipartner-btn:hover i.ipartner-cta { color: #bfe6ff; border-color: rgba(110,200,255,.7); }

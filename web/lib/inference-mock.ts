@@ -12,9 +12,6 @@ const TOKEN = "0xc65a7c91591a2dd4d5624e75e814b1bbe88b984a";
 const DESK = "0x7a1c0e5d2b9f4e83a6d1c2b0f9e8d7c6b5a4f3e2";
 
 const MODELS: [string, string, number][] = [
-  ["pearl/zai-org/GLM-5.3", "Pearl · GLM-5.3", 1000000],
-  ["pearl/deepseek-ai/DeepSeek-V4-Pro-0813", "Pearl · DeepSeek V4 Pro 0813", 1000000],
-  ["pearl/Qwen/Qwen3.8-27B", "Pearl · Qwen3.8-27B", 256000],
   ["anthropic/claude-opus-4.1", "Claude Opus 4.1", 200000],
   ["anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", 1000000],
   ["anthropic/claude-sonnet-4", "Claude Sonnet 4", 200000],
@@ -128,7 +125,7 @@ export function mockInference(method: string, path: string, body: Record<string,
   const ok = (json: unknown) => ({ status: 200, json });
   const p = path.split("?")[0];
   if (p === "/icm") return ok({
-    mock: true, enabled: true, reason: null, pearl: true,
+    mock: true, enabled: true, reason: null, pearl: false,
     endpoint: "https://inference.trenchers.io/v1",
     keyPrefix: "trench",
     rate: { tokensPerUsd: "100000", symbol: "TRENCHERS" },
