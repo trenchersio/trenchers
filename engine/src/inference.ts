@@ -586,6 +586,12 @@ export class InferenceDesk {
   }
 
   /** For /health: enough to see it is on and the book balances. Nothing a customer owns, and no margin. */
+  /** Dollars of credit this wallet has bought with $TRENCHERS (for early XP). */
+  boughtUsd(wallet: string) {
+    const w = wallet.toLowerCase(), ids = new Set(this.store.filter<{ id: string; owner: string } & Row>("icm_accounts", (a) => String(a.owner).toLowerCase() === w).map((a) => a.id));
+    if (!ids.size) return 0;
+    return this.store.filter<{ accountId: string; source: string; creditedMicroUsd?: string } & Row>("icm_deposits", (d) => ids.has(d.accountId) && d.source === "chain").reduce((a, d) => a + Number(d.creditedMicroUsd ?? 0) / 1e6, 0);
+  }
   status() {
     return {
       enabled: this.enabled, reason: this.reason, problems: this.problems, watching: !!this.watcher, pearl: this.pearl,

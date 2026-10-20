@@ -248,6 +248,9 @@ export class BuilderIndex {
     return this.coins.get(token.toLowerCase()) ?? null;
   }
 
+  /** Coins launched by this wallet (for early XP). */
+  createdBy(wallet: string) { const w = wallet.toLowerCase(); return [...this.coins.values()].filter((c) => c.creator.toLowerCase() === w).map((c) => c.token as string); }
+
   status() {
     return { ready: this.config().ready, problems: this.problems, coins: this.coins.size, skipped: this.skipped, cursor: this.cursor, lastError: this.lastError };
   }
