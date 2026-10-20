@@ -446,12 +446,20 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         </Fold>
 
         <Fold id="guide" title="Train your agent" sub="Strategy, limits, start or pause">
+        {copied && !a.wallet && (
+          <div className="rule-copied">
+            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copying Trencher #${copied.from}` : "Rule copied"}</p>
+            <p className="rule-copied-n">Trencher #{a.id} isn&apos;t awake yet, so it can&apos;t trade. Awaken it first (section 1 above, one transaction), or pick another of your Trenchers above that is awake.</p>
+          </div>
+        )}
         {copied && a.wallet && (
           <div className="rule-copied">
-            <p className="mono rule-copied-k">Rule copied{copied.from ? ` from Trencher #${copied.from}` : ""}</p>
+            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copy Trencher #${copied.from ?? ""}` : `Rule copied${copied.from ? ` from Trencher #${copied.from}` : ""}`}</p>
             <blockquote>“{copied.text}”</blockquote>
-            {!/^copy trencher/i.test(copied.text) && <RuleTest rule={copied.text} auto />}
-            <p className="rule-copied-n">Applying it replaces this agent&apos;s current rule (every version is kept). Set the limits below first. Nothing trades until trading is on.</p>
+            {!isCopy(copied.text) && <RuleTest rule={copied.text} auto />}
+            <p className="rule-copied-n">{isCopy(copied.text)
+              ? `Trencher #${a.id} will buy what #${copied.from} buys, at that share of its size, and sell when it sells. Each buy is still capped by the limits below, so set them first. Applying it replaces #${a.id}'s current rule (every version is kept), and nothing trades until trading is on.`
+              : "Applying it replaces this agent's current rule (every version is kept). Set the limits below first. Nothing trades until trading is on."}</p>
             <div className="actions">
               <button type="button" className="gf-btn" disabled={busy} onClick={async () => { const ok = await applyText(copied.text, `Applying the copied rule to Trencher #${a.id}`); if (ok) dropCopied(); }}>Apply to Trencher #{a.id}</button>
               <button type="button" className="gf-btn ghost" onClick={dropCopied}>Dismiss</button>
@@ -532,6 +540,8 @@ function BuyModal({ onClose }: { onClose: () => void }) {
     document.body,
   );
 }
+
+const isCopy = (t: string) => /^copy trencher/i.test(t.trim());
 
 /** Try any rule on last week's coins before applying it. */
 function TryRule({ current }: { current: string }) {

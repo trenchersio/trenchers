@@ -3073,3 +3073,11 @@ button.nav-mint { border: 0; cursor: pointer; }
 .detail-inner > .bdg-list { padding: 0 20px; }
 .detail-inner > .cpa { margin: 14px 20px; }
 .agp-body .agent-actions a[href^="/agent/"] { display: none; }
+
+/* follow star on every leaderboard row */
+.live-li { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.live-li .live-row { border-bottom: 0; padding-left: 6px; }
+.row-follow { flex: none; width: 34px; border: 0; background: none; color: #4A524E; font-size: 17px; cursor: pointer; transition: color .15s ease, transform .15s ease; }
+.row-follow:hover { color: var(--gold); transform: scale(1.15); }
+.row-follow.on { color: var(--gold); }
+.copying-note { max-width: 560px; margin: 0 auto 6px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--violet) 45%, var(--line)); border-radius: 10px; color: var(--fog); }

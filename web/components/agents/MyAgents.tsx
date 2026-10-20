@@ -32,6 +32,7 @@ export function MyAgents() {
         <Mark />
         <p className="eyebrow">NFT / Agent Profile</p>
         <h1>Connect to see your Trenchers</h1>
+        <CopyingNote />
         <p className="lede">Connect the wallet that holds your Trenchers to awaken them, fund them, guide their trading and track how they do.</p>
         <div className="es-actions">
           <button type="button" className="nav-mint" onClick={w.openModal}>{w.address ? "Connect a different wallet" : "Connect wallet"}</button>
@@ -405,4 +406,12 @@ function SelfFundedKpi({ a }: { a: AgentState }) {
   return (
     <div className="kpi-green"><dt className="mono">Self-funded</dt><dd className="mono">{(tok + share).toFixed(5)} <small>ETH</small></dd><span className="mono kpi-note">{a.token ? "coin fees + " : ""}{AGENT_FEE_SHARE_PCT}% fee share</span></div>
   );
+}
+
+/** Arrived from "Copy this agent" or "Use this rule" without a wallet connected: say what happens next. */
+function CopyingNote() {
+  const [c, setC] = useState<{ copy: boolean; from: string | null } | null>(null);
+  useEffect(() => { const q = new URLSearchParams(window.location.search), r = q.get("rule"); if (r) setC({ copy: /^copy trencher/i.test(r.trim()), from: q.get("from") }); }, []);
+  if (!c) return null;
+  return <p className="rule-copied-n copying-note">{c.copy ? `You're copying Trencher #${c.from}.` : `You're using a rule${c.from ? ` from Trencher #${c.from}` : ""}.`} Connect the wallet that holds your Trencher and it's ready to review and apply on your agent.</p>;
 }

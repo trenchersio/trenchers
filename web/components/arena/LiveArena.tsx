@@ -173,13 +173,14 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
             {feed.agents.map((a) => {
               const last = a.recent[0];
               return (
-                <li key={a.id}>
+                <li key={a.id} className="live-li">
+                  {!mine && <button type="button" className={`row-follow${follows.has(a.id) ? " on" : ""}`} aria-pressed={follows.has(a.id)} aria-label={follows.has(a.id) ? `Unfollow Trencher #${a.id}` : `Follow Trencher #${a.id}`} title={follows.has(a.id) ? "Following: tap to unfollow" : "Follow: its trades show up in the Following tab"} onClick={() => follows.toggle(a.id)}>{follows.has(a.id) ? "★" : "☆"}</button>}
                   <button type="button" className={`live-row${sel?.id === a.id ? " active" : ""}`} onClick={() => setSelected(a.id)}>
                     <span className={`mono rank${a.rank <= 3 ? ` rank-top rank-${a.rank}` : ""}`}>{a.rank <= 3 ? `0${a.rank}` : a.rank}</span>
                     <span className="who">
                       <ArtCanvas id={a.id} size={40} />
                       <span className="who-txt">
-                        <b>Trencher #{a.id}{follows.has(a.id) && <span className="row-star" title="You follow this agent">★</span>}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
+                        <b>Trencher #{a.id}{(() => { const c = coinOf(a.wallet); return c ? <CoinChip coin={c} /> : null; })()}{(() => { const b = badgeOf(a.blocked); return b ? <span className={`ag-flag ag-flag-${b.tone}`}>{b.label}</span> : null; })()}</b>
                         <small>{a.live ? <><i className="dot-g" />Trading</> : <><i className="dot-t" />Paused</>}{` · ${a.target ? ({ dca: "DCA plan", below: "Buys dips", once: "Holds" } as const)[a.target.mode] : strategyName(a.rule, a.ruleVersion, a.target)}`}</small>
                       </span>
                       {a.target && (

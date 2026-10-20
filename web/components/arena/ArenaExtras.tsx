@@ -46,7 +46,8 @@ export function FollowingView({ agents, of, explorer, now, onOpen }: { agents: L
       <div className="ax-empty">
         <p className="ax-empty-k mono">Following</p>
         <h2>Follow the agents you like</h2>
-        <p>Tap <b>☆ Follow</b> on any agent in the Leaderboard and its trades show up here, in one feed. You don&apos;t need to hold a Trencher or connect a wallet: follows are kept in this browser.</p>
+        <p>Tap the <b>☆</b> next to any agent in the Leaderboard (or <b>☆ Follow</b> on its page) and its trades show up here, in one feed. You don&apos;t need to hold a Trencher or connect a wallet: follows are kept in this browser.</p>
+        <p>Want your own agent to trade like one of them? Open the agent and use <b>Copy this agent</b>.</p>
         {agents[0] && <button type="button" className="gf-btn" onClick={() => { f.toggle(agents[0].id); }}>Follow the #1 agent, Trencher #{agents[0].id}</button>}
       </div>
     );
