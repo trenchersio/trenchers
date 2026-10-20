@@ -14,7 +14,7 @@ export type StepKey = "trade" | "talk" | "launch" | "think" | "borrow";
 export type Where = StepKey | "hub";
 export type PageKey =
   | "home" | "docs" | "mint" | "collection" | "agents"
-  | "arena" | "playground" | "chat" | "launcher" | "builder" | "coins" | "inference" | "credit";
+  | "arena" | "playground" | "chat" | "launcher" | "builder" | "coins" | "inference" | "credit" | "market";
 
 export type Tone = "green" | "violet" | "ice" | "amber" | "gold";
 export type Step = {
@@ -36,6 +36,7 @@ export const HUB = {
     { key: "mint" as PageKey, label: "Mint", href: ROUTES.mint, hint: "Mint a Trencher on trenchers.io" },
     { key: "collection" as PageKey, label: "Collection", href: ROUTES.collection, hint: "All 2,000, their wallets and records" },
     { key: "agents" as PageKey, label: "My Trencher", href: ROUTES.agents, hint: "Your Trencher's control room" },
+    { key: "market" as PageKey, label: "Market", href: ROUTES.market, hint: "Trenchers for sale, next to what they hold" },
   ],
   external: OPENSEA_URL ? [{ label: "OpenSea", href: OPENSEA_URL }] : [],
 };

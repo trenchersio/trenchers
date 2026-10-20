@@ -18,6 +18,8 @@ import { Loader } from "@/components/Loader";
 import { EmptyState } from "@/components/EmptyState";
 import { useSlow } from "@/lib/use-slow";
 import { FollowButton, FollowingView, RecapView, RulesBoard, useFollows } from "./ArenaExtras";
+import { Badges, CopyAgent } from "./AgentBits";
+import { RuleTest } from "@/components/agents/RuleTest";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
@@ -38,8 +40,12 @@ export type LiveAgent = {
   blocked?: Blocked; spentToday?: number; dailyCap?: number;
   /** Specific-token strategy: the coin it buys (shown with its logo next to the agent). */
   target?: Target;
+  badges?: Badge[];
+  /** How many trading agents copy this one. */
+  copiedBy?: number;
 };
-type Feed = { updatedAt: number; chainId: number; nft: string; paused: boolean; agents: LiveAgent[]; feed: LiveTrade[] };
+export type Badge = { key: string; label: string; tone: string };
+export type Feed = { updatedAt: number; chainId: number; nft: string; paused: boolean; agents: LiveAgent[]; feed: LiveTrade[] };
 
 const EXPLORERS: Record<number, string> = { 46630: "https://explorer.testnet.chain.robinhood.com", 4663: "https://robin.etherscan.io" };
 const signed = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`;
@@ -48,7 +54,7 @@ const ago = (s: number) => (s < 60 ? `${Math.max(0, Math.floor(s))}s` : s < 3600
 const sym = (t: { symbol?: string; token: string }) => `$${t.symbol ?? t.token.slice(2, 8)}`;
 
 const FEED_KEY = `trenchers:arena:${ENGINE_URL}`;
-function useFeed() {
+export function useFeed() {
   // The last feed seen in this browser shows instantly; the live one replaces it within seconds.
   const [feed, setFeed] = useState<Feed | null>(null);
   useEffect(() => { try { const v = localStorage.getItem(FEED_KEY); if (v) setFeed((f) => f ?? JSON.parse(v)); } catch { /* none */ } }, []);
@@ -220,7 +226,7 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
 }
 
 const LIVE_RANGES = ["1H", "6H", "24H", "All"] as const;
-function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
+export function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
   const [range, setRange] = useState<(typeof LIVE_RANGES)[number]>(LIVE_RANGES[LIVE_RANGES.length - 1]);
   const span = range === "1H" ? 3600 : range === "6H" ? 21600 : range === "24H" ? 86400 : Infinity;
   const end = history.at(-1)?.t ?? 0;
@@ -242,7 +248,7 @@ function LiveValueChart({ history }: { history: { t: number; v: number }[] }) {
   );
 }
 
-function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explorer: string; now: number }) {
+export function LiveDetail({ a, of, explorer, now, highlight }: { a: LiveAgent; of: number; explorer: string; now: number; highlight?: string }) {
   const winRate = a.closed ? (a.wins / a.closed) * 100 : null;
   return (
     <div className="detail-inner">
@@ -253,10 +259,12 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
           <h2>Trencher #{a.id}</h2>
           {a.owner && <p className="mono who-line">Holder {short(a.owner)}</p>}
           <p className="mono who-line">Agent wallet <a href={`${explorer}/address/${a.wallet}`} target="_blank" rel="noreferrer">{short(a.wallet)} ↗</a></p>
-          <div className="agent-actions"><FollowButton id={a.id} /><PnlCardButton data={cardFromLive(a, of)} /><AgentLinks wallet={a.wallet} /><span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
+          <div className="agent-actions"><FollowButton id={a.id} /><a className="tbtn pnl-btn" href={`/agent/${a.id}`}>Open its page</a><PnlCardButton data={cardFromLive(a, of)} /><AgentLinks wallet={a.wallet} /><span className="agent-links"><a className="tbtn" href={openseaItem(a.id)} target="_blank" rel="noreferrer">OpenSea ↗</a></span></div>
         </div>
       </header>
 
+      {a.badges && a.badges.length > 0 && <Badges list={a.badges} />}
+      <CopyAgent id={a.id} copiedBy={a.copiedBy} />
       {(() => { const b = badgeOf(a.blocked); return b ? <p className={`ag-note ag-note-${b.tone} mono`}>Can&apos;t buy right now: {a.blocked!.text}. {a.blocked!.code === "no-eth" ? "Its holder can top it up on its profile." : a.blocked!.code === "unsupported" ? "Its holder can pick another strategy on its profile." : ""}</p> : null; })()}
       <AgentCoinLine wallet={a.wallet} agent={a.id} />
       <dl className="kpis">
@@ -283,6 +291,9 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
           </div>
         )}
         {a.rule ? <blockquote className="guide"><span className="mono">Its rule, as stored on-chain</span>“{a.rule}”</blockquote> : <p className="empty">The holder hasn&apos;t given this agent a rule yet.</p>}
+        {a.rule && !/^buy token 0x|^copy trencher/i.test(a.rule.trim()) && (
+          <div className="rule-tools"><RuleTest rule={a.rule} /><a className="gf-btn ghost" href={`${ROUTES.agents}?rule=${encodeURIComponent(a.rule)}&from=${a.id}`}>Use this rule for my agent</a></div>
+        )}
         {a.understood.length > 0 && <div className="tags">{a.understood.map((u) => <span key={u} className="mono">{u}</span>)}</div>}
         {a.ruleWarning && <p className="live-warn">{a.ruleWarning}</p>}
         <p className="hint-line">{a.live ? "Trading is on." : "Trading is paused by its holder."}</p>
@@ -306,7 +317,7 @@ function LiveDetail({ a, of, explorer, now }: { a: LiveAgent; of: number; explor
         {a.recent.length ? (
           <ol className="trades mono">
             {a.recent.map((t) => (
-              <li key={`${t.tx}-${t.side}`}>
+              <li key={`${t.tx}-${t.side}`} id={`tx-${t.tx}`} className={highlight && t.tx.toLowerCase() === highlight.toLowerCase() ? "t-hl" : undefined}>
                 <span className="t-ago">{ago(now - t.time)}</span>
                 <b className={t.side === "buy" ? "up" : "down"}>{t.side.toUpperCase()}</b>
                 <span className="t-sym">{sym(t)}</span>

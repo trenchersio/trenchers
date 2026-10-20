@@ -34,7 +34,7 @@ function loadLogo(prefix: string) {
   if (logo?.complete) return Promise.resolve(logo);
   return new Promise<HTMLImageElement>((resolve) => {
     const img = new Image(); img.onload = () => { logo = img; resolve(img); }; img.onerror = () => resolve(img);
-    img.src = `${prefix}brand/lockup.svg`;
+    img.src = `${prefix || (process.env.NEXT_PUBLIC_PREVIEW === "1" ? "" : "/")}brand/lockup.svg`;
   });
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { AgentRedirect } from "../../AgentRedirect";
+import { AgentPage } from "@/components/agent/AgentPage";
+import { SiteHeader } from "@/components/SiteHeader";
 import { trade, tradeLine } from "@/lib/trade-share";
 
 type P = { params: Promise<{ id: string; tx: string }> };
@@ -12,8 +13,8 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   return { title, description, openGraph: { title, description }, twitter: { card: "summary_large_image", title, description } };
 }
 
-/** Share link for one trade (rich preview on X and Telegram); people are sent on to the agent. */
+/** Share link for one trade (rich preview on X and Telegram): the agent's page with that trade picked out. */
 export default async function TradeShare({ params }: P) {
-  const { id } = await ids(params);
-  return <AgentRedirect id={id} />;
+  const { id, tx } = await ids(params);
+  return (<><SiteHeader page="arena" wide /><main className="arena-main"><AgentPage id={id} tx={tx || undefined} /></main></>);
 }

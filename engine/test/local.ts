@@ -303,6 +303,37 @@ async function main() {
   const row6 = ((await engine.arena()).agents as { id: number; coin: string | null }[]).find((r) => r.id === 6);
   check(!!row6?.coin, `Programmable: the Arena shows #6's coin (${row6?.coin})`);
 
+  // Copy another agent: #7 copies #6 at 50% of its size, and sells when #6 sells.
+  {
+    await call(w6, "TrenchersAgentAccount", "setPolicy", [parseEther("0.04"), parseEther("1"), true, keccak256(toHex(rule6)), rule6], 0n, alice);
+    const copyRule = "Copy Trencher #6 at 50% size";
+    await call(w7, "TrenchersAgentAccount", "setPolicy", [parseEther("0.05"), parseEther("1"), true, keccak256(toHex(copyRule)), copyRule], 0n, alice);
+    await sleep(3000);
+    check(engine.agents.get(w7.toLowerCase() as Address)?.rule?.trigger === "copy", "copy: #7's rule reads as copying #6");
+    const c0 = engine.trades.length;
+    const cpTx = await call(pons, "MockPonsFactory", "launch", ["COPY", parseEther("100")], parseEther("1"), dev);
+    const cpTok = ((parseEventLogs({ abi: artifact("MockPonsFactory").abi, logs: cpTx.logs, eventName: "TokenLaunched" })[0] as unknown as { args: { token: Address } }).args.token).toLowerCase();
+    for (let i = 0; i < 60 && !engine.trades.slice(c0).some((t) => t.agent === 7 && t.token === cpTok && t.side === "sell"); i++) await sleep(500);
+    const t6 = engine.trades.slice(c0).filter((t) => t.agent === 6 && t.token === cpTok), t7 = engine.trades.slice(c0).filter((t) => t.agent === 7 && t.token === cpTok);
+    const b6 = t6.find((t) => t.side === "buy"), b7 = t7.find((t) => t.side === "buy");
+    check(!!b6 && !!b7 && Math.abs(Number(b7.eth) - Number(b6.eth) / 2) < 1e-9, `copy: #6 bought ${b6?.eth} ETH of COPY, #7 copied with half (${b7?.eth} ETH)`);
+    check(t6.some((t) => t.side === "sell") && t7.some((t) => t.side === "sell") && t7.find((t) => t.side === "sell")!.time >= t6.find((t) => t.side === "sell")!.time, `copy: #7 sold when #6 sold (${t7.map((t) => t.side).join(",")})`);
+  }
+  // Badges, from every trade so far.
+  const b6row = ((await engine.arena()).agents as { id: number; badges: { key: string }[] }[]).find((r) => r.id === 6);
+  check(!!b6row?.badges.some((b) => b.key === "first"), `badges: #6 has its badges (${b6row?.badges.map((b) => b.key).join(", ")})`);
+  // Test a rule on the last week: replays the curve trades this test made.
+  {
+    const { Backtest } = await import("../src/backtest");
+    const bt = new Backtest({ pub: engine.pub as never, curves: engine.curves, tokens: engine.tokens as never, log: () => {}, ethUsd: 3000, snipeWait: 3, maxPositions: 6, maxHold: 86400 });
+    await bt.update();
+    const r = bt.run("Buy every new Pons launch, sell after 8 seconds.");
+    console.log("   rule test:", JSON.stringify(r).slice(0, 300));
+    check(r.ok && r.coins >= 3 && r.trades >= 3, `rule test: replayed a launch rule over this test's coins (${r.ok ? `${r.trades} trades on ${r.coins} coins, ${r.winRate}% wins, avg ${r.avgPct}%` : r.error})`);
+    const g = bt.run("Buy every launch that graduates, take profit 50%");
+    check(!g.ok && /graduat/i.test(g.error), "rule test: says plainly when a rule can't be tested");
+  }
+
   // $TRENCHERS fee share: the engine enrols awake agents, closes each week and pays every agent its share.
   const rpc = (method: string, params: unknown[] = []) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
   await engine.feeKeeper.run();

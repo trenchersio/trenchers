@@ -29,6 +29,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   ];
   const collection: NavItem[] = [
     { label: "Browse all 2,000", href: ROUTES.collection, hint: "Every Trencher, its wallet and its record" },
+    { label: "Market", href: ROUTES.market, hint: "Trenchers for sale, next to what their agent holds" },
     ...HUB.external.map((x) => ({ label: x.label, href: x.href, hint: "Buy or sell a Trencher", external: true })),
   ];
   const community: NavItem[] = [
@@ -44,7 +45,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
       <SectionSwitch on={where} wide={wide} mintOn={page === "mint"} />
       <header className={`bar${wide ? " bar-wide" : ""}`}>
         <a href={page === "home" ? "#top" : ROUTES.home} aria-label="Trenchers home" className="inf-brand">
-          <img src="brand/lockup.svg" alt="Trenchers" width={200} height={22} className="lockup" />
+          <img src={`${process.env.NEXT_PUBLIC_PREVIEW === "1" ? "" : "/"}brand/lockup.svg`} alt="Trenchers" width={200} height={22} className="lockup" />
           {st && <span className={`inf-brand-tag step-tag tone-${st.tone} mono`}>Make it<br />{st.name.toLowerCase()}</span>}
         </a>
         <nav>
@@ -53,7 +54,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
               aria-current={page === p.key ? "page" : undefined}>{p.label}</a>
           )) : (
             <>
-              <NavDropdown label="Collection" items={collection} active={page === "collection"} />
+              <NavDropdown label="Collection" items={collection} active={page === "collection" || page === "market"} />
               <a href={ROUTES.agents} title="Your Trencher's control room" className={`tbtn${page === "agents" ? " tbtn-on" : ""}`}
                 aria-current={page === "agents" ? "page" : undefined}>My Trencher</a>
             </>

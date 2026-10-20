@@ -17,6 +17,8 @@ export type RecapWeek = {
   comeback: { id: number; lowPct: number; endPct: number } | null;
   mostActive: { id: number; trades: number } | null;
   winRate: { id: number; pct: number; closed: number } | null;
+  /** Every agent's place that week (for the weekly report and badges). */
+  ranks?: { id: number; rank: number; pnlPct: number; trades: number; best: { symbol: string; pct: number } | null }[];
 };
 
 const DAY = 86400, WEEK = 7 * DAY;
@@ -51,11 +53,25 @@ export function summarize(a: Arena, start: number): RecapWeek {
     top, bestTrade: bt ? { id: bt.id, symbol: bt.biggest!.symbol, pct: +bt.biggest!.pct.toFixed(1) } : null,
     comeback, mostActive: ma ? { id: ma.id, trades: ma.trades } : null,
     winRate: wr ? { id: wr.id, pct: Math.round((wr.wins / wr.closed) * 100), closed: wr.closed } : null,
+    ranks: [...a.agents].sort((x, y) => y.pnlPct - x.pnlPct).map((r, i) => ({ id: r.id, rank: i + 1, pnlPct: +r.pnlPct.toFixed(2), trades: r.trades, best: r.biggest ? { symbol: r.biggest.symbol, pct: +r.biggest.pct.toFixed(1) } : null })),
   };
 }
 
 export class Recaps {
   weeks: RecapWeek[] = [];
+  /** Called once when a week's recap is saved (the weekly report). */
+  onSaved: ((week: RecapWeek, previous: RecapWeek | null) => void) | null = null;
+  /** Per Trencher: weeks in the top 10, on the podium, won, and comebacks (for badges). */
+  honors() {
+    const m = new Map<number, { weeks: number; top10: number; podium: number; won: number; comeback: number }>();
+    const h = (id: number) => { let x = m.get(id); if (!x) m.set(id, (x = { weeks: 0, top10: 0, podium: 0, won: 0, comeback: 0 })); return x; };
+    for (const w of this.weeks) {
+      for (const r of w.ranks ?? []) if (r.trades > 0) { const x = h(r.id); x.weeks++; if (r.rank <= 10) x.top10++; }
+      w.top.forEach((t, i) => { const x = h(t.id); if (!w.ranks) x.top10++; x.podium++; if (i === 0) x.won++; });
+      if (w.comeback) h(w.comeback.id).comeback++;
+    }
+    return m;
+  }
   constructor(private log: (m: string) => void) {
     try { if (existsSync(FILE)) this.weeks = (JSON.parse(readFileSync(FILE, "utf8")) as { weeks: RecapWeek[] }).weeks ?? []; } catch { /* start empty */ }
   }
@@ -71,12 +87,13 @@ export class Recaps {
     const r = summarize(a, start);
     this.weeks.unshift(r); this.weeks.sort((x, y) => y.start - x.start); this.weeks = this.weeks.slice(0, 104);
     this.save();
+    try { this.onSaved?.(r, this.weeks.find((w) => w.start === start - WEEK) ?? null); } catch { /* the report must not block the recap */ }
     this.log(`Recap: week of ${r.week} saved (${r.trades} trades, top #${r.top[0]?.id ?? "none"})`);
   }
   async handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
     if (path !== "/recaps") return false;
     res.setHeader("cache-control", "public, max-age=300");
-    res.end(JSON.stringify({ weeks: this.weeks, nextAt: (weekStart(Date.now() / 1000) + WEEK) * 1000 }));
+    res.end(JSON.stringify({ weeks: this.weeks.map(({ ranks, ...w }) => w), nextAt: (weekStart(Date.now() / 1000) + WEEK) * 1000 }));
     return true;
   }
 }

@@ -4,6 +4,7 @@ import { ArtCanvas } from "@/components/collection/ArtCanvas";
 import { PnlCardButton } from "@/components/PnlCard";
 import { ENGINE_URL, ROUTES } from "@/lib/constants";
 import { cardFromLive, strategyName, tradeCard, type LiveAgent, type LiveTrade } from "./LiveArena";
+import { RuleTest } from "@/components/agents/RuleTest";
 
 /** The Arena's extra tabs: agents you follow, the rules that are winning, and the weekly recap. */
 
@@ -118,6 +119,7 @@ export function RulesBoard({ agents, onOpen }: { agents: LiveAgent[]; onOpen: (i
               <em className={`mono ax-ret ${g.avg >= 0 ? "up" : "down"}`}>{signed(g.avg)}<small>{g.agents.length > 1 ? "avg this week" : "this week"}</small></em>
             </div>
             <blockquote>“{g.text}”</blockquote>
+            <RuleTest rule={g.text} />
             <div className="ax-rule-foot">
               <span className="ax-users">{g.agents.slice(0, 6).map((a) => <button key={a.id} type="button" title={`Trencher #${a.id}: ${signed(a.pnlPct)}`} onClick={() => onOpen(a.id)}><ArtCanvas id={a.id} size={26} /></button>)}</span>
               <span className="ax-rule-act">

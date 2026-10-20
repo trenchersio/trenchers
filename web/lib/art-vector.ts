@@ -8,7 +8,10 @@ const CELLS = 28, MARGIN = 2, N = 24, GAP = 0.1;
 let data: Row[] | null = null;
 let loading: Promise<Row[]> | null = null;
 
+/** Absolute on the live site (pages can sit in sub-folders like /agent/862); relative in the static preview. */
+const BASE = process.env.NEXT_PUBLIC_PREVIEW === "1" ? "" : "/";
 export function loadArt(prefix = ""): Promise<Row[]> {
+  if (!prefix) prefix = BASE;
   if (data) return Promise.resolve(data);
   if (!loading) loading = fetch(`${prefix}collection/art.json`).then((r) => r.json()).then((d: Row[]) => (data = d));
   return loading;

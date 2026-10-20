@@ -8,6 +8,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { TelegramFeed } from "./telegram";
 import { Alerts } from "./alerts";
+import { Push } from "./push";
 import { dcaBuys, defaultEvery, parse, type CustomRule } from "./custom-strategy";
 import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
@@ -43,7 +44,7 @@ type Agent = {
 };
 type Position = { token: Address; ethIn: bigint; tokens: bigint; openedAt: number };
 export type Trade = { agent: number; wallet: Address; token: Address; symbol?: string; side: "buy" | "sell"; eth: string; tokens: string; time: number; tx: Hash; pnlPct?: number };
-type Entry = { wallet: Address; token: Address; notBefore: number; reason: string };
+type Entry = { wallet: Address; token: Address; notBefore: number; reason: string; size?: bigint };
 
 const lc = (a: string) => a.toLowerCase() as Address;
 const now = () => Math.floor(Date.now() / 1000);
@@ -74,6 +75,8 @@ export class Engine {
   telegram: TelegramFeed | null = null;
   /** Private alerts to holders about their own agents' trades (same bot). */
   alerts: Alerts | null = null;
+  /** Phone notifications for holders (needs the VAPID keys; otherwise off). */
+  push: Push;
   burns!: BurnTracker;
   paused = false;
   cursor = 0n;
@@ -120,9 +123,10 @@ export class Engine {
       );
       void this.telegram.check();
     }
+    this.push = new Push(ENV.SITE_URL, (addr) => this.ownedBy(addr), (m) => this.log(m));
     if (ENV.TELEGRAM_BOT_TOKEN && !/^(off|false|0|no)$/i.test((process.env.TELEGRAM_ALERTS || "").trim())) {
       this.alerts = new Alerts({ api: process.env.TELEGRAM_API, token: ENV.TELEGRAM_BOT_TOKEN, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, imageBase: ENV.IMAGE_BASE },
-        (addr) => [...this.agents.values()].filter((a) => a.owner === addr.toLowerCase()).map((a) => a.id).sort((x, y) => x - y), (m) => this.log(m));
+        (addr) => this.ownedBy(addr), (m) => this.log(m));
       void this.alerts.start();
     }
   }
@@ -414,6 +418,7 @@ export class Engine {
         ag.understood = parsed?.understood ?? [];
         ag.ruleWarning = !parsed ? "No rule text found"
           : parsed.rule.trigger === "dexupdate" ? "The DexScreener signal isn't supported yet, so this agent won't buy"
+          : parsed.rule.trigger === "copy" && parsed.rule.copyOf === ag.id ? "An agent can't copy itself"
           : parsed.missed ? "Part of this rule wasn't understood; the agent follows the parts listed"
           : null;
         if (ag.ruleWarning) this.log(`Agent #${ag.id} rule warning: ${ag.ruleWarning}`);
@@ -430,6 +435,7 @@ export class Engine {
         await this.symbolOf(token);
         this.touch(w, token);
         this.addTrade(w, token, "buy", ethIn, tokens, t, l.transactionHash!, undefined, live ? "live" : l.blockNumber! >= this.catchUpFrom ? "catchup" : false);
+        if (live) await this.onLeader(w, token, "buy", ethIn);
         break;
       }
       case "Sold": {
@@ -438,6 +444,7 @@ export class Engine {
         const p = book.get(token);
         const tokensIn = a.tokensIn as bigint, ethOut = a.ethOut as bigint;
         let pnlPct: number | undefined;
+        const heldFor = p ? t - p.openedAt : 0;
         if (p && p.tokens > 0n) {
           const part = tokensIn >= p.tokens ? p.ethIn : (p.ethIn * tokensIn) / p.tokens;
           this.realized.push({ wallet: w, time: t, pnl: ethOut - part });
@@ -447,6 +454,9 @@ export class Engine {
         }
         await this.symbolOf(token);
         this.addTrade(w, token, "sell", ethOut, tokensIn, t, l.transactionHash!, pnlPct, live ? "live" : l.blockNumber! >= this.catchUpFrom ? "catchup" : false);
+        // Diamond hands: a position held a day or more, closed in profit.
+        if (pnlPct !== undefined && pnlPct > 0 && heldFor >= 86400) this.stat(w).diamond = true;
+        if (live) await this.onLeader(w, token, "sell", ethOut);
         break;
       }
     }
@@ -500,10 +510,18 @@ export class Engine {
   private book(w: Address) { let b = this.positions.get(w); if (!b) { b = new Map(); this.positions.set(w, b); } return b; }
   private openCount() { let n = 0; for (const b of this.positions.values()) n += b.size; return n; }
   private addTrade(w: Address, token: Address, side: "buy" | "sell", eth: bigint, tokens: bigint, time: number, tx: Hash, pnlPct?: number, post: "live" | "catchup" | false = false) {
+    const st = this.stat(w);
+    st.trades++; st.first ??= time;
+    if (side === "sell" && pnlPct !== undefined) {
+      st.best = Math.max(st.best, pnlPct);
+      st.streak = pnlPct > 0 ? st.streak + 1 : 0; st.maxStreak = Math.max(st.maxStreak, st.streak);
+      if (pnlPct > 0) st.wins++;
+    }
     const tr: Trade = { agent: this.agents.get(w)?.id ?? 0, wallet: w, token, symbol: this.symbols.get(token) ?? this.tokens.get(token)?.symbol, side, eth: formatEther(eth), tokens: tokens.toString(), time, tx, pnlPct };
     this.trades.push(tr);
     if (this.telegram && post) void this.telegram.onTrade(tr)?.catch(() => {});
     if (this.alerts && post === "live") this.alerts.onTrade(tr, this.agents.get(w)?.owner);
+    if (post === "live") this.push.onTrade(tr, this.agents.get(w)?.owner);
     if (this.trades.length > 5000) this.trades.splice(0, this.trades.length - 5000);
   }
 
@@ -742,7 +760,7 @@ export class Engine {
         const liq = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "trackedQuote" }).catch(() => 0n);
         if (Number(formatEther(liq)) < r.minLiquidityEth) continue;
       }
-      await this.buy(ag, tok, e.reason);
+      await this.buy(ag, tok, e.reason, e.size);
     }
   }
 
@@ -942,6 +960,7 @@ export class Engine {
         const age = ts - p.openedAt;
         let why: string | null = null;
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
+        else if (r?.trigger === "copy" && this.copyExits.has(`${w}:${p.token}`)) { why = `#${r.copyOf} sold it`; this.copyExits.delete(`${w}:${p.token}`); }
         else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && !!r.token && lc(r.token) === p.token)) why = "max hold";
         else if (!r) why = "no rule any more";
         else if (r.exit === "tpsl" && (r.takeProfitPct || r.stopLossPct)) {
@@ -1104,6 +1123,52 @@ export class Engine {
     return { updatedAt: this.now(), coins: out.sort((a, b) => a.agent - b.agent) };
   }
 
+  /** Awakened Trenchers a wallet holds right now. */
+  ownedBy(addr: string) { return [...this.agents.values()].filter((a) => a.owner === addr.toLowerCase()).map((a) => a.id).sort((x, y) => x - y); }
+
+  // ------------------------------------------------------------------ copying another agent
+
+  /** Positions to close because the agent they copy sold that coin. */
+  private copyExits = new Set<string>();
+  /** A trade by any agent: agents whose rule copies it follow, at their share of its size, within their own limits. */
+  private async onLeader(w: Address, token: Address, side: "buy" | "sell", eth: bigint) {
+    const leader = this.agents.get(w); if (!leader) return;
+    const followers = [...this.agents.values()].filter((f) => f.rule?.trigger === "copy" && f.rule.copyOf === leader.id && f.wallet !== w);
+    if (!followers.length) return;
+    if (side === "sell") { for (const f of followers) if (this.book(f.wallet).has(token)) this.copyExits.add(`${f.wallet}:${token}`); return; }
+    const tok = this.tokens.get(token) ?? (await this.ensureToken(token).catch(() => null));
+    if (!tok) return;
+    for (const f of followers) {
+      const size = (eth * BigInt(Math.round((f.rule!.copyPct ?? 100) * 100))) / 10_000n;
+      this.entries.push({ wallet: f.wallet, token: tok.token, notBefore: this.now(), reason: `copying #${leader.id}`, size });
+      this.log(`Agent #${f.id} copies #${leader.id}: buy ${tok.token} at ${f.rule!.copyPct ?? 100}% of its size`);
+    }
+  }
+
+  // ------------------------------------------------------------------ badges
+
+  /** Running totals per agent wallet, built from every trade (history is replayed on start, so they're complete). */
+  private stats = new Map<Address, { trades: number; wins: number; best: number; streak: number; maxStreak: number; first?: number; diamond?: boolean }>();
+  private stat(w: Address) { let s = this.stats.get(w); if (!s) this.stats.set(w, (s = { trades: 0, wins: 0, best: -Infinity, streak: 0, maxStreak: 0 })); return s; }
+  /** Weekly recap honours per Trencher (set from the saved recaps). */
+  honors = new Map<number, { weeks: number; top10: number; podium: number; won: number; comeback: number }>();
+  badgesOf(ag: Agent) {
+    const s = this.stats.get(ag.wallet), h = this.honors.get(ag.id), out: { key: string; label: string; tone: string }[] = [];
+    const add = (key: string, label: string, tone: string) => out.push({ key, label, tone });
+    if (h?.won) add("champion", h.won > 1 ? `Week winner ×${h.won}` : "Week winner", "gold");
+    else if (h?.podium) add("podium", h.podium > 1 ? `Podium ×${h.podium}` : "Podium", "gold");
+    else if (h?.top10) add("top10", "Top 10 week", "gold");
+    if (h?.comeback) add("comeback", "Comeback", "ice");
+    if (s) {
+      if (s.best >= 900) add("x10", "10x trade", "green"); else if (s.best >= 100) add("x2", "+100% trade", "green");
+      if (s.maxStreak >= 10) add("streak10", "10 wins in a row", "violet"); else if (s.maxStreak >= 5) add("streak5", "5 wins in a row", "violet");
+      if (s.diamond) add("diamond", "Diamond hands", "ice");
+      if (s.trades >= 1000) add("t1000", "1,000 trades", "amber"); else if (s.trades >= 100) add("t100", "100 trades", "amber");
+      if (s.trades >= 1) add("first", "First trade", "quiet");
+    }
+    return out;
+  }
+
   /** One trade by its transaction (for share links); the newest match if a tx holds several. */
   findTrade(tx: string, agent?: number) {
     const t = tx.toLowerCase();
@@ -1136,6 +1201,8 @@ export class Engine {
         biggest: best ? { symbol: best.symbol ?? best.token.slice(2, 8), pct: best.pnlPct! } : null,
         history: this.valueHistory(ag.wallet, nav, open - cost),
         recent: mine.slice(-30).reverse(),
+        badges: this.badgesOf(ag),
+        copiedBy: [...this.agents.values()].filter((f) => f.rule?.trigger === "copy" && f.rule.copyOf === ag.id && this.tradable(f)).length,
       });
     }
     rows.sort((a, b) => b.pnlPct - a.pnlPct || b.nav - a.nav || b.trades - a.trades);

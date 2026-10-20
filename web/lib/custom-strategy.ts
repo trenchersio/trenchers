@@ -5,13 +5,13 @@
  * the engine reads every rule back from the chain. The holder reviews and applies every rule; trading
  * itself is rule-based and capped by the wallet.
  */
-export type CustomTrigger = "launch" | "graduation" | "volume" | "devsell" | "dexupdate" | "mcap" | "token";
+export type CustomTrigger = "launch" | "graduation" | "volume" | "devsell" | "dexupdate" | "mcap" | "token" | "copy";
 /** Specific token: buy it once, DCA into it on a schedule, or buy whenever its market cap is below a level. */
 export type TokenMode = "once" | "dca" | "below";
 export type CustomRule = {
   trigger: CustomTrigger;
   threshold: number | null;       // volume: USD; mcap: ETH; token "below": market cap in ETH
-  exit: "time" | "tpsl" | "hold"; // hold: never sold automatically (specific token only)
+  exit: "time" | "tpsl" | "hold" | "follow"; // hold: never sold automatically (specific token only); follow: sells when the copied agent sells
   holdSec: number | null;
   takeProfitPct: number | null;
   stopLossPct: number | null;
@@ -23,6 +23,9 @@ export type CustomRule = {
   dcaDays?: number | null;        // dca: spread the buys over this many days
   everyHours?: number | null;     // dca: one buy every N hours; below: at most one buy every N hours
   budgetEth?: number | null;      // optional total to spend; each buy is the per-trade limit or less
+  /** Copy another agent (trigger "copy"): buys what it buys, at this share of its size, and sells when it sells. */
+  copyOf?: number | null;         // the Trencher to copy
+  copyPct?: number | null;        // 1 to 100: share of its buy size (capped by this agent's own limits)
 };
 
 export const TRIGGERS: { key: CustomTrigger; label: string; unit?: string; defaultThreshold?: number }[] = [
@@ -40,6 +43,7 @@ export const DEFAULT_RULE: CustomRule = {
   token: null, tokenMode: null, dcaDays: null, everyHours: null, budgetEth: null,
 };
 const NO_TOKEN = { token: null, tokenMode: null, dcaDays: null, everyHours: null, budgetEth: null } as const;
+const NO_COPY = { copyOf: null, copyPct: null } as const;
 export const isAddress = (a: string | null | undefined): a is string => !!a && /^0x[0-9a-fA-F]{40}$/.test(a);
 /** Default spacing between buys: daily for multi-day DCA, every 4 hours for shorter ones; 6 hours between dip buys. */
 export const defaultEvery = (r: Pick<CustomRule, "tokenMode" | "dcaDays">) => (r.tokenMode === "below" ? 6 : (r.dcaDays ?? 7) >= 2 ? 24 : 4);
@@ -62,6 +66,7 @@ function describeToken(r: CustomRule): string {
 
 /** One-line description, also used as the strategy summary in the Arena. */
 export function describe(r: CustomRule): string {
+  if (r.trigger === "copy") return `Copy Trencher #${r.copyOf}'s trades at ${r.copyPct ?? 100}% of its size, sell when it sells.`;
   const t = TRIGGERS.find((x) => x.key === r.trigger)!;
   if (r.trigger === "token") return `${describeToken(r)}, ${sellText(r)}.`;
   let buy = {
@@ -72,6 +77,7 @@ export function describe(r: CustomRule): string {
     devsell: "Buy every time a token's dev sells",
     dexupdate: "Buy every DexScreener update",
     token: "",
+    copy: "",
   }[r.trigger];
   const filters: string[] = [];
   if (r.maxAgeMin) filters.push(`launched in the last ${r.maxAgeMin} min`);
@@ -81,6 +87,7 @@ export function describe(r: CustomRule): string {
 }
 
 function sellText(r: CustomRule): string {
+  if (r.exit === "follow") return "sell when the copied agent sells";
   if (r.exit === "hold") return "hold it (no automatic sell)";
   if (r.exit === "time") return `sell after ${fmtHold(r.holdSec ?? 60)}`;
   const parts = [];
@@ -90,6 +97,12 @@ function sellText(r: CustomRule): string {
 }
 
 export function validate(r: CustomRule): string | null {
+  if (r.trigger === "copy") {
+    if (!(r.copyOf && Number.isInteger(r.copyOf) && r.copyOf >= 1 && r.copyOf <= 2000)) return "Pick the Trencher to copy (1 to 2000).";
+    if (!(r.copyPct && r.copyPct >= 1 && r.copyPct <= 100)) return "Set the copy size between 1% and 100%.";
+    return null;
+  }
+  if (r.exit === "follow") return "Selling when another agent sells is only for copying an agent.";
   if (r.trigger === "token") {
     if (!isAddress(r.token)) return "Paste the token's contract address (0x followed by 40 characters).";
     if (r.tokenMode === "dca" && !(r.dcaDays && r.dcaDays > 0)) return "Set over how many days to spread the buys.";
@@ -115,6 +128,16 @@ export function parse(text: string, base: CustomRule = DEFAULT_RULE): { rule: Cu
   const full = text.toLowerCase();
   const r: CustomRule = { ...DEFAULT_RULE, ...base };
   const understood: string[] = [];
+  // "Copy Trencher #862 at 50% size": buys what that agent buys and sells when it sells.
+  const copy = full.match(/\b(?:copy|mirror|follow)(?:ing)?\s+(?:trencher\s*)?#\s*(\d{1,4})\b|\b(?:copy|mirror)(?:ing)?\s+trencher\s+(\d{1,4})\b/);
+  if (copy) {
+    const id = parseInt(copy[1] ?? copy[2]);
+    const pm = full.match(/(\d{1,3}(?:\.\d+)?)\s*%\s*(?:of\s+(?:its|their|the)\s+)?size|(?:at|with)\s+(\d{1,3}(?:\.\d+)?)\s*%/);
+    const pct = Math.min(100, Math.max(1, pm ? parseFloat(pm[1] ?? pm[2]) : 100));
+    Object.assign(r, DEFAULT_RULE, NO_TOKEN, { trigger: "copy", copyOf: id, copyPct: pct, exit: "follow", holdSec: null });
+    understood.push(`copies Trencher #${id}`, `at ${pct}% of its size`, "sells when it sells");
+    return { rule: r, understood, missed: false };
+  }
   const addr = full.match(/0x[0-9a-f]{40}/)?.[0] ?? null;
   // The address is read separately, so its digits never count as amounts or times.
   const s = addr ? full.split(addr).join(" ") : full;
@@ -177,6 +200,8 @@ export function parse(text: string, base: CustomRule = DEFAULT_RULE): { rule: Cu
   if (sl) { if (r.exit !== "tpsl") { r.exit = "tpsl"; r.takeProfitPct = tp ? r.takeProfitPct : null; } r.stopLossPct = parseFloat(sl[1]); understood.push(`stop loss: -${r.stopLossPct}%`); }
   if (r.exit === "tpsl" && hold) r.holdSec = null;
 
+  Object.assign(r, NO_COPY);
+  if (r.exit === "follow") { r.exit = "time"; r.holdSec = r.holdSec ?? 60; }
   if (r.trigger !== "token") {
     Object.assign(r, NO_TOKEN);
     if (r.exit === "hold") { r.exit = "time"; r.holdSec = r.holdSec ?? 60; }

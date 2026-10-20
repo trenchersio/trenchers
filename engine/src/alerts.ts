@@ -130,6 +130,16 @@ export class Alerts {
     }
   }
 
+  /** Monday's report: one message per linked chat about that wallet's agents (rank, return, trades, best trade). */
+  weekly(lines: (addr: string) => string | null) {
+    if (!this.username) return;
+    const byChat = new Map<number, string[]>();
+    for (const s of this.subs) { const l = lines(s.addr); if (l) byChat.set(s.chat, [...(byChat.get(s.chat) ?? []), l]); }
+    for (const [chat, parts] of byChat) {
+      this.queue = this.queue.then(async () => { await this.say(chat, parts.join("\n\n")).catch(() => {}); this.sent++; await new Promise((r) => setTimeout(r, 1100)); }).catch(() => {});
+    }
+  }
+
   async handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
     if (path !== "/alerts/link" && path !== "/alerts/status") return false;
     res.setHeader("cache-control", "no-store");

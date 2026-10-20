@@ -8,6 +8,8 @@ import { AgentLinks } from "@/components/AgentLinks";
 import { TextButton } from "@/components/TextButton";
 import { GuideFlow } from "./GuideFlow";
 import { TelegramAlerts } from "./TelegramAlerts";
+import { RuleTest } from "./RuleTest";
+import { PushToggle } from "./PushToggle";
 import { CoinLaunch } from "./CoinLaunch";
 import { Fold } from "@/components/Fold";
 import { SectionNav } from "@/components/SectionNav";
@@ -182,7 +184,7 @@ export function LiveAgents() {
       </header>
 
       {error && <p className="notice">{error}</p>}
-      {ids.length > 0 && <TelegramAlerts me={me} />}
+      {ids.length > 0 && <div className="notify-row"><TelegramAlerts me={me} /><PushToggle me={me} /></div>}
 
       {ids.length === 0 ? (
         <div className="connect-gate live-empty-gate">
@@ -448,6 +450,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
           <div className="rule-copied">
             <p className="mono rule-copied-k">Rule copied{copied.from ? ` from Trencher #${copied.from}` : ""}</p>
             <blockquote>“{copied.text}”</blockquote>
+            {!/^copy trencher/i.test(copied.text) && <RuleTest rule={copied.text} auto />}
             <p className="rule-copied-n">Applying it replaces this agent&apos;s current rule (every version is kept). Set the limits below first. Nothing trades until trading is on.</p>
             <div className="actions">
               <button type="button" className="gf-btn" disabled={busy} onClick={async () => { const ok = await applyText(copied.text, `Applying the copied rule to Trencher #${a.id}`); if (ok) dropCopied(); }}>Apply to Trencher #{a.id}</button>
@@ -455,6 +458,7 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
             </div>
           </div>
         )}
+        <TryRule current={a.ruleText ?? ""} />
         <GuideFlow
           id={a.id} busy={busy}
           rule={a.ruleVersion ? { label: `Current rule · v${a.ruleVersion}${tpl ? ` · ${tpl}` : ""}`, text: a.ruleText ?? "Rule applied." } : null}
@@ -526,5 +530,21 @@ function BuyModal({ onClose }: { onClose: () => void }) {
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** Try any rule on last week's coins before applying it. */
+function TryRule({ current }: { current: string }) {
+  const [text, setText] = useState(current);
+  const [shown, setShown] = useState<string | null>(null);
+  return (
+    <details className="try-rule">
+      <summary className="mono">Test a rule on last week</summary>
+      <div className="try-rule-body">
+        <p>Write any rule (or keep the current one) and see how it would have traded the last 7 days of Pons coins. Nothing is applied.</p>
+        <textarea rows={2} value={text} placeholder="Buy every new launch, take profit at 40%, stop loss 20%." onChange={(e) => { setText(e.target.value); setShown(null); }} />
+        {shown ? <RuleTest key={shown} rule={shown} auto /> : <button type="button" className="gf-btn" disabled={!text.trim()} onClick={() => setShown(text.trim())}>Test on last week</button>}
+      </div>
+    </details>
   );
 }
