@@ -496,7 +496,7 @@ export class Engine {
     this.log(`Agent #${ag.id} coin on Programmable: ${token} (${byAgent ? "launched by the agent wallet" : "launched by its holder"})`);
   }
 
-  private async symbolOf(token: Address) {
+  async symbolOf(token: Address) {
     let sym = this.symbols.get(token);
     if (sym === undefined) {
       sym = await this.pub.readContract({ address: token, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "") as string;

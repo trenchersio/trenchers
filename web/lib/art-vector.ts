@@ -54,3 +54,10 @@ export function drawArt(ctx: CanvasRenderingContext2D, id: number, size: number,
 
 /** Background colour of a token (for placeholders before the art data loads). */
 export const artBg = (id: number) => (data ? data[id - 1][0] : "#151917");
+
+/** A Trencher's colours (for things drawn in its style, like its Trenchie). Call after loadArt(). */
+export function artPalette(id: number): { bg: string; main: string; second: string; sig: string; eye: string } | null {
+  if (!data || !data[id - 1]) return null;
+  const [bg, main, second, eye, sig] = data[id - 1];
+  return { bg, main, second, sig, eye };
+}

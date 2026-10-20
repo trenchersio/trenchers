@@ -12,6 +12,7 @@ import { BuilderIndex } from "./builder";
 import { Recaps } from "./recap";
 import { Backtest } from "./backtest";
 import { Market } from "./market";
+import { Trenchies } from "./trenchies";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
@@ -131,7 +132,19 @@ recaps.onSaved = (week, prev) => {
 };
 // "Test this rule on last week": 7 days of Pons prices, read 4 times a day (a few dozen reads each time).
 const backtest = engine ? new Backtest({ pub: engine.pub as never, curves: engine.curves, tokens: engine.tokens as never, log, ethUsd: ENV.ETH_USD, snipeWait: ENV.SNIPE_WAIT_SEC, maxPositions: ENV.MAX_POSITIONS, maxHold: ENV.MAX_HOLD_SEC }) : null;
-if (backtest) { const go = () => { if (lastTick) void backtest.update(); }; setTimeout(go, 120_000); setInterval(go, 6 * 3_600_000); setTimeout(go, 15 * 60_000); }
+// Trenchies: daily picks settled from those same prices, a few minutes after each UTC day ends.
+const trenchies = engine && backtest ? new Trenchies({ pub: engine.pub as never, nft: ENV.NFT as `0x${string}`, prices: backtest, symbolOf: (t) => engine.symbolOf(t), log }) : null;
+if (backtest) {
+  // Prices: hourly (a handful of reads each time), and right after midnight UTC so the day can be settled.
+  let lastDay = Math.floor(Date.now() / 86_400_000);
+  const go = () => { if (lastTick) void backtest.update(); };
+  setTimeout(go, 120_000); setTimeout(go, 15 * 60_000); setInterval(go, 3_600_000);
+  setInterval(() => {
+    const d = Math.floor(Date.now() / 86_400_000);
+    if (d !== lastDay && Date.now() % 86_400_000 > 60_000) { lastDay = d; go(); }
+    try { trenchies?.tick(); } catch (e) { log(`Trenchies: ${(e as Error).message}`); }
+  }, 60_000);
+}
 const market = new Market(ENV.NFT);
 // Last week's recap is saved right after the week ends, from the cached Arena (no extra chain reads).
 setInterval(() => { if (engine && lastTick) recaps.check(async () => JSON.parse(await shared("arena", 60_000, async () => JSON.stringify(await engine.arena())))).catch(() => {}); }, 60_000);
@@ -146,6 +159,7 @@ const server = createServer(async (req, res) => {
     if (await builder.handle(req, res, path)) return;
     if (await recaps.handle(req, res, path)) return;
     if (backtest && await backtest.handle(req, res, path)) return;
+    if (trenchies && await trenchies.handle(req, res, path)) return;
     if (await market.handle(req, res, path)) return;
     if (engine && await engine.push.handle(req, res, path)) return;
     if (engine?.alerts && await engine.alerts.handle(req, res, path)) return;
@@ -153,7 +167,7 @@ const server = createServer(async (req, res) => {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", rpc: rpcStats(), block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), ruleTest: backtest?.status ?? "off", market: market.status, push: engine.push.view(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, tradesSkipped: engine.telegram.tradesSkipped, lastError: engine.telegram.lastError, alerts: engine.alerts?.view() ?? "off" } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
+      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", rpc: rpcStats(), block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), ruleTest: backtest?.status ?? "off", market: market.status, push: engine.push.view(), trenchies: trenchies?.view() ?? "off", trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, tradesSkipped: engine.telegram.tradesSkipped, lastError: engine.telegram.lastError, alerts: engine.alerts?.view() ?? "off" } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.

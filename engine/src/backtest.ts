@@ -19,7 +19,7 @@ type Tok = { token: Address; deployer: Address; launchedAt: number; symbol?: str
 export type Host = { pub: PublicClient; curves: Map<Address, Address>; tokens: Map<Address, Tok>; log: (m: string) => void; ethUsd: number; snipeWait: number; maxPositions: number; maxHold: number };
 type Series = { pts: number[]; vol: number }; // pts: t, price (ETH per coin), lifetime volume (ETH), dev sell (1/0), repeated
 
-const DAY = 86400, KEEP = 8 * DAY, WINDOW = 7 * DAY, FEE = 0.01, MAX_PTS = 4 * 3000;
+const DAY = 86400, KEEP = 8 * DAY, WINDOW = 7 * DAY, FEE = 0.01, MAX_PTS = 4 * 6000;
 const lc = (a: string) => a.toLowerCase() as Address;
 
 export type TradeOut = { symbol: string; token: Address; in: number; out: number; pct: number; why: string; open: boolean };
@@ -69,9 +69,14 @@ export class Backtest {
         for (const l of logs) this.add(l, time(l.blockNumber!));
         this.cursor = to; from = to + 1n; fromT = tb;
       }
-      // Forget coins older than 8 days.
+      // Forget trades older than 8 days (keeping the last one before, as the starting price), and quiet coins.
       const cut = headT - KEEP;
-      for (const [k] of this.series) { const tk = this.host.tokens.get(k); if (!tk || tk.launchedAt < cut) this.series.delete(k); }
+      for (const [k, sr] of this.series) {
+        const P = sr.pts; let i = 0;
+        while (i + 4 < P.length && P[i + 4] < cut) i += 4;
+        if (i) P.splice(0, i);
+        if (!P.length || P[P.length - 4] < cut) this.series.delete(k);
+      }
       this.updatedAt = headT; this.cache.clear();
       this.status = `ok: ${this.series.size} coins from the last 8 days (${reads} reads this update)`;
     } catch (e) {
@@ -81,7 +86,7 @@ export class Backtest {
 
   private add(l: Log, t: number) {
     const token = this.host.curves.get(lc(l.address)); if (!token) return;
-    const tk = this.host.tokens.get(token); if (!tk || !tk.launchedAt || tk.launchedAt < t - KEEP) return;
+    const tk = this.host.tokens.get(token); if (!tk) return;
     const a = (l as unknown as { eventName: string; args: Record<string, bigint | string> });
     const buy = a.eventName === "CurveBuy";
     const eth = Number(formatEther((buy ? a.args.quoteIn : a.args.quoteOut) as bigint));
@@ -92,9 +97,33 @@ export class Backtest {
     let s = this.series.get(token); if (!s) this.series.set(token, (s = { pts: [], vol: 0 }));
     s.vol += eth;
     const dev = !buy && lc(a.args.seller as string) === tk.deployer ? 1 : 0;
-    if (s.pts.length >= MAX_PTS && !dev) return; // very busy coins: the first 3,000 trades are plenty
+    // Very busy coins: keep the latest 6,000 trades (older ones go first).
+    if (s.pts.length >= MAX_PTS) s.pts.splice(0, 4 * 1000);
     s.pts.push(t, net / units, s.vol, dev);
   }
+
+  /** The coin's price at time t: its last trade at or before t, or its first trade after t (a coin launched later). */
+  priceAt(token: Address, t: number): number | null {
+    const P = this.series.get(token)?.pts; if (!P?.length) return null;
+    let best: number | null = null;
+    for (let i = 0; i < P.length; i += 4) { if (P[i] <= t) best = P[i + 1]; else { if (best === null) best = P[i + 1]; break; } }
+    return best;
+  }
+  /** Coins that traded since `since`: price now, change and volume since then. For the Trenchies daily picks. */
+  active(since: number, limit = 80) {
+    const out: { token: Address; symbol: string; price: number; changePct: number; volEth: number; trades: number; launchedAt: number; graduated: boolean }[] = [];
+    for (const [token, sr] of this.series) {
+      const P = sr.pts; if (!P.length || P[P.length - 4] < since) continue;
+      const tk = this.host.tokens.get(token); if (!tk || tk.graduated) continue;
+      let first = -1, trades = 0, vol0 = 0;
+      for (let i = 0; i < P.length; i += 4) if (P[i] >= since) { if (first < 0) { first = i; vol0 = i ? P[i - 2] : 0; } trades++; }
+      const start = first > 0 ? P[first - 3] : P[1], now = P[P.length - 3];
+      out.push({ token, symbol: tk.symbol ?? token.slice(2, 8).toUpperCase(), price: now, changePct: start > 0 ? (now / start - 1) * 100 : 0, volEth: sr.vol - vol0, trades, launchedAt: tk.launchedAt, graduated: tk.graduated });
+    }
+    return out.sort((a, b) => b.volEth - a.volEth).slice(0, limit);
+  }
+  symbolOf(token: Address) { const tk = this.host.tokens.get(token); return tk ? tk.symbol ?? token.slice(2, 8).toUpperCase() : null; }
+  known(token: Address) { return this.host.tokens.has(token); }
 
   /** Replays `rule` over the last 7 days. `size`: ETH per trade, for the ETH result. */
   run(text: string, size = 0.01): Result {
