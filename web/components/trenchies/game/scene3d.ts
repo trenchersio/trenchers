@@ -79,7 +79,7 @@ class Walker {
 }
 
 type PetRun = { p: Pet; w: Walker; wait: number; ph: number; perch: number; orbit: number };
-type Mode = "idle" | "walk" | "enter" | "do" | "exit" | "ride" | "party";
+type Mode = "idle" | "walk" | "move" | "enter" | "do" | "exit" | "ride" | "party";
 
 export class World3D {
   private renderer: THREE.WebGLRenderer;
@@ -117,6 +117,8 @@ export class World3D {
   private ticker: [number, number][] = [];
   /** Placing a garden piece: the next tap on the ground is reported here instead of walking. */
   onGround: ((x: number, y: number) => void) | null = null;
+  /** Direct control (arrow keys, WASD or the joystick): -1..1, x to the right of the screen, y up the screen. */
+  stick = { x: 0, y: 0 };
   /** Tapping the computer on the desk (opens the trading screen). */
   onDesk: (() => void) | null = null;  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
   private grow: Grow = { wood: 0, stone: 0, fish: 0 };
@@ -367,7 +369,11 @@ export class World3D {
     if (this.mode === "do" || this.mode === "enter") { this.pendingSpot = s; this.pendingThen = then ?? null; this.mode = "exit"; this.blend = 0; return; }
     this.onArrive = then ?? null; this.walkToNow(s);
   }
-  private walkToNow(s: Spot) { this.me.go(this.nav.route({ x: this.me.x, y: this.me.y }, s.at), 1.4); this.spot = s; this.mode = "walk"; }
+  private walkToNow(s: Spot) {
+    // long way: a light jog; short way: a walk (the speed eases in and out either way)
+    const route = this.nav.route({ x: this.me.x, y: this.me.y }, s.at), far = lengths(route).at(-1) ?? 0;
+    this.me.go(route, far > 9 ? 2.3 : far > 4 ? 1.8 : 1.4); this.spot = s; this.mode = "walk";
+  }
   say(text?: string) {
     const pool = LINES[this.spot?.act ?? "idle"] ?? LINES.idle; const s = text ?? pool[Math.floor(Math.random() * pool.length)];
     const b = this.pins.bubble; if (!b) return;
@@ -463,8 +469,19 @@ export class World3D {
   update(dt: number) {
     this.t += dt; this.hop = Math.max(0, this.hop - dt * 1.4);
     if (this.intro < 1) { this.intro = Math.min(1, this.intro + dt / 2.2); this.camera.zoom = 0.5 + 0.45 * ease(this.intro); this.camera.updateProjectionMatrix(); }
+    // direct control: walk where the keys or the joystick point, sliding along walls
+    const st = this.stick, mag = Math.min(1, Math.hypot(st.x, st.y));
+    if (mag > 0.12 && this.trenchie && this.mode !== "ride" && this.mode !== "party") {
+      this.steered = this.t;
+      if (this.mode === "do" || this.mode === "enter") { this.pendingSpot = null; this.pendingThen = null; this.onArrive = null; this.mode = "exit"; this.blend = 0.4; }
+      else if (this.mode !== "exit") this.steerStep(dt, st, mag);
+    } else if (this.mode === "move") {
+      const m = this.me; m.v = Math.max(0, m.v - dt * 7);
+      if (m.v < 0.05) { m.v = 0; this.mode = "idle"; this.until = this.t + 1; } else this.steerStep(dt, this.lastDir, 0, true);
+    }
     const s = this.spot;
     switch (this.mode) {
+      case "move": break;
       case "walk": { const d = this.me.step(dt); this.gait += d * (Math.PI / 0.36); if (!this.me.path) { this.mode = "enter"; this.blend = 0; this.enterDur = s ? Math.max(0.45, Math.hypot(s.pose.x - s.at.x, s.pose.y - s.at.y) / 1.1) : 0.45; } break; }
       case "enter": this.blend = Math.min(1, this.blend + dt / this.enterDur); if (s && this.enterDur > 0.6) this.gait += dt * 1.1 * (Math.PI / 0.36); if (this.blend >= 1) { this.mode = "do"; this.until = this.t + (s ? s.min + Math.random() * (s.max - s.min) : 2); if (s && s.act !== "ride" && (Math.random() < 0.4 || s.act === "chop" || s.act === "mine")) this.say(); } break;
       case "do":
@@ -484,6 +501,23 @@ export class World3D {
     this.pets.forEach((p) => this.petStep(p, dt));
     this.guestStep(dt);
     this.sync(dt);
+  }
+  private lastDir = { x: 0, y: 0 };
+  private steerStep(dt: number, st: { x: number; y: number }, mag: number, coast = false) {
+    const cam = this.camera; cam.updateMatrixWorld();
+    const r = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).setY(0).normalize(), u = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).setY(0).normalize();
+    let dx = r.x * st.x + u.x * st.y, dy = r.z * st.x + u.z * st.y; const n = Math.hypot(dx, dy); if (n < 1e-4) return; dx /= n; dy /= n;
+    if (!coast) this.lastDir = { x: st.x, y: st.y };
+    const m = this.me; m.path = null; this.spot = null; this.mode = "move";
+    if (!coast) { const want = 2.3 * mag; m.v += Math.max(-6 * dt, Math.min(4 * dt, want - m.v)); }
+    const go = m.v * dt, here = this.nav.free({ x: m.x, y: m.y });
+    let nx = m.x + dx * go, ny = m.y + dy * go;
+    if (here && !this.nav.free({ x: nx, y: ny })) {
+      if (this.nav.free({ x: nx, y: m.y })) ny = m.y; else if (this.nav.free({ x: m.x, y: ny })) nx = m.x; else { nx = m.x; ny = m.y; m.v *= 0.5; }
+    }
+    nx = Math.max(0.6, Math.min(LAND - 0.6, nx)); ny = Math.max(0.6, Math.min(LAND - 0.6, ny));
+    this.gait += Math.hypot(nx - m.x, ny - m.y) * (Math.PI / 0.36); m.x = nx; m.y = ny;
+    m.yaw = angLerp(m.yaw, Math.atan2(dx, dy), 1 - Math.exp(-dt * 12));
   }
   private drive(dt: number) {
     const c = this.car; if (!c) { this.endRide(); return; }
@@ -537,7 +571,7 @@ export class World3D {
   private targetPose() {
     const s = this.spot, m = this.me, o = { x: m.x, y: m.y, z: 0, yaw: m.yaw, rx: 0, rz: 0, sy: 1 };
     const gaitPose = (v: number, k = 1) => { const ph = this.gait, mv = Math.min(1, v * 1.3) * k; o.z = Math.pow(Math.sin(ph), 2) * 0.04 * mv; o.rz = Math.sin(ph) * 0.05 * mv; o.rx = 0.06 * mv; o.sy = 1 - Math.cos(ph * 2) * 0.012 * mv; };
-    if (this.mode === "walk") { gaitPose(m.v); return o; }
+    if (this.mode === "walk" || this.mode === "move") { gaitPose(m.v); return o; }
     if (!s || this.mode === "idle" || this.mode === "party") { o.sy = 1 + Math.sin(this.t * 2.2) * 0.015; if (this.mode === "party") { o.z = Math.abs(Math.sin(this.t * 9)) * 0.3; o.yaw = m.yaw + this.t * 4; } return o; }
     const P = s.pose, at = { x: s.at.x, y: s.at.y };
     const target = { x: P.x, y: P.y, z: P.z, yaw: P.yaw, rx: P.kind === "lie" ? -Math.PI / 2 : P.kind === "look" ? -0.22 : 0, rz: 0, sy: 1 };
@@ -598,7 +632,7 @@ export class World3D {
       } else {
         tr.visible = true;
         const want = this.targetPose();
-        if (this.mode === "walk") {
+        if (this.mode === "walk" || this.mode === "move") {
           // walking: follow the path exactly (no lag), turn smoothly, sway with each step
           this.pose.x = want.x; this.pose.y = want.y; this.pose.z = want.z; this.pose.rx = want.rx; this.pose.rz = want.rz; this.pose.sy = want.sy;
           this.pose.yaw = angLerp(this.pose.yaw, want.yaw, 1 - Math.exp(-dt * 10));
@@ -612,7 +646,7 @@ export class World3D {
         tr.rotation.set(this.pose.rx, this.pose.yaw, this.pose.rz, "YXZ");
         const inner = tr.userData.inner as THREE.Group; inner.scale.y = (HT / 3.3) * this.pose.sy;
       }
-      animateWear(tr, this.t, this.mode === "walk" ? Math.min(1, this.me.v) : 0);
+      animateWear(tr, this.t, this.mode === "walk" || this.mode === "move" ? Math.min(1, this.me.v) : 0);
       // tools: axe, pickaxe, rod, net
       const kind = this.spot?.pose.kind, gathering = kind === "net" && (this.mode === "do" || this.mode === "enter");
       if (gathering && (!this.tool || this.tool.userData.kind !== kind)) { if (this.tool) tr.remove(this.tool); this.tool = this.makeTool(kind!); tr.add(this.tool); }
@@ -666,7 +700,7 @@ export class World3D {
   /** Your trail cosmetic: little things left behind as you walk. */
   private trailStep(dt: number) {
     const kind = this.look.wear?.trail, tr = this.trenchie;
-    if (kind && tr && this.mode === "walk" && this.me.v > 0.3 && this.t - this.trailAt > 0.09) {
+    if (kind && tr && (this.mode === "walk" || this.mode === "move") && this.me.v > 0.3 && this.t - this.trailAt > 0.09) {
       this.trailAt = this.t;
       const look: Record<string, [THREE.BufferGeometry, number, number]> = {
         "trail-dust": [new THREE.SphereGeometry(0.06, 6, 4), 0xc9c2b4, 0.9], "trail-leaves": [new THREE.CircleGeometry(0.06, 5), 0x6fbf4a, 1], "trail-hearts": [new THREE.OctahedronGeometry(0.06, 0), 0xff4f8a, 1.4],
@@ -699,7 +733,9 @@ export class World3D {
     goal.x *= 0.8; goal.z *= 0.8;
     const k = snap ? 1 : 1 - Math.exp(-dt * 1.5), t = this.controls.target, dx = (goal.x - t.x) * k, dy = (goal.y - t.y) * k, dz = (goal.z - t.z) * k;
     t.set(t.x + dx, t.y + dy, t.z + dz); this.camera.position.set(this.camera.position.x + dx, this.camera.position.y + dy, this.camera.position.z + dz);
-    this.key.position.set(t.x + 10, 26, t.z + 6); this.key.target.position.copy(t);
+    // the sun follows the camera in whole shadow-map texels, so shadows stay still instead of shimmering
+    const tex = 44 / this.key.shadow.mapSize.x, sx = Math.round(t.x / tex) * tex, sz = Math.round(t.z / tex) * tex;
+    this.key.position.set(sx + 10, 26, sz + 6); this.key.target.position.set(sx, t.y, sz);
   }
   /** Pins HTML onto 3D points: nameplate over the head, bubble above it, tags on the forest, quarry, pond and flowers. */
   private pinAll() {

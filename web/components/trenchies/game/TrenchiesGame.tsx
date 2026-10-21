@@ -561,7 +561,16 @@ function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
-  const act = async (it: Item, op: "buy" | "equip") => { setBusy(it.id); setErr(null); try { const j = await call(op, { id: it.id }); onDone(j.me, it); } catch (e) { setErr((e as Error).message); } setBusy(null); };
+  const act = async (it: Item, op: "buy" | "equip") => {
+    setBusy(it.id); setErr(null);
+    try {
+      const j = await call(op, { id: it.id }); onDone(j.me, it);
+      // just built: pick where it goes straight away
+      if (op === "buy" && it.kind === "room" && it.site === "house") setEdit(it.id);
+      else if (op === "buy" && (it.kind === "outdoor" || it.kind === "statue")) onPlace(it.id);
+    } catch (e) { setErr((e as Error).message); }
+    setBusy(null);
+  };
   const houseIx = HOUSE_ORDER.indexOf(me.house);
   if (edit) return <RoomEdit me={me} room={edit} call={call} onMe={onMe} say={say} onBack={() => setEdit(null)} />;
   return (
@@ -684,7 +693,7 @@ function RulesPanel() {
       <li><span>9</span><div><b>Cheers and invites</b><p>Cheer other lands: +{CHEER.xp} XP for you (up to {CHEER.perDay} a day), +{CHEER.ownerBricks} coins for them. Invite friends with your link: they start with +{REFERRAL.newBricks} coins, you get +{REFERRAL.refBricks} and a {REFERRAL.refChest} chest when they play their first day.</p></div></li>
       <li><span>10</span><div><b>Weekly prizes</b><p>Every week (Monday to Sunday, UTC) the 3 players whose picks earned the most XP split the prize pot: {PRIZE_SPLIT.join(" / ")}%. The pot is {PRIZE_BPS / 100}% of the $TRENCHERS creator fees that came in that week, paid out in ETH.</p></div></li>
       <li><span>11</span><div><b>Lands and chat</b><p>Make your land public (anyone can walk in) or private (you approve who joins). Members spawn there whenever they visit and can use the land&apos;s chat.</p></div></li>
-      <li><span>12</span><div><b>Your Trenchie, your way</b><p>Tap the ground to walk there, or tap something to use it. Leave it alone for 30 seconds and it goes back to its own life. It sleeps at night, sits at its desk while you trade, and the weather changes through the day.</p></div></li>
+      <li><span>12</span><div><b>Your Trenchie, your way</b><p>Walk it with WASD or the arrow keys (or the joystick on a phone), tap the ground to walk there, or tap something to use it. Leave it alone for 30 seconds and it goes back to its own life. It sleeps at night, sits at its desk while you trade, and the weather changes through the day.</p></div></li>
     </ol>
   );
 }

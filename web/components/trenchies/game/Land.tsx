@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadArt } from "@/lib/art-vector";
 import { NET_EVERY } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
@@ -54,7 +54,6 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
       const frame = (t: number) => {
         if (!alive) return; raf = requestAnimationFrame(frame);
         if (document.hidden) { last = t; return; }
-        if (slow && t - last < 1000 / 42) return;
         const dt = Math.min(0.1, (t - last) / 1000); last = t;
         w.update(dt); w.render();
         if (!skyT || t - skyT > 60_000) { skyT = t; latest.current.onSky?.(w.weatherNow); }
@@ -84,6 +83,21 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
     seen.current = Math.max(seen.current, top);
   }, [chat]);
 
+  // direct control: arrow keys or WASD on a computer, a joystick on touch screens (your own land only)
+  const [touch, setTouch] = useState(false), [hint, setHint] = useState(false);
+  useEffect(() => { const t = window.matchMedia?.("(pointer: coarse)").matches ?? false; setTouch(t); if (!t && mine) { setHint(true); const h = setTimeout(() => setHint(false), 9000); return () => clearTimeout(h); } }, [mine]);
+  useEffect(() => {
+    if (!mine) return;
+    const keys = new Set<string>(), K: Record<string, string> = { ArrowUp: "u", w: "u", W: "u", ArrowDown: "d", s: "d", S: "d", ArrowLeft: "l", a: "l", A: "l", ArrowRight: "r", d: "r", D: "r" };
+    const set = () => { if (world.current) world.current.stick = { x: (keys.has("r") ? 1 : 0) - (keys.has("l") ? 1 : 0), y: (keys.has("u") ? 1 : 0) - (keys.has("d") ? 1 : 0) }; };
+    const typing = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); };
+    const dn = (e: KeyboardEvent) => { const k = K[e.key]; if (!k || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return; e.preventDefault(); keys.add(k); set(); setHint(false); };
+    const up = (e: KeyboardEvent) => { const k = K[e.key]; if (k) { keys.delete(k); set(); } };
+    const clear = () => { keys.clear(); set(); };
+    window.addEventListener("keydown", dn); window.addEventListener("keyup", up); window.addEventListener("blur", clear);
+    return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); window.removeEventListener("blur", clear); clear(); };
+  }, [mine]);
+
   const ready = !netAt || netAt <= now * 1000;
   return (
     <div className={`tg-landwrap ${className}${onPick ? " picking" : ""}`}>
@@ -105,6 +119,25 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
         <div className="tg-pin tg-bubble" ref={bubble} />
         <div className="tg-pin tg-pop" ref={pop} />
       </div>
+      {mine && touch && !onPick && !atDesk && <Stick onMove={(x, y) => { if (world.current) world.current.stick = { x, y }; }} />}
+      {hint && !atDesk && <p className="tg-movehint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys to walk · click the ground to go there</p>}
+    </div>
+  );
+}
+
+/** A thumb joystick for phones: drag from the middle, let go to stop. */
+function Stick({ onMove }: { onMove: (x: number, y: number) => void }) {
+  const base = useRef<HTMLDivElement>(null), [k, setK] = useState({ x: 0, y: 0, on: false }), R = 38;
+  const at = (e: React.PointerEvent) => {
+    const r = base.current!.getBoundingClientRect(); let x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(x, y); if (d > R) { x *= R / d; y *= R / d; }
+    setK({ x, y, on: true }); onMove(x / R, -y / R);
+  };
+  const stop = () => { setK({ x: 0, y: 0, on: false }); onMove(0, 0); };
+  return (
+    <div ref={base} className={`tg-stick${k.on ? " on" : ""}`} aria-label="Walk" role="application"
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); at(e); }} onPointerMove={(e) => { if (k.on) at(e); }} onPointerUp={stop} onPointerCancel={stop}>
+      <i style={{ transform: `translate(${k.x}px, ${k.y}px)` }} />
     </div>
   );
 }
