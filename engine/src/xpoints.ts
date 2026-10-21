@@ -19,8 +19,8 @@ import { getAddress, isAddress, verifyMessage } from "viem";
  * Every task is checked with the X API before XP is given. Checks are kept cheap (X bills per item read):
  *   follow  the newest followers of @trenchersio, read with the account's own sign-in when it has signed in here
  *           once ("owned reads", $0.001 each), shared by everyone checking in the same minute
- *   like    the player's own 10 most recent likes (read with their sign-in)
- *   reply   the newest replies to @trenchersio (owned reads), else the player's own 10 most recent posts
+ *   like    not checked with X (to keep costs down): counts once the player opened it from the page and came back
+ *   reply   the same as likes
  * A daily spending cap stops checks when it is reached (XPOINTS_BUDGET_USD, default 5).
  *
  * Settings (Railway, Mainnet service):
@@ -41,7 +41,9 @@ const ACCOUNT = () => (clean(process.env.X_ACCOUNT) || "trenchersio").replace(/^
 const BUDGET = () => Number(clean(process.env.XPOINTS_BUDGET_USD) || 5);
 const SITE = () => (clean(process.env.SITE_URL) || "https://www.trenchers.io").replace(/\/$/, "");
 const API = "https://api.x.com/2";
-const SCOPES = "tweet.read users.read like.read follows.read offline.access";
+const SCOPES = "tweet.read users.read follows.read offline.access";
+/** Likes and replies count once opened from the page this long ago (no X check: it keeps the cost near zero). */
+const OPEN_WAIT = 5000;
 const DAY = 86_400_000;
 export const XP_RULES = { follow: 10, like: 1, reply: 1, posts: 3, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 } as const;
 /** What the rest of the engine knows about a wallet. */
@@ -65,10 +67,11 @@ export class XPoints {
   private account: { id: string | null; owner?: Tokens } = { id: null };
   private posts: { at: number; list: Post[] } = { at: 0, list: [] };
   private followers: { at: number; ids: Set<string> } = { at: 0, ids: new Set() };
-  private replies: { at: number; since?: string; byUser: Map<string, Set<string>> } = { at: 0, byUser: new Map() };
   private pending = new Map<string, { verifier: string; ret: string; at: number }>();
   private spend = { day: 0, usd: 0 };
   private lastCheck = new Map<string, number>();
+  /** When each player opened each task from the page (likes and replies count from this). */
+  private opened = new Map<string, number>();
   private board: { at: number; list: { rank: number; handle: string; name: string; avatar: string; xp: number }[] } | null = null;
   lastError: string | null = null;
 
@@ -159,27 +162,7 @@ export class XPoints {
     const acc = await this.accountId(token);
     return (j.data ?? []).some((x) => x.id === acc || x.username.toLowerCase() === ACCOUNT().toLowerCase());
   }
-  private async liked(u: Profile, token: string, post: string) {
-    if (!this.charge(0.05)) throw new Error("busy");
-    const j = await this.get<{ data?: { id: string }[] }>(`/users/${u.id}/liked_tweets?max_results=10`, token);
-    return (j.data ?? []).some((x) => x.id === post);
-  }
-  private async replied(u: Profile, token: string, post: string) {
-    const owner = await this.ownerToken();
-    if (owner) {
-      if (Date.now() - this.replies.at > 60_000) {
-        if (!this.charge(0.03)) throw new Error("busy");
-        const id = await this.accountId(owner);
-        const j = await this.get<{ data?: { id: string; author_id: string; referenced_tweets?: { type: string; id: string }[] }[]; meta?: { newest_id?: string } }>(`/users/${id}/mentions?max_results=100&tweet.fields=author_id,referenced_tweets${this.replies.since ? `&since_id=${this.replies.since}` : ""}`, owner);
-        for (const m of j.data ?? []) for (const r of m.referenced_tweets ?? []) if (r.type === "replied_to") { const s = this.replies.byUser.get(m.author_id) ?? new Set<string>(); s.add(r.id); this.replies.byUser.set(m.author_id, s); }
-        this.replies.at = Date.now(); if (j.meta?.newest_id) this.replies.since = j.meta.newest_id;
-      }
-      if (this.replies.byUser.get(u.id)?.has(post)) return true;
-    }
-    if (!this.charge(0.05)) throw new Error("busy");
-    const j = await this.get<{ data?: { referenced_tweets?: { type: string; id: string }[] }[] }>(`/users/${u.id}/tweets?max_results=10&tweet.fields=referenced_tweets`, token);
-    return (j.data ?? []).some((t) => (t.referenced_tweets ?? []).some((r) => r.type === "replied_to" && r.id === post));
-  }
+
 
   // ------------------------------------------------------------------ using Trenchers (linked wallet)
   /** Brings a profile's usage XP up to date: new NFTs held, trades made, coins launched, inference bought. */
@@ -282,8 +265,26 @@ export class XPoints {
       u.wallet = a.toLowerCase(); this.sync(u); this.save();
       send(200, { me: await this.me(u) }); return true;
     }
+    if (op === "open") {
+      const task = String(b.task ?? ""); if (!/^(follow|like:\d+|reply:\d+)$/.test(task)) { send(400, { error: "Unknown task." }); return true; }
+      if (!this.opened.has(`${u.id}:${task}`)) this.opened.set(`${u.id}:${task}`, Date.now());
+      if (this.opened.size > 200_000) this.opened.clear();
+      send(200, { ok: true }); return true;
+    }
     if (op === "check") {
       const task = String(b.task ?? ""), [kind, post] = task.split(":");
+      // likes and replies: no X call, just "opened from here a few seconds ago"
+      if (kind === "like" || kind === "reply") {
+        const posts = await this.tasks();
+        if (!posts.some((p) => p.id === post)) { send(400, { error: "That post isn't one of today's." }); return true; }
+        const d = (u.done[post] ??= {});
+        if (!d[kind]) {
+          const at = this.opened.get(`${u.id}:${task}`);
+          if (!at || Date.now() - at < OPEN_WAIT) { send(200, { ok: false, me: await this.me(u), msg: kind === "like" ? "Like it on X first, then come back." : "Reply on X first, then come back." }); return true; }
+          d[kind] = Date.now(); this.give(u, kind === "like" ? XP_RULES.like : XP_RULES.reply, kind === "like" ? "Liked a post" : "Replied to a post"); this.save();
+        }
+        send(200, { ok: true, me: await this.me(u) }); return true;
+      }
       const k = `${u.id}:${task}`, last = this.lastCheck.get(k) ?? 0;
       if (Date.now() - last < 20_000) { send(429, { error: "Give it a few seconds, then check again." }); return true; }
       this.lastCheck.set(k, Date.now()); if (this.lastCheck.size > 100_000) this.lastCheck.clear();
@@ -294,14 +295,6 @@ export class XPoints {
           if (u.followed) { send(200, { ok: true, me: await this.me(u) }); return true; }
           if (!(await this.isFollowing(u, token))) { send(200, { ok: false, me: await this.me(u), msg: `We can't see you following @${ACCOUNT()} yet. Follow, wait a moment, then check again.` }); return true; }
           u.followed = Date.now(); this.give(u, XP_RULES.follow, `Followed @${ACCOUNT()}`);
-        } else if (kind === "like" || kind === "reply") {
-          const posts = await this.tasks(token);
-          if (!posts.some((p) => p.id === post)) { send(400, { error: "That post isn't one of today's." }); return true; }
-          const d = (u.done[post] ??= {});
-          if (d[kind]) { send(200, { ok: true, me: await this.me(u) }); return true; }
-          const ok = kind === "like" ? await this.liked(u, token, post) : await this.replied(u, token, post);
-          if (!ok) { send(200, { ok: false, me: await this.me(u), msg: kind === "like" ? "We can't see your like yet. Give it a moment and check again." : "We can't see your reply yet. Give it a moment and check again." }); return true; }
-          d[kind] = Date.now(); this.give(u, kind === "like" ? XP_RULES.like : XP_RULES.reply, kind === "like" ? "Liked a post" : "Replied to a post");
         } else { send(400, { error: "Unknown task." }); return true; }
         this.save();
         send(200, { ok: true, me: await this.me(u) });

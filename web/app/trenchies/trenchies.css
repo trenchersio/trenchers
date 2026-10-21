@@ -1,7 +1,6 @@
 /* trenchers.io/trenchies: early XP before the game opens (sign in with X, tasks, leaderboard) */
-.tx { --n: #39ff88; position: relative; min-height: 100svh; overflow-x: hidden; background: #0B0D0C; color: var(--fog); font: 400 14px/1.5 var(--sans); padding: 18px max(16px, env(safe-area-inset-right, 0px)) 90px max(16px, env(safe-area-inset-left, 0px)); display: grid; justify-items: center; align-content: start; gap: 18px; }
-.tx-glow { position: absolute; inset: 0 0 auto; height: 620px; pointer-events: none; background: radial-gradient(50% 60% at 50% 20%, rgba(57,255,136,0.12), transparent 70%), radial-gradient(40% 40% at 80% 10%, rgba(183,156,255,0.08), transparent 70%); }
-.tx > *:not(.tx-glow) { position: relative; width: min(760px, 100%); }
+.tx { --n: #39ff88; position: relative; min-height: 100svh; overflow-x: hidden; background: radial-gradient(50% 380px at 50% 120px, rgba(57,255,136,0.12), transparent 70%) no-repeat, radial-gradient(40% 260px at 80% 60px, rgba(183,156,255,0.08), transparent 70%) no-repeat, #0B0D0C; color: var(--fog); font: 400 14px/1.5 var(--sans); padding: 18px max(16px, env(safe-area-inset-right, 0px)) 90px max(16px, env(safe-area-inset-left, 0px)); display: grid; justify-items: center; align-content: start; gap: 18px; }
+.tx > * { position: relative; width: min(760px, 100%); }
 .tx-top { display: flex; justify-content: space-between; align-items: center; }
 .tx-back, .tx-ghost { color: var(--quiet); font-size: 12px; text-decoration: none; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
 .tx-back:hover, .tx-ghost:hover { color: var(--fog); }

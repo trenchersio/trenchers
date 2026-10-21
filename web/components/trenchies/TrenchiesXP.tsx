@@ -49,7 +49,7 @@ export function TrenchiesXP() {
     if (s && Number(s.split(".")[1]) > Date.now()) setSession(s);
     fetch(`${ENGINE_URL}/xp/status`, { cache: "no-store" }).then((r) => r.json()).then((j: { ready: boolean; rules: Rules }) => { setReady(j.ready); if (j.rules) setRules(j.rules); }).catch(() => setReady(false));
   }, []);
-  const loadBoard = useCallback(() => { fetch(`${ENGINE_URL}/xp/board`, { cache: "no-store" }).then((r) => r.json()).then(setBoard).catch(() => {}); }, []);
+  const loadBoard = useCallback(() => { fetch(`${ENGINE_URL}/xp/board`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j && Array.isArray(j.top)) setBoard(j); }).catch(() => {}); }, []);
   useEffect(() => { loadBoard(); const t = setInterval(loadBoard, 60_000); return () => clearInterval(t); }, [loadBoard]);
   const apply = useCallback((next: Me) => setMe((prev) => { if (prev && next.xp > prev.xp) setPop({ n: next.xp - prev.xp, k: Date.now() }); return next; }), []);
   const loadMe = useCallback(async (s: string) => {
@@ -73,11 +73,14 @@ export function TrenchiesXP() {
   }, [session, apply, loadBoard]);
   // come back from X: check whatever was just done
   useEffect(() => {
-    const back = () => { if (document.visibilityState !== "visible") return; const now = Date.now(); for (const [task, at] of Object.entries(pending)) if (now - at > 3000 && now - at < 10 * 60_000) void check(task, true); };
+    const back = () => { if (document.visibilityState !== "visible") return; const now = Date.now(); for (const [task, at] of Object.entries(pending)) if (now - at > 5500 && now - at < 10 * 60_000) void check(task, true); };
     document.addEventListener("visibilitychange", back); window.addEventListener("focus", back);
     return () => { document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
   }, [pending, check]);
-  const open = (url: string, task: string) => { window.open(url, "_blank", "noopener"); setPending((p) => ({ ...p, [task]: Date.now() })); };
+  const open = (url: string, task: string) => {
+    window.open(url, "_blank", "noopener"); setPending((p) => ({ ...p, [task]: Date.now() }));
+    if (session) void fetch(`${ENGINE_URL}/xp/open`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: session, task }) }).catch(() => {});
+  };
 
   const linkWallet = async () => {
     if (!me || !session) return;
@@ -101,7 +104,6 @@ export function TrenchiesXP() {
 
   return (
     <main className="tx">
-      <div className="tx-glow" aria-hidden="true" />
       <header className="tx-top">
         <a className="tx-back mono" href={ROUTES.home}>← trenchers.io</a>
         {me && <button type="button" className="tx-ghost mono" onClick={signOut}>Sign out</button>}
