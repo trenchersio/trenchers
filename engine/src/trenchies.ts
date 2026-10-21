@@ -494,7 +494,7 @@ export class Trenchies {
   private crowd(rd: DeskRound | undefined) { const v = Object.values(rd?.calls ?? {}); return { up: v.filter((c) => c === "up").length, down: v.filter((c) => c === "down").length }; }
   /** The desk as one player sees it: live price and chart, the running round, the next one (calls open), recent results. */
   private deskView(p: Player, since: number) {
-    const now = Date.now() / 1000, cur = deskRound(now), btc = this.host.btc, from = Math.max(since + 1, now - 300);
+    const now = Date.now() / 1000, cur = deskRound(now), btc = this.host.btc, from = since > 0 ? Math.max(since + 1, now - 300) : now - 1800; // first load: the last 30 minutes
     const live = this.desk.get(cur), next = this.desk.get(cur + 1);
     const start = cur * DESK.round, open = btc?.priceAt(start) ?? null;
     return {
@@ -502,7 +502,7 @@ export class Trenchies {
       live: { round: cur, start, end: start + DESK.round, open, call: live?.calls[p.addr] ?? null, crowd: this.crowd(live) },
       next: { round: cur + 1, start: start + DESK.round, call: next?.calls[p.addr] ?? null, crowd: this.crowd(next) },
       streak: p.desk.streak, best: p.desk.best, paidLeft: Math.max(0, DESK.paidPerDay - (p.desk.day === roundOf(now) ? p.desk.paid : 0)),
-      log: p.desk.log.slice(-12).reverse(),
+      log: p.desk.log.slice(-30).reverse(),
       top: this.deskBoard(),
     };
   }

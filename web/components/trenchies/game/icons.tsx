@@ -45,6 +45,8 @@ const P: Record<string, string> = {
   chart: "M3 3v18h18M7 15l4-4 3 3 6-7",
   coin: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 6.5v11M15 9h-4a1.5 1.5 0 0 0 0 3h2a1.5 1.5 0 0 1 0 3H9",
   up: "M12 19V5M5 12l7-7 7 7",
+  maximize: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  restore: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
   down: "M12 5v14M5 12l7 7 7-7",
   move: "M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3",
   paint: "M4 4h13v5H4zM17 6.5h3v5h-8v3M11 14.5h2V21h-2z",

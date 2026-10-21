@@ -7,7 +7,7 @@ import { ownedTrenchers, walletProvider } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { useWallet } from "@/lib/wallet";
 import { ACHIEVEMENTS, CHEER, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
-import { DeskPanel } from "./DeskPanel";
+import { Terminal } from "./Terminal";
 import { SKY_LABEL, type Sky } from "./weather";
 import { Icon } from "./icons";
 import { Land } from "./Land";
@@ -73,6 +73,8 @@ export function TrenchiesGame() {
   const [ticker, setTicker] = useState<[number, number][] | undefined>(undefined);
   const [placing, setPlacing] = useState<string | null>(null);
   const [sky, setSky] = useState<Sky | null>(null);
+  const [deskMax, setDeskMax] = useState(false);
+  useEffect(() => { if (panel === "picks") setDeskMax(false); }, [panel]);
   const [landInfo, setLandInfo] = useState<LandInfo | null>(null);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -293,11 +295,21 @@ export function TrenchiesGame() {
         ))}
       </nav>
 
-      {panel && (
+      {(panel === "picks" || panel === "desk") && (
+        <div className={`tg-trade${deskMax ? " max" : ""} show-${panel}`}>
+          <div className="tg-trade-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={panel === "desk"} className={panel === "desk" ? "on" : ""} onClick={() => setPanel("desk")}><Icon n="chart" size={14} />Trading desk</button>
+            <button type="button" role="tab" aria-selected={panel === "picks"} className={panel === "picks" ? "on" : ""} onClick={() => setPanel("picks")}><Icon n="target" size={14} />Daily picks{needPicks && <i className="tg-dot" />}</button>
+            <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
+          </div>
+          <Terminal call={call} onTicker={setTicker} onSettled={refresh} say={say} max={deskMax} onMax={() => setDeskMax((m) => !m)} onClose={() => setPanel(null)} />
+          {!deskMax && <div className="tg-trade-picks"><button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
+            <PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} /></div>}
+        </div>
+      )}
+      {panel && panel !== "picks" && panel !== "desk" && (
         <aside key={panel} className="tg-panel" role="dialog" aria-label={panel}>
           <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
-          {panel === "desk" && <DeskPanel call={call} onTicker={setTicker} onSettled={refresh} say={say} />}
-          {panel === "picks" && <PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} />}
           {panel === "today" && <TodayPanel me={me} onClaim={claimDaily} claiming={claiming} onGo={goQuest} onChest={setChest} onShare={shareLand} invite={inviteUrl(me.name)} />}
           {panel === "build" && <ShopPanel me={me} call={call} onMe={apply} say={say} onDone={(m, it) => { apply(m); setParty((p) => p + 1); say(`${it.name} added to your land`); }} onPlace={(id) => { setVisiting(null); setPlacing(id); setPanel(null); }} />}
           {panel === "me" && <ProfilePanel me={me} palette={myPalette} call={call} onMe={(m, bonus) => { apply(m); if (bonus) { setParty((p) => p + 1); say(`X linked: +${bonus} XP`); } }} onRespawn={() => setPhase("spawn")} onShare={shareLand} />}

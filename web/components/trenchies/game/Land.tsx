@@ -33,7 +33,7 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
   const ref = useRef<HTMLCanvasElement>(null);
   const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), desk = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
   const world = useRef<import("./scene3d").World3D | null>(null);
-  const latest = useRef({ look, nft, grow, guests, follow, onPick, onSky, atDesk }); latest.current = { look, nft, grow, guests, follow, onPick, onSky, atDesk };
+  const latest = useRef({ look, nft, grow, guests, follow, onPick, onSky, atDesk, onDeskTap: mine ? onDesk : undefined }); latest.current = { look, nft, grow, guests, follow, onPick, onSky, atDesk, onDeskTap: mine ? onDesk : undefined };
   const seen = useRef<number>(-1);
   useEffect(() => {
     const c = ref.current!; let raf = 0, alive = true, last = performance.now(), ro: ResizeObserver | null = null, skyT = 0;
@@ -48,6 +48,7 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
       w.setGuests(latest.current.guests, latest.current.follow);
       w.setDesk(latest.current.atDesk);
       if (latest.current.onPick) w.onGround = (x, y) => latest.current.onPick?.(x, y);
+      w.onDesk = () => latest.current.onDeskTap?.();
       const size = () => { const r = c.getBoundingClientRect(); w.resize(Math.max(1, r.width), Math.max(1, r.height)); };
       size(); ro = new ResizeObserver(size); ro.observe(c);
       const frame = (t: number) => {

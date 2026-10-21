@@ -116,7 +116,9 @@ export class World3D {
   /** Live Bitcoin prices for the desk screens. */
   private ticker: [number, number][] = [];
   /** Placing a garden piece: the next tap on the ground is reported here instead of walking. */
-  onGround: ((x: number, y: number) => void) | null = null;  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
+  onGround: ((x: number, y: number) => void) | null = null;
+  /** Tapping the computer on the desk (opens the trading screen). */
+  onDesk: (() => void) | null = null;  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
   private grow: Grow = { wood: 0, stone: 0, fish: 0 };
   private busy: Partial<Record<"net", boolean>> = {};
   private pins: Pins = {};
@@ -395,13 +397,18 @@ export class World3D {
     this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
     if (!this.onGround && this.raycaster.intersectObject(this.trenchie, true).length) { this.poke(); return; }
     const hit = new THREE.Vector3(); if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
+    // tapped something standing up (a computer, a bed, a statue): use the point on that thing, not the ground behind it
+    let onThing = false;
+    if (!this.onGround) { const h = this.raycaster.intersectObject(this.statics, true)[0]; if (h && h.point.y > 0.05) { hit.set(h.point.x, 0, h.point.z); onThing = true; } }
     const x = hit.x + LAND / 2, y = hit.z + LAND / 2; if (x < 0.5 || y < 0.5 || x > LAND - 0.5 || y > LAND - 0.5) return;
     if (this.onGround) { this.onGround(x, y); return; }
     if (this.mode === "ride") return;
     this.steered = this.t; this.atDesk = false;
     // a spot close to the tap: use it; otherwise just walk there
-    let best: Spot | null = null, bd = 1.3;
+    let best: Spot | null = null, bd = onThing ? 1.7 : 1.3;
     for (const sp of this.reg.spots) { const d = Math.min(Math.hypot(sp.pose.x - x, sp.pose.y - y), Math.hypot(sp.at.x - x, sp.at.y - y)); if (d < bd) { bd = d; best = sp; } }
+    // the computer: open the trading screen (the Trenchie sits down there)
+    if (best && best.tag === "desk" && this.onDesk) { this.onDesk(); return; }
     const target: Spot = best ?? (() => { const q = this.nav.nearestFree({ x, y }); return { act: "idle", at: q, pose: { x: q.x, y: q.y, z: 0, yaw: this.me.yaw, kind: "stand" as Kind }, min: 30, max: 30, w: 0 }; })();
     this.marker(best ? best.pose.x : x, best ? best.pose.y : y);
     this.walkTo(target);
