@@ -10,12 +10,15 @@ import { ENGINE_URL, ROUTES, chain } from "@/lib/constants";
 import { walletProvider } from "@/lib/chain";
 import { useWallet } from "@/lib/wallet";
 
-type Rules = { follow: number; like: number; reply: number; posts: number; nft: number; trade: number; tradesPerDay: number; coin: number; inferencePerUsd: number };
+type Rules = { follow: number; like: number; reply: number; posts: number; original: number; originalsPerDay: number; nft: number; trade: number; tradesPerDay: number; coin: number; inferencePerUsd: number };
 type Post = { id: string; text: string; at: number; liked: boolean; replied: boolean };
-type Me = { id: string; handle: string; name: string; avatar: string; xp: number; rank: number; players: number; followed: boolean; account: string; rules: Rules; posts: Post[]; log: { t: number; xp: number; why: string }[]; wallet: string | null; usage: { nfts: number[]; trades: number; coins: string[]; usd: number } };
+type Me = { id: string; handle: string; name: string; avatar: string; xp: number; rank: number; players: number; followed: boolean; account: string; rules: Rules; posts: Post[]; log: { t: number; xp: number; why: string }[]; wallet: string | null; usage: { nfts: number[]; trades: number; coins: string[]; usd: number };
+  originals: Original[]; admin: boolean; toReview: number };
+type Original = { id: string; url: string; at: number; status: "pending" | "ok" | "no" };
+type ReviewRow = Original & { user: string; handle: string; name: string; avatar: string; xp: number; by: string | null };
 type Row = { rank: number; handle: string; name: string; avatar: string; xp: number };
 const KEY = "trenchies:xp";
-const DEF: Rules = { follow: 10, like: 1, reply: 1, posts: 3, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 };
+const DEF: Rules = { follow: 10, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 };
 const linkText = (handle: string, wallet: string, time: string) => `Link this wallet to Trenchies XP\n\nX: @${handle}\nWallet: ${wallet}\nTime: ${time}\n\nThis only proves you hold this wallet. It costs nothing and sends no transaction.`;
 const ago = (t: number) => { const s = Math.max(1, Math.round((Date.now() - t) / 1000)); return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
 const n0 = (v: number) => v.toLocaleString("en-US");
@@ -153,6 +156,10 @@ export function TrenchiesXP() {
             )}
           </div>
 
+          <OriginalCard me={me} rules={rules} session={session!} onMe={apply} say={say} />
+
+          {me.admin && <ReviewCard session={session!} count={me.toReview} say={say} onDone={() => { void loadMe(session!); loadBoard(); }} />}
+
           <div className="tx-card">
             <h2>One time</h2>
             <div className="tx-once">
@@ -192,6 +199,7 @@ export function TrenchiesXP() {
             <li><b className="mono">+{rules.follow}</b><span>Follow @trenchersio (once)</span></li>
             <li><b className="mono">+{rules.like}</b><span>Like each of its latest posts, every day</span></li>
             <li><b className="mono">+{rules.reply}</b><span>Reply to each of its latest posts, every day</span></li>
+            <li><b className="mono">+{rules.original}</b><span>Write your own post about Trenchies (one a day, checked by the team)</span></li>
             <li><b className="mono">+{rules.nft}</b><span>For every Trencher NFT you hold</span></li>
             <li><b className="mono">+{rules.trade}</b><span>For every trade your Trencher makes</span></li>
             <li><b className="mono">+{rules.coin}</b><span>For every coin you launch</span></li>
@@ -217,6 +225,64 @@ export function TrenchiesXP() {
       </section>
       {toast && <div className={`tx-toast${toast.good ? " good" : ""}`} role="status">{toast.text}</div>}
     </main>
+  );
+}
+
+const POST_TEXT = "My Trencher is getting its own land in Trenchies, the game coming to @trenchersio. Earning XP before it opens:";
+function OriginalCard({ me, rules, session, onMe, say }: { me: Me; rules: Rules; session: string; onMe: (m: Me) => void; say: (t: string, good?: boolean) => void }) {
+  const [url, setUrl] = useState(""), [busy, setBusy] = useState(false);
+  const today = Math.floor(Date.now() / 86_400_000), used = me.originals.filter((o) => o.status !== "no" && Math.floor(o.at / 86_400_000) === today).length >= rules.originalsPerDay;
+  const send = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${ENGINE_URL}/xp/original`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: session, url: url.trim() }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.me) { onMe(j.me); setUrl(""); say("Sent in. The team checks it soon.", true); } else say(j.error ?? "Couldn't send that in.");
+    } catch { say("Couldn't reach the server. Try again in a moment."); }
+    setBusy(false);
+  };
+  const label = { pending: "waiting for review", ok: `+${rules.original} XP`, no: "not counted" } as const;
+  return (
+    <div className="tx-card">
+      <h2>Your own post</h2>
+      <p className="tx-sub">Write a post about Trenchies from your own account, then paste its link here. The team checks it by hand: <b>+{rules.original} XP</b> once it&apos;s approved, one post a day.</p>
+      {used ? <p className="tx-sub">Today&apos;s post is in. Write another one tomorrow.</p> : (<>
+        <a className="tx-btn" href={`https://x.com/intent/post?text=${encodeURIComponent(POST_TEXT)}&url=${encodeURIComponent("https://www.trenchers.io/trenchies")}`} target="_blank" rel="noreferrer"><X s={14} />Write a post</a>
+        <form className="tx-orig" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={`https://x.com/${me.handle}/status/…`} inputMode="url" aria-label="Link to your post" />
+          <button type="submit" className="tx-btn tx-btn-go" disabled={busy || !url.trim()}>{busy ? "Sending…" : "Send in"}</button>
+        </form>
+      </>)}
+      {me.originals.length > 0 && <ol className="tx-origs">{me.originals.map((o) => <li key={o.id} className={o.status}><a href={o.url} target="_blank" rel="noreferrer" className="mono">x.com/…/{o.id.slice(-6)}</a><small className="mono">{ago(o.at)} ago</small><em className="mono">{label[o.status]}</em></li>)}</ol>}
+    </div>
+  );
+}
+/** For the team: posts waiting for a yes or no. */
+function ReviewCard({ session, count, say, onDone }: { session: string; count: number; say: (t: string, good?: boolean) => void; onDone: () => void }) {
+  const [d, setD] = useState<{ pending: ReviewRow[]; recent: ReviewRow[] } | null>(null), [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(() => { fetch(`${ENGINE_URL}/xp/review?s=${encodeURIComponent(session)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (Array.isArray(j.pending)) setD(j); }).catch(() => {}); }, [session]);
+  useEffect(() => { load(); const t = setInterval(load, 30_000); return () => clearInterval(t); }, [load, count]);
+  const decide = async (r: ReviewRow, ok: boolean) => {
+    setBusy(r.id);
+    try { const res = await fetch(`${ENGINE_URL}/xp/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: session, user: r.user, id: r.id, ok }) }); const j = await res.json(); if (Array.isArray(j.pending)) { setD(j); onDone(); say(ok ? `Approved @${r.handle}'s post` : `Rejected @${r.handle}'s post`, ok); } else say(j.error ?? "Couldn't save that."); }
+    catch { say("Couldn't reach the server."); }
+    setBusy(null);
+  };
+  return (
+    <div className="tx-card tx-review">
+      <h2>Review posts <small className="mono">team only · {d ? d.pending.length : count} waiting</small></h2>
+      {!d ? <p className="tx-sub">Loading…</p> : d.pending.length === 0 ? <p className="tx-sub">Nothing waiting.</p> : (
+        <ol className="tx-revs">{d.pending.map((r) => (
+          <li key={r.id}>
+            <Avatar src={r.avatar} name={r.name} size={30} />
+            <div className="tx-rev-t"><b>{r.name}</b><small className="mono">@{r.handle} · {n0(r.xp)} XP · {ago(r.at)} ago</small></div>
+            <a className="tx-btn tx-btn-sm" href={r.url} target="_blank" rel="noreferrer"><X s={12} />Open</a>
+            <button type="button" className="tx-btn tx-btn-sm tx-btn-go" disabled={busy === r.id} onClick={() => void decide(r, true)}>Approve</button>
+            <button type="button" className="tx-btn tx-btn-sm" disabled={busy === r.id} onClick={() => void decide(r, false)}>Reject</button>
+          </li>))}</ol>
+      )}
+      {d && d.recent.length > 0 && <details className="tx-fine"><summary>Recently decided ({d.recent.length})</summary><ol className="tx-origs">{d.recent.map((r) => <li key={r.id} className={r.status}><a href={r.url} target="_blank" rel="noreferrer" className="mono">@{r.handle}</a><small className="mono">{r.by ? `by @${r.by}` : ""}</small><em className="mono">{r.status === "ok" ? "approved" : "rejected"}</em></li>)}</ol></details>}
+    </div>
   );
 }
 

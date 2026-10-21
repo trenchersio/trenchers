@@ -72,3 +72,21 @@
   .tx-card { padding: 14px; border-radius: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .tx-logo, .tx-card { animation: none; } }
+
+/* your own post, and the team's review list */
+.tx-orig { display: flex; gap: 8px; }
+.tx-orig input { flex: 1 1 auto; min-width: 0; height: 42px; min-height: 42px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.3); color: var(--fog); font: 400 13px var(--mono); }
+.tx-orig input:focus { outline: none; border-color: rgba(57,255,136,.5); }
+.tx-card > a.tx-btn { justify-self: start; text-decoration: none; }
+.tx-origs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tx-origs li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.03); font-size: 12px; }
+.tx-origs a { color: var(--fog); } .tx-origs small { color: var(--quiet); } .tx-origs em { margin-left: auto; font-style: normal; color: var(--quiet); }
+.tx-origs li.ok em { color: var(--n); } .tx-origs li.no em { color: #f0516a; } .tx-origs li.pending em { color: #ffcf3a; }
+.tx-review { border-color: rgba(255,207,58,.35); }
+.tx-review h2 small { color: var(--quiet); font: 500 11px var(--mono); }
+.tx-revs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tx-revs li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.03); flex-wrap: wrap; }
+.tx-rev-t { display: grid; min-width: 0; flex: 1; } .tx-rev-t small { color: var(--quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-revs .tx-btn { text-decoration: none; }
+.tx-review details summary { cursor: pointer; margin-bottom: 6px; }
+@media (max-width: 520px) { .tx-orig { flex-direction: column; } .tx-rev-t { flex-basis: calc(100% - 44px); } .tx-revs li .tx-btn { flex: 1; } }

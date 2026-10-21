@@ -45,7 +45,11 @@ const SCOPES = "tweet.read users.read follows.read offline.access";
 /** Likes and replies count once opened from the page this long ago (no X check: it keeps the cost near zero). */
 const OPEN_WAIT = 5000;
 const DAY = 86_400_000;
-export const XP_RULES = { follow: 10, like: 1, reply: 1, posts: 3, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 } as const;
+export const XP_RULES = { follow: 10, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 } as const;
+/** Who reviews original posts: these X handles, signed in on /trenchies (XPOINTS_ADMINS, comma-separated; default the account). */
+const ADMINS = () => new Set((clean(process.env.XPOINTS_ADMINS) || ACCOUNT()).split(",").map((h) => h.trim().replace(/^@/, "").toLowerCase()).filter(Boolean));
+/** A link to an X post: https://x.com/<handle>/status/<id> (twitter.com and mobile links too). */
+const POST_URL = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{5,25})(?:[/?#].*)?$/i;
 /** What the rest of the engine knows about a wallet. */
 export type XpHost = {
   nftsOf: (wallet: string) => number[];
@@ -59,7 +63,9 @@ const linkText = (handle: string, wallet: string, time: string) => `Link this wa
 type Tokens = { access: string; refresh?: string; exp: number };
 type Usage = { nfts: number[]; trades: number; coins: string[]; usd: number };
 type Profile = { id: string; handle: string; name: string; avatar: string; createdAt: number; lastSeen: number; xp: number; followed: number | null; done: Record<string, { like?: number; reply?: number }>; tokens?: Tokens; log: { t: number; xp: number; why: string }[];
-  wallet?: string; usage?: Usage };
+  wallet?: string; usage?: Usage; originals?: Original[] };
+/** An original post about Trenchies, waiting for (or after) a manual review. */
+type Original = { id: string; url: string; at: number; status: "pending" | "ok" | "no"; decidedAt?: number; by?: string };
 type Post = { id: string; text: string; at: number };
 
 export class XPoints {
@@ -202,8 +208,12 @@ export class XPoints {
       posts: posts.map((p) => ({ ...p, liked: !!u.done[p.id]?.like, replied: !!u.done[p.id]?.reply })),
       log: u.log.slice(-12).reverse(),
       wallet: u.wallet ?? null, usage: u.usage ?? { nfts: [], trades: 0, coins: [], usd: 0 },
+      originals: (u.originals ?? []).slice(-10).reverse().map((o) => ({ id: o.id, url: o.url, at: o.at, status: o.status })),
+      admin: this.isAdmin(u), toReview: this.isAdmin(u) ? this.reviewQueue().length : 0,
     };
   }
+  private isAdmin(u: Profile) { return ADMINS().has(u.handle.toLowerCase()); }
+  private reviewQueue() { const out: { u: Profile; o: Original }[] = []; for (const u of this.users.values()) for (const o of u.originals ?? []) if (o.status === "pending") out.push({ u, o }); return out.sort((a, b) => a.o.at - b.o.at); }
   private give(u: Profile, xp: number, why: string) { u.xp += xp; u.log = [...u.log.slice(-49), { t: Date.now(), xp, why }]; this.board = null; }
 
   // ------------------------------------------------------------------ http
@@ -253,6 +263,33 @@ export class XPoints {
     const u = this.who(b.s ?? q.get("s"));
     if (!u) { send(401, { error: "Sign in with X again." }); return true; }
     if (op === "me") { u.lastSeen = Date.now(); if (this.sync(u)) this.save(); send(200, { me: await this.me(u) }); return true; }
+    if (op === "original") {
+      const m = POST_URL.exec(String(b.url ?? "").trim());
+      if (!m) { send(400, { error: "Paste the link to your post, like https://x.com/you/status/123…" }); return true; }
+      if (m[1].toLowerCase() !== u.handle.toLowerCase()) { send(400, { error: `That post isn't from @${u.handle}. Post it from your own account.` }); return true; }
+      const id = m[2];
+      for (const x of this.users.values()) if (x.originals?.some((o) => o.id === id)) { send(400, { error: "That post was already sent in." }); return true; }
+      const list = (u.originals ??= []), today = Math.floor(Date.now() / DAY);
+      if (list.filter((o) => o.status !== "no" && Math.floor(o.at / DAY) === today).length >= XP_RULES.originalsPerDay) { send(400, { error: "One post a day counts. Post again tomorrow." }); return true; }
+      if (list.filter((o) => o.status === "pending").length >= 3) { send(400, { error: "You have posts waiting for review. Give us a moment." }); return true; }
+      list.push({ id, url: `https://x.com/${m[1]}/status/${id}`, at: Date.now(), status: "pending" }); if (list.length > 60) list.splice(0, list.length - 60);
+      this.save(); send(200, { me: await this.me(u) }); return true;
+    }
+    if (op === "review") {
+      if (!this.isAdmin(u)) { send(403, { error: "Only the team can review posts." }); return true; }
+      if (req.method === "POST") {
+        const who = this.users.get(String(b.user ?? "")), o = who?.originals?.find((x) => x.id === String(b.id ?? ""));
+        if (!who || !o) { send(404, { error: "That post isn't in the list any more." }); return true; }
+        if (o.status === "pending") {
+          o.status = b.ok === true ? "ok" : "no"; o.decidedAt = Date.now(); o.by = u.handle;
+          if (o.status === "ok") this.give(who, XP_RULES.original, "Original post about Trenchies");
+          this.save();
+        }
+      }
+      const done: { u: Profile; o: Original }[] = []; for (const x of this.users.values()) for (const o of x.originals ?? []) if (o.status !== "pending") done.push({ u: x, o });
+      const row = ({ u: x, o }: { u: Profile; o: Original }) => ({ user: x.id, handle: x.handle, name: x.name, avatar: x.avatar, xp: x.xp, id: o.id, url: o.url, at: o.at, status: o.status, by: o.by ?? null });
+      send(200, { pending: this.reviewQueue().slice(0, 100).map(row), recent: done.sort((a, b) => (b.o.decidedAt ?? 0) - (a.o.decidedAt ?? 0)).slice(0, 20).map(row) }); return true;
+    }
     if (op === "wallet") {
       const { address, time, signature } = b as { address?: string; time?: string; signature?: string };
       if (!address || !isAddress(address) || !time || !signature) { send(400, { error: "bad request" }); return true; }
