@@ -141,9 +141,9 @@ const backtest = engine ? new Backtest({ pub: engine.pub as never, curves: engin
 // Weekly prize pot: 5% of the $TRENCHERS creator fees that come in each week (2 to 3 reads an hour).
 const pot = engine ? new PrizePot(engine.pub as never, ENV.TRENCHERS_TOKEN, ENV.PONS_FACTORY, log) : null;
 if (pot) { setTimeout(() => void pot.update(), 90_000); setInterval(() => void pot.update(), 3_600_000); }
-// The giveaway prize pool on /trenchies: the $TRENCHERS deployer wallet's ETH (one balance read every 10 minutes).
+// The giveaway prize pool on /trenchies: the $TRENCHERS deployer wallet's ETH (one balance read a minute).
 const giveaway = engine ? new Giveaway(engine.pub as never, ENV.TRENCHERS_TOKEN, ENV.PONS_FACTORY, log) : null;
-if (giveaway) { setTimeout(() => void giveaway.update(), 20_000); setInterval(() => void giveaway.update(), 600_000); }
+if (giveaway) { setTimeout(() => void giveaway.update(), 20_000); setInterval(() => void giveaway.update(), 60_000); }
 // The Trenchies trading desk: Bitcoin's live price (public exchange feed, no key, no chain reads).
 const btc = new BtcFeed(log);
 const trenchies = engine && backtest ? new Trenchies({
@@ -181,7 +181,7 @@ const server = createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json");
   const path = (req.url ?? "/").split("?")[0];
   try {
-    if (path === "/giveaway") { res.setHeader("cache-control", "public, max-age=60"); res.end(JSON.stringify(giveaway?.view() ?? { wallet: null, eth: null, nfts: 10, updatedAt: 0, error: "off" })); return; }
+    if (path === "/giveaway") { res.setHeader("cache-control", "public, max-age=20"); res.end(JSON.stringify(giveaway?.view() ?? { wallet: null, eth: null, nfts: 10, updatedAt: 0, error: "off" })); return; }
     if (await chat.handle(req, res, path)) return;
     if (await waitlist.handle(req, res, path)) return;
     if (await xpoints.handle(req, res, path)) return;

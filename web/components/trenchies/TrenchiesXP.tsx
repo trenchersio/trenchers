@@ -9,6 +9,7 @@ import { createWalletClient, custom, getAddress } from "viem";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { walletProvider } from "@/lib/chain";
 import { useWallet } from "@/lib/wallet";
+import { ConnectModal } from "@/components/ConnectModal";
 
 type Rules = { follow: number; like: number; reply: number; posts: number; original: number; originalsPerDay: number; nft: number; trade: number; tradesPerDay: number; coin: number; inferencePerUsd: number };
 type Post = { id: string; text: string; at: number; liked: boolean; replied: boolean };
@@ -85,9 +86,10 @@ export function TrenchiesXP() {
     if (session) void fetch(`${ENGINE_URL}/xp/open`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: session, task }) }).catch(() => {});
   };
 
+  const [wantLink, setWantLink] = useState(false);
   const linkWallet = async () => {
     if (!me || !session) return;
-    if (!w.address) { w.openModal(); return; }
+    if (!w.address) { setWantLink(true); w.openModal(); return; }
     setBusy("wallet");
     try {
       const a = getAddress(w.address), time = new Date().toISOString(), p = await walletProvider();
@@ -98,6 +100,8 @@ export function TrenchiesXP() {
     } catch (e) { const m = String((e as Error).message ?? e); say(/reject|denied/i.test(m) ? "Cancelled in your wallet." : m.split("\n")[0]); }
     setBusy(null);
   };
+  // connected from the "Connect wallet" button: carry straight on to the signature
+  useEffect(() => { if (wantLink && w.address && me && session) { setWantLink(false); w.closeModal(); void linkWallet(); } }, [wantLink, w.address, me, session]); // eslint-disable-line react-hooks/exhaustive-deps
   const signOut = () => { try { localStorage.removeItem(KEY); } catch { /* */ } setSession(null); setMe(null); };
   const login = () => { window.location.href = `${ENGINE_URL}/xp/login?ret=${encodeURIComponent(`${window.location.origin}${window.location.pathname}`)}`; };
 
@@ -116,7 +120,7 @@ export function TrenchiesXP() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="tx-logo" src="/trenchies/logo.webp" alt="Trenchies" width={420} height={140} />
         <h1>Earn Early XP and Win Prizes</h1>
-        <p>Trenchies is the game coming to Trenchers: your Trencher becomes a little character with its own land to build. Sign in with X, earn XP before it opens and climb the leaderboard for a share of the prize pool.</p>
+        <p>Trenchies, our upcoming SocialFi meets Web3 Gaming protocol. Make trades, pick memecoin winners, and earn real-world and in-game prizes. Sign in with X, earn XP before the game opens, and climb the leaderboard for a share of the prize pool.</p>
         {!me && (
           <div className="tx-cta">
             <button type="button" className="tx-btn tx-btn-x" onClick={login} disabled={ready === false}><X s={16} />{ready === false ? "Sign-in opens soon" : "Sign in with X"}</button>
@@ -226,6 +230,7 @@ export function TrenchiesXP() {
           </ol>
         )}
       </section>
+      <ConnectModal />
       {toast && <div className={`tx-toast${toast.good ? " good" : ""}`} role="status">{toast.text}</div>}
     </main>
   );
@@ -313,7 +318,7 @@ function PrizePool() {
   const [shown, setShown] = useState(0);
   useEffect(() => {
     const load = () => fetch(`${ENGINE_URL}/giveaway`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j && "eth" in j) setG(j); }).catch(() => {});
-    load(); const t = setInterval(load, 60_000); return () => clearInterval(t);
+    load(); const t = setInterval(load, 30_000); return () => clearInterval(t);
   }, []);
   const eth = g?.eth ? Number(g.eth) : null;
   // count up to the balance once it arrives

@@ -6,6 +6,7 @@ import { artPalette, loadArt } from "@/lib/art-vector";
 import { ownedTrenchers, walletProvider } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { useWallet } from "@/lib/wallet";
+import { ConnectModal } from "@/components/ConnectModal";
 import { ACHIEVEMENTS, CHEER, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
 import { Terminal } from "./Terminal";
 import { SKY_LABEL, type Sky } from "./weather";
@@ -211,6 +212,7 @@ export function TrenchiesGame() {
       <p className="tg-lede">Spawn your Trenchie, pick tomorrow&apos;s top coins, trade Bitcoin at your desk, and build a land like nobody else&apos;s.</p>
       {prizes?.pot && <PotBadge prizes={prizes} now={now} />}
       <button type="button" className="tg-btn tg-btn-go" onClick={w.openModal}>Connect wallet</button>
+      <ConnectModal />
       <HowShort />
     </Splash>
   );

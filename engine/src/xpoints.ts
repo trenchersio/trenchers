@@ -17,7 +17,7 @@ import { getAddress, isAddress, verifyMessage } from "viem";
  * A leaderboard ranks everyone.
  *
  * Every task is checked with the X API before XP is given. Checks are kept cheap (X bills per item read):
- *   follow  the newest followers of @trenchersio, read with the account's own sign-in when it has signed in here
+ *   follow  not checked with X either: counts once the player opened it from the page and came back
  *           once ("owned reads", $0.001 each), shared by everyone checking in the same minute
  *   like    not checked with X (to keep costs down): counts once the player opened it from the page and came back
  *   reply   the same as likes
@@ -322,24 +322,16 @@ export class XPoints {
         }
         send(200, { ok: true, me: await this.me(u) }); return true;
       }
-      const k = `${u.id}:${task}`, last = this.lastCheck.get(k) ?? 0;
-      if (Date.now() - last < 20_000) { send(429, { error: "Give it a few seconds, then check again." }); return true; }
-      this.lastCheck.set(k, Date.now()); if (this.lastCheck.size > 100_000) this.lastCheck.clear();
-      const token = await this.access(u.tokens, (t) => { u.tokens = t; });
-      if (!token) { send(401, { error: "Sign in with X again." }); return true; }
-      try {
-        if (kind === "follow") {
-          if (u.followed) { send(200, { ok: true, me: await this.me(u) }); return true; }
-          if (!(await this.isFollowing(u, token))) { send(200, { ok: false, me: await this.me(u), msg: `We can't see you following @${ACCOUNT()} yet. Follow, wait a moment, then check again.` }); return true; }
-          u.followed = Date.now(); this.give(u, XP_RULES.follow, `Followed @${ACCOUNT()}`);
-        } else { send(400, { error: "Unknown task." }); return true; }
-        this.save();
-        send(200, { ok: true, me: await this.me(u) });
-      } catch (e) {
-        const m = (e as Error).message;
-        send(m === "busy" ? 503 : 502, { error: m === "busy" ? "Checks are paused for today. Your task will count when you check again tomorrow." : "Couldn't reach X right now. Try again in a minute." });
+      // following: the same, no X call (X can't cheaply tell us about follows that happened long ago)
+      if (kind === "follow") {
+        if (!u.followed) {
+          const at = this.opened.get(`${u.id}:follow`);
+          if (!at || Date.now() - at < OPEN_WAIT) { send(200, { ok: false, me: await this.me(u), msg: `Tap Follow to open @${ACCOUNT()} on X, then come back.` }); return true; }
+          u.followed = Date.now(); this.give(u, XP_RULES.follow, `Followed @${ACCOUNT()}`); this.save();
+        }
+        send(200, { ok: true, me: await this.me(u) }); return true;
       }
-      return true;
+      send(400, { error: "Unknown task." }); return true;
     }
     send(404, { error: "not found" });
     return true;

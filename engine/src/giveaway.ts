@@ -4,7 +4,7 @@ import { FACTORY } from "./prizes";
 /**
  * The giveaway prize pool shown on trenchers.io/trenchies: the ETH in the wallet that deployed $TRENCHERS, plus a
  * number of Trencher NFTs. The deployer is read once from the Pons factory (or GIVEAWAY_WALLET), then its balance
- * every 10 minutes: one small read each time.
+ * every minute: one small read each time.
  *
  * Settings: GIVEAWAY_WALLET (default: the token's deployer on Pons), GIVEAWAY_NFTS (default 10).
  */
