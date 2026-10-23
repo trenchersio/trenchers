@@ -207,6 +207,7 @@ export function TrenchiesXP() {
             <li><b className="mono">+{rules.coin}</b><span>For every coin you launch</span></li>
             <li><b className="mono">+{rules.inferencePerUsd}</b><span>For every $1 of inference you buy</span></li>
           </ul>
+          <p className="tx-fine">The X tasks count as soon as you sign in with X. For NFTs, trades, coins and inference, link your wallet after signing in: one free signature, no transaction. Each NFT and coin counts once, for the first profile that links it.</p>
         </section>
       )}
 
