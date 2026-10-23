@@ -16,7 +16,7 @@ import { PRIZE_BPS, weekOf, weekStart } from "./trenchies-catalog";
  */
 const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
 const FILE = clean(process.env.PRIZES_FILE) || `${dirname(clean(process.env.CHAT_FILE) || "./chat.json")}/prizes.json`;
-const FACTORY = parseAbi([
+export const FACTORY = parseAbi([
   "struct LaunchedToken { address token; address curve; address deployer; address creatorFeeRecipient; address pairToken; uint256 graduationThreshold; uint24 poolFee; int24 tickSpacing; uint16 creatorTaxBps; bool buybackEnabled; uint8 phase; }",
   "function getLaunchedToken(address token) view returns (LaunchedToken)",
 ]);

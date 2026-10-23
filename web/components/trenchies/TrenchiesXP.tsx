@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createWalletClient, custom, getAddress } from "viem";
-import { ENGINE_URL, ROUTES, chain } from "@/lib/constants";
+import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { walletProvider } from "@/lib/chain";
 import { useWallet } from "@/lib/wallet";
 
@@ -124,6 +124,8 @@ export function TrenchiesXP() {
           </div>
         )}
       </section>
+
+      <PrizePool />
 
       {me && (
         <section className="tx-me">
@@ -297,5 +299,44 @@ function Use({ n, xp, title, text, href, cta, unit = "" }: { n: number; xp: numb
       <b className="mono">{unit}{n0(n)}</b><span>{title}</span><small>{text}</small>
       {xp > 0 ? <em className="mono">+{n0(xp)} XP</em> : <a className="mono" href={href}>{cta} →</a>}
     </div>
+  );
+}
+
+/** The giveaway prize pool: the ETH in the $TRENCHERS deployer wallet (live), plus Trencher NFTs. */
+const MILESTONES = [0.25, 0.5, 1, 2, 3, 5, 10, 20, 50, 100];
+function PrizePool() {
+  const [g, setG] = useState<{ wallet: string | null; eth: string | null; nfts: number; updatedAt: number } | null>(null);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const load = () => fetch(`${ENGINE_URL}/giveaway`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j && "eth" in j) setG(j); }).catch(() => {});
+    load(); const t = setInterval(load, 60_000); return () => clearInterval(t);
+  }, []);
+  const eth = g?.eth ? Number(g.eth) : null;
+  // count up to the balance once it arrives
+  useEffect(() => {
+    if (eth === null) return;
+    let raf = 0; const from = shown, t0 = performance.now();
+    const step = (t: number) => { const k = Math.min(1, (t - t0) / 1400), e = 1 - Math.pow(1 - k, 3); setShown(from + (eth - from) * e); if (k < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step); return () => cancelAnimationFrame(raf);
+  }, [eth]); // eslint-disable-line react-hooks/exhaustive-deps
+  const next = eth === null ? MILESTONES[0] : MILESTONES.find((m) => m > eth) ?? Math.ceil(eth / 100) * 100 + 100;
+  const prev = eth === null ? 0 : [0, ...MILESTONES].filter((m) => m <= eth).pop() ?? 0;
+  const fill = eth === null ? 0 : Math.max(0.03, Math.min(1, (eth - prev) / (next - prev)));
+  const nfts = g?.nfts ?? 10;
+  const ago = g?.updatedAt ? Math.max(0, Math.round((Date.now() / 1000 - g.updatedAt) / 60)) : null;
+  return (
+    <section className="tx-pool" aria-label="Giveaway prize pool">
+      <div className="tx-pool-h"><span className="tx-pool-chip mono"><i />Giveaway prize pool</span>{ago !== null && <small className="mono">live · updated {ago < 1 ? "just now" : `${ago} min ago`}</small>}</div>
+      <div className="tx-pool-big">
+        <b className="mono">{eth === null ? "…" : shown.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}<span> ETH</span></b>
+        <em>+ {nfts} Trencher NFTs</em>
+      </div>
+      <div className="tx-meter" role="meter" aria-valuemin={prev} aria-valuemax={next} aria-valuenow={eth ?? 0} aria-label="Prize pool in ETH">
+        <i style={{ width: `${fill * 100}%` }} />
+        {Array.from({ length: 9 }, (_, k) => <s key={k} style={{ left: `${(k + 1) * 10}%` }} />)}
+      </div>
+      <div className="tx-meter-k mono"><span>{prev} ETH</span><span>next: {next} ETH</span></div>
+      <p className="tx-fine">Held in the $TRENCHERS deployer wallet{g?.wallet && <> <a className="mono" href={`${EXPLORER}/address/${g.wallet}`} target="_blank" rel="noreferrer">{g.wallet.slice(0, 6)}…{g.wallet.slice(-4)} ↗</a></>}. Earn XP to be in the running.</p>
+    </section>
   );
 }
