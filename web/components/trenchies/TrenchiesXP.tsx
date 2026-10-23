@@ -18,7 +18,7 @@ type Original = { id: string; url: string; at: number; status: "pending" | "ok" 
 type ReviewRow = Original & { user: string; handle: string; name: string; avatar: string; xp: number; by: string | null };
 type Row = { rank: number; handle: string; name: string; avatar: string; xp: number };
 const KEY = "trenchies:xp";
-const DEF: Rules = { follow: 10, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 };
+const DEF: Rules = { follow: 5, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 };
 const linkText = (handle: string, wallet: string, time: string) => `Link this wallet to Trenchies XP\n\nX: @${handle}\nWallet: ${wallet}\nTime: ${time}\n\nThis only proves you hold this wallet. It costs nothing and sends no transaction.`;
 const ago = (t: number) => { const s = Math.max(1, Math.round((Date.now() - t) / 1000)); return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
 const n0 = (v: number) => v.toLocaleString("en-US");
@@ -115,8 +115,8 @@ export function TrenchiesXP() {
       <section className="tx-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="tx-logo" src="/trenchies/logo.webp" alt="Trenchies" width={420} height={140} />
-        <h1>Earn XP before the game opens</h1>
-        <p>Trenchies is the game coming to Trenchers: your Trencher becomes a little character with its own land to build. Sign in with X, collect XP now and climb the early leaderboard.</p>
+        <h1>Earn Early XP and Win Prizes</h1>
+        <p>Trenchies is the game coming to Trenchers: your Trencher becomes a little character with its own land to build. Sign in with X, earn XP before it opens and climb the leaderboard for a share of the prize pool.</p>
         {!me && (
           <div className="tx-cta">
             <button type="button" className="tx-btn tx-btn-x" onClick={login} disabled={ready === false}><X s={16} />{ready === false ? "Sign-in opens soon" : "Sign in with X"}</button>
@@ -141,7 +141,7 @@ export function TrenchiesXP() {
 
           <div className="tx-card">
             <h2>Every day</h2>
-            <p className="tx-sub">Like and reply to @{me.account}&apos;s latest posts: <b>+{rules.like} XP</b> for each like and <b>+{rules.reply} XP</b> for each reply. New posts, new XP.</p>
+            <p className="tx-sub">Like and reply to <XLink h={me.account} />&apos;s latest posts: <b>+{rules.like} XP</b> for each like and <b>+{rules.reply} XP</b> for each reply. New posts, new XP.</p>
             <div className="tx-prog"><i style={{ width: `${dailyMax ? (daily / dailyMax) * 100 : 0}%` }} /><span className="mono">{daily}/{dailyMax} XP from these posts</span></div>
             {me.posts.length === 0 ? <p className="tx-sub">No posts to do right now. Check back soon.</p> : (
               <ol className="tx-posts">
@@ -166,7 +166,7 @@ export function TrenchiesXP() {
             <h2>One time</h2>
             <div className="tx-once">
               <div className={`tx-row${me.followed ? " done" : ""}`}>
-                <span className="tx-ic"><X s={16} /></span><div><b>Follow @{me.account}</b><small>+{rules.follow} XP</small></div>
+                <span className="tx-ic"><X s={16} /></span><div><b>Follow <XLink h={me.account} /></b><small>+{rules.follow} XP</small></div>
                 <Task done={me.followed} label="Follow" xp={rules.follow} wait={!!pending.follow} busy={busy === "follow"} go={() => open(`https://x.com/intent/follow?screen_name=${me.account}`, "follow")} check={() => void check("follow")} />
               </div>
             </div>
@@ -198,7 +198,7 @@ export function TrenchiesXP() {
         <section className="tx-how">
           <h2>How to earn</h2>
           <ul>
-            <li><b className="mono">+{rules.follow}</b><span>Follow @trenchersio (once)</span></li>
+            <li><b className="mono">+{rules.follow}</b><span>Follow <XLink h="trenchersio" /> (once)</span></li>
             <li><b className="mono">+{rules.like}</b><span>Like each of its latest posts, every day</span></li>
             <li><b className="mono">+{rules.reply}</b><span>Reply to each of its latest posts, every day</span></li>
             <li><b className="mono">+{rules.original}</b><span>Write your own post about Trenchies (one a day, checked by the team)</span></li>
@@ -287,6 +287,9 @@ function ReviewCard({ session, count, say, onDone }: { session: string; count: n
     </div>
   );
 }
+
+/** An @handle that opens the X profile. */
+function XLink({ h }: { h: string }) { return <a className="tx-xlink" href={`https://x.com/${h}`} target="_blank" rel="noreferrer">@{h}</a>; }
 
 function Task({ done, label, xp, wait, busy, go, check }: { done: boolean; label: string; xp: number; wait: boolean; busy: boolean; go: () => void; check: () => void }) {
   if (done) return <span className="tx-done mono">✓ +{xp}</span>;

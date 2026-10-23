@@ -6,7 +6,7 @@ import { getAddress, isAddress, verifyMessage } from "viem";
 
 /**
  * Trenchies early XP: sign in with X on trenchers.io/trenchies, then earn XP before the game opens.
- *   follow @trenchersio once          +10 XP
+ *   follow @trenchersio once          +5 XP
  *   like each of its recent posts      +1 XP per post
  *   reply to each of its recent posts  +1 XP per post
  * And for using Trenchers, once a wallet is linked (one signature):
@@ -45,7 +45,7 @@ const SCOPES = "tweet.read users.read follows.read offline.access";
 /** Likes and replies count once opened from the page this long ago (no X check: it keeps the cost near zero). */
 const OPEN_WAIT = 5000;
 const DAY = 86_400_000;
-export const XP_RULES = { follow: 10, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 } as const;
+export const XP_RULES = { follow: 5, like: 1, reply: 1, posts: 3, original: 15, originalsPerDay: 1, nft: 50, trade: 1, tradesPerDay: 20, coin: 25, inferencePerUsd: 10 } as const;
 /** Who reviews original posts: these X handles, signed in on /trenchies (XPOINTS_ADMINS, comma-separated; default the account). */
 const ADMINS = () => new Set((clean(process.env.XPOINTS_ADMINS) || ACCOUNT()).split(",").map((h) => h.trim().replace(/^@/, "").toLowerCase()).filter(Boolean));
 /** A link to an X post: https://x.com/<handle>/status/<id> (twitter.com and mobile links too). */

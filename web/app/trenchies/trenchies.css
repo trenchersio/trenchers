@@ -110,3 +110,4 @@
 .tx-meter-k { display: flex; justify-content: space-between; color: var(--quiet); font-size: 11px; margin-top: -4px; }
 .tx-pool .tx-fine a { color: var(--fog); }
 @media (prefers-reduced-motion: reduce) { .tx-meter i::after, .tx-pool-chip i { animation: none; } }
+.tx-xlink { color: inherit; text-decoration: underline; text-decoration-color: rgba(57,255,136,.6); text-underline-offset: 3px; } .tx-xlink:hover { color: var(--n); }
