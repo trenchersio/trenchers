@@ -1,3 +1,4 @@
+// Trenchers engine: trading, the Arena, inference, Trenchies and the points program.
 import { createServer } from "node:http";
 import { explain, mainnetRpcs, rpcStats, scrub } from "./rpc";
 import { Engine } from "./engine";

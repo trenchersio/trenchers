@@ -1,3 +1,4 @@
+// The root layout shared by every page on trenchers.io.
 import type { Metadata, Viewport } from "next";
 import "@fontsource/space-grotesk/400.css";
 import "@fontsource/space-grotesk/500.css";
