@@ -26,6 +26,9 @@ export type CustomRule = {
   /** Copy another agent (trigger "copy"): buys what it buys, at this share of its size, and sells when it sells. */
   copyOf?: number | null;         // the Trencher to copy
   copyPct?: number | null;        // 1 to 100: share of its buy size (capped by this agent's own limits)
+  /** Copy a trader's wallet instead of an agent (FOMO traders in the Arena): its Pons trades on Robinhood Chain. */
+  copyWallet?: string | null;
+  copyName?: string | null;        // how the trader is shown, e.g. "Rasmr"
 };
 
 export const TRIGGERS: { key: CustomTrigger; label: string; unit?: string; defaultThreshold?: number }[] = [
@@ -43,7 +46,13 @@ export const DEFAULT_RULE: CustomRule = {
   token: null, tokenMode: null, dcaDays: null, everyHours: null, budgetEth: null,
 };
 const NO_TOKEN = { token: null, tokenMode: null, dcaDays: null, everyHours: null, budgetEth: null } as const;
-const NO_COPY = { copyOf: null, copyPct: null } as const;
+const NO_COPY = { copyOf: null, copyPct: null, copyWallet: null, copyName: null } as const;
+/** Who a copy rule follows, as people read it: "Trencher #862", "Rasmr" or a short wallet. */
+export const copyWho = (r: Pick<CustomRule, "copyOf" | "copyWallet" | "copyName">) =>
+  r.copyWallet ? (r.copyName || `${r.copyWallet.slice(0, 6)}…${r.copyWallet.slice(-4)}`) : `Trencher #${r.copyOf}`;
+/** The copy rule for a trader's wallet, exactly as the engine reads it back. */
+export const copyWalletRule = (wallet: string, name: string | null, pct: number) =>
+  `Copy ${name ? `FOMO trader ${name} (${wallet.toLowerCase()})` : `wallet ${wallet.toLowerCase()}`}'s trades at ${pct}% of their size, sell when they sell.`;
 export const isAddress = (a: string | null | undefined): a is string => !!a && /^0x[0-9a-fA-F]{40}$/.test(a);
 /** Default spacing between buys: daily for multi-day DCA, every 4 hours for shorter ones; 6 hours between dip buys. */
 export const defaultEvery = (r: Pick<CustomRule, "tokenMode" | "dcaDays">) => (r.tokenMode === "below" ? 6 : (r.dcaDays ?? 7) >= 2 ? 24 : 4);
@@ -66,6 +75,7 @@ function describeToken(r: CustomRule): string {
 
 /** One-line description, also used as the strategy summary in the Arena. */
 export function describe(r: CustomRule): string {
+  if (r.trigger === "copy" && r.copyWallet) return copyWalletRule(r.copyWallet, r.copyName ?? null, r.copyPct ?? 100);
   if (r.trigger === "copy") return `Copy Trencher #${r.copyOf}'s trades at ${r.copyPct ?? 100}% of its size, sell when it sells.`;
   const t = TRIGGERS.find((x) => x.key === r.trigger)!;
   if (r.trigger === "token") return `${describeToken(r)}, ${sellText(r)}.`;
@@ -87,7 +97,7 @@ export function describe(r: CustomRule): string {
 }
 
 function sellText(r: CustomRule): string {
-  if (r.exit === "follow") return "sell when the copied agent sells";
+  if (r.exit === "follow") return r.copyWallet ? "sell when they sell" : "sell when the copied agent sells";
   if (r.exit === "hold") return "hold it (no automatic sell)";
   if (r.exit === "time") return `sell after ${fmtHold(r.holdSec ?? 60)}`;
   const parts = [];
@@ -98,7 +108,7 @@ function sellText(r: CustomRule): string {
 
 export function validate(r: CustomRule): string | null {
   if (r.trigger === "copy") {
-    if (!(r.copyOf && Number.isInteger(r.copyOf) && r.copyOf >= 1 && r.copyOf <= 2000)) return "Pick the Trencher to copy (1 to 2000).";
+    if (r.copyWallet ? !isAddress(r.copyWallet) : !(r.copyOf && Number.isInteger(r.copyOf) && r.copyOf >= 1 && r.copyOf <= 2000)) return "Pick the Trencher to copy (1 to 2000).";
     if (!(r.copyPct && r.copyPct >= 1 && r.copyPct <= 100)) return "Set the copy size between 1% and 100%.";
     return null;
   }
@@ -128,13 +138,24 @@ export function parse(text: string, base: CustomRule = DEFAULT_RULE): { rule: Cu
   const full = text.toLowerCase();
   const r: CustomRule = { ...DEFAULT_RULE, ...base };
   const understood: string[] = [];
+  // "Copy FOMO trader Rasmr (0x…)'s trades at 50% of their size": buys what that wallet buys on Pons, sells when it sells.
+  const cw = full.match(/\b(?:copy|mirror)(?:ing)?\s+(?:fomo\s+trader\s+|trader\s+|wallet\s+)?([^(.]*?)\s*\(?\s*(0x[0-9a-f]{40})/);
+  if (cw) {
+    const wallet = cw[2], at = full.indexOf(cw[1], cw.index ?? 0);
+    const name = cw[1].trim() && at >= 0 ? text.slice(at, at + cw[1].length).trim().replace(/[^\p{L}\p{N} _.-]/gu, "").slice(0, 32) || null : null;
+    const pm = full.split(wallet).join(" ").match(/(\d{1,3}(?:\.\d+)?)\s*%\s*(?:of\s+(?:its|their|the)\s+)?size|(?:at|with)\s+(\d{1,3}(?:\.\d+)?)\s*%/);
+    const pct = Math.min(100, Math.max(1, pm ? parseFloat(pm[1] ?? pm[2]) : 100));
+    Object.assign(r, DEFAULT_RULE, NO_TOKEN, NO_COPY, { trigger: "copy", copyWallet: wallet, copyName: name, copyPct: pct, exit: "follow", holdSec: null });
+    understood.push(`copies ${name ?? `${wallet.slice(0, 6)}…${wallet.slice(-4)}`}`, `at ${pct}% of their size`, "sells when they sell");
+    return { rule: r, understood, missed: false };
+  }
   // "Copy Trencher #862 at 50% size": buys what that agent buys and sells when it sells.
   const copy = full.match(/\b(?:copy|mirror|follow)(?:ing)?\s+(?:trencher\s*)?#\s*(\d{1,4})\b|\b(?:copy|mirror)(?:ing)?\s+trencher\s+(\d{1,4})\b/);
   if (copy) {
     const id = parseInt(copy[1] ?? copy[2]);
     const pm = full.match(/(\d{1,3}(?:\.\d+)?)\s*%\s*(?:of\s+(?:its|their|the)\s+)?size|(?:at|with)\s+(\d{1,3}(?:\.\d+)?)\s*%/);
     const pct = Math.min(100, Math.max(1, pm ? parseFloat(pm[1] ?? pm[2]) : 100));
-    Object.assign(r, DEFAULT_RULE, NO_TOKEN, { trigger: "copy", copyOf: id, copyPct: pct, exit: "follow", holdSec: null });
+    Object.assign(r, DEFAULT_RULE, NO_TOKEN, NO_COPY, { trigger: "copy", copyOf: id, copyPct: pct, exit: "follow", holdSec: null });
     understood.push(`copies Trencher #${id}`, `at ${pct}% of its size`, "sells when it sells");
     return { rule: r, understood, missed: false };
   }

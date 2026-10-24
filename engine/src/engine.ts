@@ -13,6 +13,7 @@ import { dcaBuys, defaultEvery, parse, type CustomRule } from "./custom-strategy
 import { ENV } from "./env";
 import { FeeKeeper } from "./keeper";
 import { BurnTracker } from "./burns";
+import { TraderWatch, nameOf, type WalletTrade } from "./fomo";
 import {
   PONS_RECORD_ABI, ALL_EVENTS, ADAPTER_ABI, AGENT_ABI, BOUGHT, CONFIG_ABI, LAUNCH_SWEPT, NFT_TRANSFER, CLAIMED, CURVE_ABI, CURVE_BUY, CURVE_SELL, ERC20_ABI, POOL_GRADUATED, RULE_APPLIED, POLICY_SET, FUND_ABI, SOLD, TOKEN_LAUNCHED, FOUNDATION_LAUNCHED, FOUNDATION_TOKEN_ABI, FOUNDATION_LEDGER_ABI, NFT_OWNER_ABI,
 } from "./abis";
@@ -194,6 +195,8 @@ export class Engine {
       try { await this.sync(head, true); this.syncError = null; }
       catch (e) { this.syncError = (e as Error).message.split("\n")[0].slice(0, 160); this.log(`reading new blocks failed at ${this.cursor + 1n}: ${this.syncError}`); }
     }
+    // FOMO traders agents can copy (the Arena's Copytrade cards): their own trades only.
+    if (this.liveFrom) await this.fomo.run(head, this.headTime).catch((e) => this.log(`fomo traders: ${(e as Error).message.split("\n")[0]}`));
     // Agents are re-read straight away on their own events (awakening, new rule, start/pause); this is the backstop.
     if (Date.now() - this.lastAgentRefresh > 300_000) await this.refreshAgents(false);
     if (Date.now() - this.lastSnapshot > 600_000) await this.snapshot();
@@ -960,7 +963,7 @@ export class Engine {
         const age = ts - p.openedAt;
         let why: string | null = null;
         if (r?.exit === "time" && age >= (r.holdSec ?? 60)) why = `held ${age}s`;
-        else if (r?.trigger === "copy" && this.copyExits.has(`${w}:${p.token}`)) { why = `#${r.copyOf} sold it`; this.copyExits.delete(`${w}:${p.token}`); }
+        else if (r?.trigger === "copy" && this.copyExits.has(`${w}:${p.token}`)) { why = r.copyWallet ? `${r.copyName || "the copied wallet"} sold it` : `#${r.copyOf} sold it`; this.copyExits.delete(`${w}:${p.token}`); }
         else if (age >= ENV.MAX_HOLD_SEC && !(r?.exit === "hold" && !!r.token && lc(r.token) === p.token)) why = "max hold";
         else if (!r) why = "no rule any more";
         else if (r.exit === "tpsl" && (r.takeProfitPct || r.stopLossPct)) {
@@ -1127,6 +1130,35 @@ export class Engine {
   ownedBy(addr: string) { return [...this.agents.values()].filter((a) => a.owner === addr.toLowerCase()).map((a) => a.id).sort((x, y) => x - y); }
 
   // ------------------------------------------------------------------ copying another agent
+
+  /** Watches the FOMO traders' wallets (and any wallet an agent copies). */
+  private _fomo?: TraderWatch;
+  get fomo() { return (this._fomo ??= new TraderWatch(this.pub as PublicClient, {
+    tokenOfCurve: (c) => this.curves.get(c),
+    isPons: (t) => this.tokens.has(t),
+    symbolOf: (t) => this.symbolOf(t),
+    copied: () => new Set([...this.agents.values()].filter((f) => f.rule?.trigger === "copy" && f.rule.copyWallet && this.tradable(f)).map((f) => lc(f.rule!.copyWallet as Address))),
+    onTrade: (t) => { void this.onWallet(t).catch((e) => this.log(`copy: ${(e as Error).message.split("\n")[0]}`)); },
+    log: (m) => this.log(m),
+    rangeMax: ENV.LOG_RANGE_MAX,
+  })); }
+  /** How many trading agents copy a wallet. */
+  copiersOf(w: Address) { return [...this.agents.values()].filter((f) => f.rule?.trigger === "copy" && f.rule.copyWallet && lc(f.rule.copyWallet as Address) === lc(w) && this.tradable(f)).length; }
+  /** A trade by a copied wallet: agents copying it follow, like copying an agent. */
+  private async onWallet(t: WalletTrade) {
+    const followers = [...this.agents.values()].filter((f) => f.rule?.trigger === "copy" && f.rule.copyWallet && lc(f.rule.copyWallet as Address) === t.wallet && f.wallet !== t.wallet);
+    if (!followers.length) return;
+    const who = nameOf(t.wallet) ?? `${t.wallet.slice(0, 6)}…`;
+    if (t.side === "sell") { for (const f of followers) if (this.book(f.wallet).has(t.token)) this.copyExits.add(`${f.wallet}:${t.token}`); return; }
+    const tok = this.tokens.get(t.token) ?? (await this.ensureToken(t.token).catch(() => null));
+    if (!tok || t.eth === null) return;
+    const eth = BigInt(Math.round(t.eth * 1e18));
+    for (const f of followers) {
+      const size = (eth * BigInt(Math.round((f.rule!.copyPct ?? 100) * 100))) / 10_000n;
+      this.entries.push({ wallet: f.wallet, token: tok.token, notBefore: this.now(), reason: `copying ${who}`, size });
+      this.log(`Agent #${f.id} copies ${who}: buy ${tok.token} at ${f.rule!.copyPct ?? 100}% of their size`);
+    }
+  }
 
   /** Positions to close because the agent they copy sold that coin. */
   private copyExits = new Set<string>();

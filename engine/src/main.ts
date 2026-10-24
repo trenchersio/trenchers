@@ -237,6 +237,10 @@ const server = createServer(async (req, res) => {
       res.setHeader("cache-control", "public, max-age=60");
       if (!t) { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); return; }
       res.end(JSON.stringify(t));
+    } else if (path === "/copytraders") {
+      // The Arena's Copytrade cards: FOMO traders' Pons trades this week and how many agents copy them.
+      if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
+      res.end(await shared("copytraders", 30_000, async () => JSON.stringify({ updatedAt: engine!.now(), chainId: ENV.CHAIN_ID, traders: engine!.fomo.cards((w) => engine!.copiersOf(w)) })));
     } else if (path === "/arena") {
       if (!engine || !lastTick) { res.statusCode = 503; res.end(JSON.stringify({ error: status })); return; }
       res.end(await shared("arena", 60_000, async () => JSON.stringify(await engine.arena())));

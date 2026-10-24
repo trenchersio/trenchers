@@ -20,13 +20,14 @@ import { useSlow } from "@/lib/use-slow";
 import { FollowButton, FollowingView, RecapView, RulesBoard, useFollows } from "./ArenaExtras";
 import { Badges, CopyAgent } from "./AgentBits";
 import { RuleTest } from "@/components/agents/RuleTest";
+import { CopyTraders } from "./CopyTraders";
 
 /** A rule's name as people know it: the house template it came from, or "Own strategy" (with its version once changed). */
 const TEMPLATE_BY_TEXT = new Map(STRATEGIES.filter((s) => s.name !== "Custom").map((s) => [`${s.trigger}. ${s.exit}.`.toLowerCase(), s.name]));
 export type Target = { token: string; symbol: string | null; logo: string | null; mode: "once" | "dca" | "below"; status: string | null } | null;
 const tokenStrategy = (t: NonNullable<Target>) => { const s = t.symbol ? `$${t.symbol}` : "a token"; return `Treasury · ${t.mode === "dca" ? `DCA ${s}` : t.mode === "below" ? `${s} dip buys` : `holds ${s}`}`; };
 export const strategyName = (rule: string | null, version: number, target?: Target) =>
-  !rule ? "No strategy yet" : target ? tokenStrategy(target) : /^buy token 0x/i.test(rule) ? "Treasury"
+  !rule ? "No strategy yet" : /^copy fomo trader /i.test(rule.trim()) ? `Copies ${rule.trim().match(/^copy fomo trader (.+?) \(0x/i)?.[1] ?? "a FOMO trader"}` : target ? tokenStrategy(target) : /^buy token 0x/i.test(rule) ? "Treasury"
     : TEMPLATE_BY_TEXT.get(rule.trim().toLowerCase()) ?? (version > 1 ? `Own strategy · v${version}` : "Own strategy");
 
 /** The live Arena: real agents and trades, straight from the trading engine's /arena feed. */
@@ -95,9 +96,9 @@ export function tradeCard(base: PnlCardData, t: { symbol?: string; token: string
   return { ...base, trade: { sym: t.symbol ?? t.token.slice(2, 8), pct, outEth: out, inEth: out / (1 + pct / 100), tx: t.tx, time: t.time } };
 }
 
-const TABS = ["board", "following", "rules", "recap"] as const;
+const TABS = ["board", "copy", "following", "rules", "recap"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = { board: "Leaderboard", following: "Following", rules: "Winning rules", recap: "Weekly recap" };
+const TAB_LABEL: Record<Tab, string> = { board: "Leaderboard", copy: "Copytrade", following: "Following", rules: "Winning rules", recap: "Weekly recap" };
 
 /** `only`: show just these Trenchers (the holder's own agents on their profile). */
 export function LiveArena({ only }: { only?: number[] } = {}) {
@@ -153,11 +154,12 @@ export function LiveArena({ only }: { only?: number[] } = {}) {
         <div className="arena-tabs" role="tablist" aria-label="Arena views">
           {TABS.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={`arena-tab${tab === t ? " on" : ""}`} onClick={() => setTab(t)}>
-              {TAB_LABEL[t]}{t === "following" && follows.ids.length > 0 && <span className="mono arena-tab-n">{follows.ids.length}</span>}
+              {TAB_LABEL[t]}{t === "copy" && <span className="mono arena-tab-new">New</span>}{t === "following" && follows.ids.length > 0 && <span className="mono arena-tab-n">{follows.ids.length}</span>}
             </button>
           ))}
         </div>
       )}
+      {!mine && tab === "copy" && <CopyTraders explorer={explorer} />}
       {!mine && tab === "following" && <FollowingView agents={feed.agents} of={of} explorer={explorer} now={now} onOpen={open} />}
       {!mine && tab === "rules" && <RulesBoard agents={feed.agents} onOpen={open} />}
       {!mine && tab === "recap" && <RecapView agents={feed.agents} onOpen={open} />}
@@ -292,7 +294,7 @@ export function LiveDetail({ a, of, explorer, now, highlight }: { a: LiveAgent; 
           </div>
         )}
         {a.rule ? <blockquote className="guide"><span className="mono">Its rule, as stored on-chain</span>“{a.rule}”</blockquote> : <p className="empty">The holder hasn&apos;t given this agent a rule yet.</p>}
-        {a.rule && !/^buy token 0x|^copy trencher/i.test(a.rule.trim()) && (
+        {a.rule && !/^buy token 0x|^copy (trencher|fomo trader|wallet)/i.test(a.rule.trim()) && (
           <div className="rule-tools"><RuleTest rule={a.rule} /><a className="gf-btn ghost" href={`${ROUTES.agents}?rule=${encodeURIComponent(a.rule)}&from=${a.id}`}>Use this rule for my agent</a></div>
         )}
         {a.understood.length > 0 && <div className="tags">{a.understood.map((u) => <span key={u} className="mono">{u}</span>)}</div>}

@@ -410,8 +410,8 @@ function SelfFundedKpi({ a }: { a: AgentState }) {
 
 /** Arrived from "Copy this agent" or "Use this rule" without a wallet connected: say what happens next. */
 function CopyingNote() {
-  const [c, setC] = useState<{ copy: boolean; from: string | null } | null>(null);
-  useEffect(() => { const q = new URLSearchParams(window.location.search), r = q.get("rule"); if (r) setC({ copy: /^copy trencher/i.test(r.trim()), from: q.get("from") }); }, []);
+  const [c, setC] = useState<{ copy: boolean; from: string | null; who: string | null } | null>(null);
+  useEffect(() => { const q = new URLSearchParams(window.location.search), r = q.get("rule"); if (r) setC({ copy: /^copy (trencher|fomo trader|wallet)/i.test(r.trim()), from: q.get("from"), who: /^copy (fomo trader|wallet)/i.test(r.trim()) ? (q.get("trader")?.slice(0, 32) || "this trader") : null }); }, []);
   if (!c) return null;
-  return <p className="rule-copied-n copying-note">{c.copy ? `You're copying Trencher #${c.from}.` : `You're using a rule${c.from ? ` from Trencher #${c.from}` : ""}.`} Connect the wallet that holds your Trencher and it's ready to review and apply on your agent.</p>;
+  return <p className="rule-copied-n copying-note">{c.copy ? `You're copying ${c.who ?? `Trencher #${c.from}`}.` : `You're using a rule${c.from ? ` from Trencher #${c.from}` : ""}.`} Connect the wallet that holds your Trencher and it's ready to review and apply on your agent.</p>;
 }

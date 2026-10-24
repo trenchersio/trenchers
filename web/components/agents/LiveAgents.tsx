@@ -244,10 +244,10 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
   const [chat, setChat] = useState<ChatMsg[]>(() => { try { return JSON.parse(localStorage.getItem(chatKey) || "[]"); } catch { return []; } });
   const saveChat = (c: ChatMsg[]) => { setChat(c); try { localStorage.setItem(chatKey, JSON.stringify(c.slice(-60))); } catch {} };
   // A rule picked on the Arena's "Winning rules" board (/agents?rule=…&from=…), waiting to be applied.
-  const [copied, setCopied] = useState<{ text: string; from: number | null } | null>(null);
+  const [copied, setCopied] = useState<{ text: string; from: number | null; who?: string | null } | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search), text = (q.get("rule") ?? "").trim().slice(0, 600);
-    if (text) { setCopied({ text, from: Number(q.get("from")) || null }); setTimeout(() => goToSection("guide"), 400); }
+    if (text) { setCopied({ text, from: Number(q.get("from")) || null, who: copyTarget(text, q.get("trader")) }); setTimeout(() => goToSection("guide"), 400); }
   }, []);
   const dropCopied = () => { setCopied(null); const u = new URL(window.location.href); u.searchParams.delete("rule"); u.searchParams.delete("from"); history.replaceState(null, "", u.pathname + u.search + u.hash); };
   const [perTrade, setPerTrade] = useState("");
@@ -448,17 +448,18 @@ function Profile({ a, me, claim, live, engineCount, busy, run }: {
         <Fold id="guide" title="Train your agent" sub="Strategy, limits, start or pause">
         {copied && !a.wallet && (
           <div className="rule-copied">
-            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copying Trencher #${copied.from}` : "Rule copied"}</p>
+            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copying ${copied.who ?? `Trencher #${copied.from}`}` : "Rule copied"}</p>
             <p className="rule-copied-n">Trencher #{a.id} isn&apos;t awake yet, so it can&apos;t trade. Awaken it first (section 1 above, one transaction), or pick another of your Trenchers above that is awake.</p>
           </div>
         )}
         {copied && a.wallet && (
           <div className="rule-copied">
-            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copy Trencher #${copied.from ?? ""}` : `Rule copied${copied.from ? ` from Trencher #${copied.from}` : ""}`}</p>
+            <p className="mono rule-copied-k">{isCopy(copied.text) ? `Copy ${copied.who ?? `Trencher #${copied.from ?? ""}`}` : `Rule copied${copied.from ? ` from Trencher #${copied.from}` : ""}`}</p>
             <blockquote>“{copied.text}”</blockquote>
             {!isCopy(copied.text) && <RuleTest rule={copied.text} auto />}
             <p className="rule-copied-n">{isCopy(copied.text)
-              ? `Trencher #${a.id} will buy what #${copied.from} buys, at that share of its size, and sell when it sells. Each buy is still capped by the limits below, so set them first. Applying it replaces #${a.id}'s current rule (every version is kept), and nothing trades until trading is on.`
+              ? copied.who ? `Trencher #${a.id} will buy the Pons coins ${copied.who} buys, at that share of their size, and sell when they sell. Each buy is still capped by the limits below, so set them first. Applying it replaces #${a.id}'s current rule (every version is kept), and nothing trades until trading is on.`
+              : `Trencher #${a.id} will buy what #${copied.from} buys, at that share of its size, and sell when it sells. Each buy is still capped by the limits below, so set them first. Applying it replaces #${a.id}'s current rule (every version is kept), and nothing trades until trading is on.`
               : "Applying it replaces this agent's current rule (every version is kept). Set the limits below first. Nothing trades until trading is on."}</p>
             <div className="actions">
               <button type="button" className="gf-btn" disabled={busy} onClick={async () => { const ok = await applyText(copied.text, `Applying the copied rule to Trencher #${a.id}`); if (ok) dropCopied(); }}>Apply to Trencher #{a.id}</button>
@@ -541,7 +542,9 @@ function BuyModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const isCopy = (t: string) => /^copy trencher/i.test(t.trim());
+const isCopy = (t: string) => /^copy (trencher|fomo trader|wallet)/i.test(t.trim());
+/** Who a copied rule follows: a FOMO trader's name, or null for a Trencher (shown by its number). */
+const copyTarget = (t: string, trader: string | null) => (/^copy (fomo trader|wallet)/i.test(t.trim()) ? trader?.slice(0, 32) || "this trader" : null);
 
 /** Try any rule on last week's coins before applying it. */
 function TryRule({ current }: { current: string }) {
