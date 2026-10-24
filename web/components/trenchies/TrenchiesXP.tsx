@@ -311,48 +311,45 @@ function Use({ n, xp, title, text, href, cta, unit = "" }: { n: number; xp: numb
   );
 }
 
-/** The giveaway prize pool: the ETH and $TRENCHERS in the $TRENCHERS deployer wallet (live, tokens at the Pons price), plus Trencher NFTs. */
-const MILESTONES = [0.25, 0.5, 1, 2, 3, 5, 10, 20, 50, 100];
+/** The giveaway prize pool: the $TRENCHERS in the $TRENCHERS deployer wallet, in USD (live Pons price), plus Trencher NFTs. */
+const MILESTONES = [1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
+const usdK = (v: number) => (v >= 1_000_000 ? `$${+(v / 1_000_000).toFixed(2)}M` : v >= 1_000 ? `$${+(v / 1_000).toFixed(1)}k` : `$${Math.round(v)}`);
 function PrizePool() {
-  const [g, setG] = useState<{ wallet: string | null; eth: string | null; nfts: number; updatedAt: number; trenchers?: number | null; trenchersEth?: number | null; totalEth?: number | null } | null>(null);
+  const [g, setG] = useState<{ wallet: string | null; nfts: number; updatedAt: number; trenchers?: number | null; usd?: number | null } | null>(null);
   const [shown, setShown] = useState(0);
   useEffect(() => {
     const load = () => fetch(`${ENGINE_URL}/giveaway`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j && "eth" in j) setG(j); }).catch(() => {});
     load(); const t = setInterval(load, 30_000); return () => clearInterval(t);
   }, []);
-  const ethOnly = g?.eth ? Number(g.eth) : null;
-  // The meter tracks the whole pool: ETH plus the $TRENCHERS held, valued in ETH.
-  const eth = g?.totalEth ?? ethOnly;
-  const tokEth = g?.trenchersEth ?? null, tok = g?.trenchers ?? null;
+  // The meter tracks only the $TRENCHERS held, in USD.
+  const usd = g?.usd ?? null, tok = g?.trenchers ?? null;
   const compact = (v: number) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
-  // count up to the balance once it arrives
+  // count up to the value once it arrives
   useEffect(() => {
-    if (eth === null) return;
+    if (usd === null) return;
     let raf = 0; const from = shown, t0 = performance.now();
-    const step = (t: number) => { const k = Math.min(1, (t - t0) / 1400), e = 1 - Math.pow(1 - k, 3); setShown(from + (eth - from) * e); if (k < 1) raf = requestAnimationFrame(step); };
+    const step = (t: number) => { const k = Math.min(1, (t - t0) / 1400), e = 1 - Math.pow(1 - k, 3); setShown(from + (usd - from) * e); if (k < 1) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step); return () => cancelAnimationFrame(raf);
-  }, [eth]); // eslint-disable-line react-hooks/exhaustive-deps
-  const next = eth === null ? MILESTONES[0] : MILESTONES.find((m) => m > eth) ?? Math.ceil(eth / 100) * 100 + 100;
-  const prev = eth === null ? 0 : [0, ...MILESTONES].filter((m) => m <= eth).pop() ?? 0;
-  const fill = eth === null ? 0 : Math.max(0.03, Math.min(1, (eth - prev) / (next - prev)));
+  }, [usd]); // eslint-disable-line react-hooks/exhaustive-deps
+  const next = usd === null ? MILESTONES[0] : MILESTONES.find((m) => m > usd) ?? Math.ceil(usd / 1_000_000) * 1_000_000 + 1_000_000;
+  const prev = usd === null ? 0 : [0, ...MILESTONES].filter((m) => m <= usd).pop() ?? 0;
+  const fill = usd === null ? 0 : Math.max(0.03, Math.min(1, (usd - prev) / (next - prev)));
   const nfts = g?.nfts ?? 10;
   const ago = g?.updatedAt ? Math.max(0, Math.round((Date.now() / 1000 - g.updatedAt) / 60)) : null;
   return (
     <section className="tx-pool" aria-label="Giveaway prize pool">
       <div className="tx-pool-h"><span className="tx-pool-chip mono"><i />Giveaway prize pool</span>{ago !== null && <small className="mono">live · updated {ago < 1 ? "just now" : `${ago} min ago`}</small>}</div>
       <div className="tx-pool-big">
-        <b className="mono">{eth === null ? "…" : shown.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}<span> ETH</span></b>
+        <b className="mono">{usd === null ? "…" : `$${Math.round(shown).toLocaleString("en-US")}`}<span> USD</span></b>
         <em>+ {nfts} Trencher NFTs</em>
       </div>
-      {tokEth !== null && tok !== null && tok > 0 && ethOnly !== null && (
-        <div className="tx-pool-split mono"><span><i className="eth" />{ethOnly.toFixed(3)} ETH</span><span><i className="tr" />{compact(tok)} $TRENCHERS ≈ {tokEth.toFixed(3)} ETH</span></div>
-      )}
-      <div className="tx-meter" role="meter" aria-valuemin={prev} aria-valuemax={next} aria-valuenow={eth ?? 0} aria-label="Prize pool in ETH, $TRENCHERS included">
+      {tok !== null && <div className="tx-pool-split mono"><span><i className="tr" />{compact(tok)} $TRENCHERS</span></div>}
+      <div className="tx-meter" role="meter" aria-valuemin={prev} aria-valuemax={next} aria-valuenow={usd ?? 0} aria-label="Prize pool in USD">
         <i style={{ width: `${fill * 100}%` }} />
         {Array.from({ length: 9 }, (_, k) => <s key={k} style={{ left: `${(k + 1) * 10}%` }} />)}
       </div>
-      <div className="tx-meter-k mono"><span>{prev} ETH</span><span>next: {next} ETH</span></div>
-      <p className="tx-fine">ETH and $TRENCHERS held in the $TRENCHERS deployer wallet, the tokens valued at the live Pons price{g?.wallet && <> <a className="mono" href={`${EXPLORER}/address/${g.wallet}`} target="_blank" rel="noreferrer">{g.wallet.slice(0, 6)}…{g.wallet.slice(-4)} ↗</a></>}. Earn XP to be in the running.</p>
+      <div className="tx-meter-k mono"><span>{usdK(prev)}</span><span>next: {usdK(next)}</span></div>
+      <p className="tx-fine">$TRENCHERS held in the $TRENCHERS deployer wallet, valued in USD at the live Pons price{g?.wallet && <> <a className="mono" href={`${EXPLORER}/address/${g.wallet}`} target="_blank" rel="noreferrer">{g.wallet.slice(0, 6)}…{g.wallet.slice(-4)} ↗</a></>}. Earn XP to be in the running.</p>
     </section>
   );
 }

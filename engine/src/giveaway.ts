@@ -3,9 +3,9 @@ import { FACTORY } from "./prizes";
 const ERC20_BAL = [{ type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ name: "a", type: "address" }], outputs: [{ type: "uint256" }] }] as const;
 
 /**
- * The giveaway prize pool shown on trenchers.io/trenchies: the ETH and the $TRENCHERS in the wallet that deployed
- * $TRENCHERS (the tokens valued at the live Pons price), plus a number of Trencher NFTs. The token price is read
- * every 5 minutes. The deployer is read once from the Pons factory (or GIVEAWAY_WALLET), then its balance
+ * The giveaway prize pool shown on trenchers.io/trenchies: the $TRENCHERS in the wallet that deployed $TRENCHERS,
+ * shown in USD (the live Pons price in ETH, times ETH/USD from Coinbase's public ticker), plus a number of Trencher
+ * NFTs. Prices are read every 5 minutes. The deployer is read once from the Pons factory (or GIVEAWAY_WALLET), then its balance
  * every minute: one small read each time.
  *
  * Settings: GIVEAWAY_WALLET (default: the token's deployer on Pons), GIVEAWAY_NFTS (default 10).
@@ -19,6 +19,8 @@ export class Giveaway {
   tokens: bigint | null = null;
   price: number | null = null;
   private priceAt = 0;
+  ethUsd: number | null = null;
+  private ethUsdAt = 0;
   updatedAt = 0;
   error: string | null = null;
   readonly nfts = Math.max(0, Math.floor(Number(clean(process.env.GIVEAWAY_NFTS) || 10)));
@@ -39,6 +41,10 @@ export class Giveaway {
         this.pub.readContract({ address: this.token, abi: ERC20_BAL, functionName: "balanceOf", args: [this.wallet] }).catch(() => null) as Promise<bigint | null>,
       ]);
       this.wei = wei; if (held !== null) this.tokens = held;
+      if (Date.now() - this.ethUsdAt > 300_000) {
+        const j = await fetch("https://api.exchange.coinbase.com/products/ETH-USD/ticker", { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { price?: string } | null;
+        const v = Number(j?.price); if (v > 0) { this.ethUsd = v; this.ethUsdAt = Date.now(); }
+      }
       if (this.priceOf && Date.now() - this.priceAt > 300_000) { const p = await this.priceOf(this.token).catch(() => null); if (p !== null && p > 0) { this.price = p; this.priceAt = Date.now(); } }
       this.updatedAt = Math.floor(Date.now() / 1000); this.error = null;
     } catch (e) { this.error = (e as Error).message.split("\n")[0].slice(0, 160); this.log(`giveaway: ${this.error}`); }
@@ -50,6 +56,7 @@ export class Giveaway {
     return {
       wallet: this.wallet, eth: this.wei === null ? null : formatEther(this.wei), nfts: this.nfts, updatedAt: this.updatedAt, error: this.error,
       trenchers, trenchersEth, priceEth: this.price, totalEth: eth === null ? null : eth + (trenchersEth ?? 0),
+      ethUsd: this.ethUsd, usd: trenchersEth !== null && this.ethUsd !== null ? trenchersEth * this.ethUsd : null,
     };
   }
 }
