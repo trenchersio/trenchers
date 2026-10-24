@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import {
-  ACHIEVEMENTS, BUTTERFLIES, CHESTS, COSMETICS, DAILY, LEVEL_COINS, NET_EVERY, QUESTS, QUEST_ALL, cosmetic, cosmeticFree, levelChest, levelOf,
+  ACHIEVEMENTS, BUTTERFLIES, CHESTS, COSMETICS, DAILY, FISHES, FISH_EVERY, LEVEL_COINS, NET_EVERY, QUESTS, QUEST_ALL, cosmetic, cosmeticFree, levelChest, levelOf,
   type ChestTier, type Reward, type Slot, type Stat,
 } from "./trenchies-catalog";
 
@@ -18,6 +18,7 @@ export type Progress = {
   chests: Record<ChestTier, number>;
   stats: Partial<Record<Stat, number>>;
   bugs: Record<string, number>;
+  fish: Record<string, number>;
   achievements: string[];
   wardrobe: string[]; wear: Partial<Record<Slot, string>>;
   inbox: Note[];
@@ -25,8 +26,8 @@ export type Progress = {
 
 export const emptyProgress = () => ({
   daily: { next: 0, last: null, run: 0, best: 0 }, quests: { day: -1, list: [], bonus: false }, chests: { common: 0, rare: 0, epic: 0 },
-  stats: {}, bugs: {}, achievements: [], wardrobe: [], wear: { hat: "cap" }, inbox: [],
-}) as Pick<Progress, "daily" | "quests" | "chests" | "stats" | "bugs" | "achievements" | "wardrobe" | "wear" | "inbox">;
+  stats: {}, bugs: {}, fish: {}, achievements: [], wardrobe: [], wear: { hat: "cap" }, inbox: [],
+}) as Pick<Progress, "daily" | "quests" | "chests" | "stats" | "bugs" | "fish" | "achievements" | "wardrobe" | "wear" | "inbox">;
 
 let noteId = Date.now();
 export function note(p: Progress, kind: Note["kind"], text: string) { p.inbox = [...p.inbox.slice(-19), { id: ++noteId, kind, text, at: Date.now() }]; }
@@ -108,6 +109,7 @@ export function statValue(p: Progress, key: Stat): number {
     case "owned": return p.items.length;
     case "level": return levelOf(p.xp);
     case "species": return Object.keys(p.bugs).length;
+    case "fishSpecies": return p.fish && typeof p.fish === "object" ? Object.keys(p.fish).length : 0;
     default: return p.stats[key] ?? 0;
   }
 }
@@ -154,6 +156,24 @@ export function swingNet(p: Progress & { next: Partial<Record<string, number>> }
   gain(p, xp, "butterflies");
   checkAchievements(p);
   return { got, xp, next: p.next.net } as const;
+}
+
+// ------------------------------------------------------------------------------------------------ fishing
+/** One cast from the dock: one fish (two now and then), the catfish and the Moon Whale only at night (UTC). */
+export function castLine(p: Progress & { next: Partial<Record<string, number>> }, nowMs: number, rnd: () => number = Math.random) {
+  const at = p.next.fish ?? 0;
+  if (nowMs < at) return { error: "Nothing's biting yet. Try again soon.", next: at } as const;
+  const hour = new Date(nowMs).getUTCHours(), night = hour >= 19 || hour < 6;
+  const pool = FISHES.filter((f) => !f.night || night), total = pool.reduce((s, x) => s + x.weight, 0);
+  const n = rnd() < 0.2 ? 2 : 1, got: string[] = [];
+  for (let i = 0; i < n; i++) { let k = rnd() * total; for (const x of pool) { if ((k -= x.weight) < 0) { got.push(x.id); break; } } if (got.length <= i) got.push(pool[0].id); }
+  let xp = 0; if (!p.fish || typeof p.fish !== "object") p.fish = {};
+  for (const id of got) { const f = FISHES.find((x) => x.id === id)!; p.fish[id] = (p.fish[id] ?? 0) + 1; xp += f.xp; if (f.rarity === "epic" || f.rarity === "legendary" || f.rarity === "mythic") note(p, "bug", `You caught a ${f.name}!`); }
+  stat(p, "fish", got.length);
+  p.next.fish = nowMs + FISH_EVERY * 1000;
+  gain(p, xp, "fishing");
+  checkAchievements(p);
+  return { got, xp, next: p.next.fish } as const;
 }
 
 // ------------------------------------------------------------------------------------------------ wardrobe

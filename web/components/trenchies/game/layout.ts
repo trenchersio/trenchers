@@ -54,6 +54,8 @@ export const GARDEN_ROOMS: Record<string, R & { h: number }> = {
 };
 
 export const FOREST: R = { x: 2.0, y: 13.0, w: 9.6, d: 28.8 };
+/** The forest in six plots, top to bottom: each one can be chopped down (plot1 first) and built on. */
+export const PLOTS: (R & { id: string; build: string })[] = ["lumbermill", "archery", "logcabin", "campground", "lookout", "stonecircle"].map((build, i) => ({ id: `plot${i + 1}`, build, x: FOREST.x, y: FOREST.y + i * 4.8, w: FOREST.w, d: 4.8 }));
 /** The big oak at the forest edge, and where you stand to admire it. */
 export const CHOP = { x: 10.4, y: 20.6, sx: 11.45, sy: 21.15 };
 

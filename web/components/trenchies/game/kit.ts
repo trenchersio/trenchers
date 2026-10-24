@@ -59,7 +59,7 @@ export class Kit {
     return {
       white: this.std(0xe2e5e3, 0.55, 0.05), soft: this.std(0xc4c8c6, 0.6), black: this.std(0x0e100f, 0.3, 0.5), ink: this.std(0x08090a, 0.45, 0.3),
       metal: this.std(0xa4aaa7, 0.28, 0.9), gold: this.std(GOLD, 0.25, 0.9), dark: this.std(0x1b1f1d, 0.6, 0.2), wood: this.std(0x7a5536, 0.75, 0.05),
-      darkwood: this.std(0x4a3424, 0.8, 0.05), leaf: this.flat(0x2a5a36), leaf2: this.flat(0x3c7a45), stone: this.flat(0x6d726f, 0.9), red: this.std(0xc8323a, 0.5), fabric: this.std(0x3a4a5a, 0.9),
+      darkwood: this.std(0x4a3424, 0.8, 0.05), leaf: this.flat(0x1f5229), leaf2: this.flat(0x2e6c33), stone: this.flat(0x6d726f, 0.9), red: this.std(0xc8323a, 0.5), fabric: this.std(0x3a4a5a, 0.9),
     };
   }
   /** A box with its min corner at tile (x, y), height z, size w (x), d (y), h (up). */

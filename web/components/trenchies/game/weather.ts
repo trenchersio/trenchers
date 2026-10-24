@@ -35,8 +35,10 @@ export class Weather {
     const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.BufferAttribute(this.snowPos, 3));
     this.snow = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.11, transparent: true, opacity: 0, depthWrite: false })); this.snow.frustumCulled = false;
     this.clouds = new THREE.Group();
-    const cm = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, roughness: 1, transparent: true, opacity: 0, depthWrite: false, flatShading: true });
-    for (let i = 0; i < 9; i++) { const c = new THREE.Group(); for (let j = 0; j < 4; j++) { const p = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2 + rnd() * 1.4, 0), cm); p.position.set(j * 1.6 - 2.4, rnd() * 0.6, rnd() * 1.2); p.scale.y = 0.55; c.add(p); } c.position.set((rnd() - 0.5) * land * 1.4, 13 + rnd() * 4, (rnd() - 0.5) * land * 1.4); this.clouds.add(c); }
+    // soft puffs (blurred sprites), so a cloudy day reads as haze drifting over the land, not shapes
+    const puff = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d")!; const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.5, "rgba(255,255,255,0.55)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+    const cm = new THREE.SpriteMaterial({ map: puff, color: 0xe6ebef, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    for (let i = 0; i < 9; i++) { const c = new THREE.Group(); for (let j = 0; j < 5; j++) { const p = new THREE.Sprite(cm); const s = 3.2 + rnd() * 2.6; p.scale.set(s, s * 0.6, 1); p.position.set(j * 1.5 - 3, rnd() * 0.6, rnd() * 1.2); c.add(p); } c.position.set((rnd() - 0.5) * land * 1.4, 13 + rnd() * 4, (rnd() - 0.5) * land * 1.4); this.clouds.add(c); }
     // a thin white layer over the land when it snows
     this.snowCover = new THREE.Mesh(new THREE.PlaneGeometry(land, land), new THREE.MeshStandardMaterial({ color: 0xf4f7fa, roughness: 1, transparent: true, opacity: 0, depthWrite: false }));
     this.snowCover.rotation.x = -Math.PI / 2; this.snowCover.position.y = 0.012; this.snowCover.renderOrder = 2;
@@ -47,11 +49,11 @@ export class Weather {
   update(dt: number, center: THREE.Vector3, kind: Sky) {
     this.kind = kind;
     const ease = (v: number, to: number) => v + (to - v) * Math.min(1, dt * 0.6);
-    this.k.rain = ease(this.k.rain, kind === "rain" ? 1 : 0); this.k.snow = ease(this.k.snow, kind === "snow" ? 1 : 0); this.k.clouds = ease(this.k.clouds, kind === "sun" ? 0.15 : 1);
+    this.k.rain = ease(this.k.rain, kind === "rain" ? 1 : 0); this.k.snow = ease(this.k.snow, kind === "snow" ? 1 : 0); this.k.clouds = ease(this.k.clouds, kind === "sun" ? 0 : 1);
     (this.rain.material as THREE.LineBasicMaterial).opacity = this.k.rain * 0.5; this.rain.visible = this.k.rain > 0.02;
     (this.snow.material as THREE.PointsMaterial).opacity = this.k.snow * 0.95; this.snow.visible = this.k.snow > 0.02;
     (this.snowCover.material as THREE.MeshStandardMaterial).opacity = this.k.snow * 0.5;
-    this.clouds.children.forEach((c, i) => { c.position.x += dt * (0.4 + (i % 3) * 0.15); if (c.position.x > 40) c.position.x = -40; ((c.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = this.k.clouds * 0.7; });
+    this.clouds.children.forEach((c, i) => { c.position.x += dt * (0.4 + (i % 3) * 0.15); if (c.position.x > 40) c.position.x = -40; ((c.children[0] as THREE.Sprite).material as THREE.SpriteMaterial).opacity = this.k.clouds * 0.32; c.visible = this.k.clouds > 0.02; });
     if (this.rain.visible) {
       const P = this.rainPos;
       for (let i = 0; i < N_RAIN; i++) { const o = i * 6; P[o + 1] -= dt * 22; P[o + 4] -= dt * 22; if (P[o + 4] < 0) { const x = center.x + (Math.random() - 0.5) * AREA, z = center.z + (Math.random() - 0.5) * AREA, y = TOP + Math.random() * 3; P[o] = x; P[o + 1] = y; P[o + 2] = z; P[o + 3] = x + 0.05; P[o + 4] = y - 0.45; P[o + 5] = z; } }

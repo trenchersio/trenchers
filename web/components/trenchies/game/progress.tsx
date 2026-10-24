@@ -4,7 +4,7 @@
  * turntable, achievements and the butterfly collection, and invites.
  */
 import { useEffect, useRef, useState } from "react";
-import { ACHIEVEMENTS, BUTTERFLIES, CHEER, COSMETICS, NET_EVERY, QUEST_ALL, REFERRAL, cosmetic, levelOf, type ChestTier, type Reward, type Slot, type Stat } from "@/lib/trenchies-catalog";
+import { ACHIEVEMENTS, BUTTERFLIES, CHEER, COSMETICS, FISHES, FISH_EVERY, NET_EVERY, QUEST_ALL, REFERRAL, cosmetic, levelOf, type ChestTier, type Reward, type Slot, type Stat } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
 import type { Call, Me, Wear } from "./model";
 import type { Palette } from "./types";
@@ -16,7 +16,7 @@ function Chips({ r }: { r: Reward }) {
   return <span className="tg-chips">{r.bricks ? <span className="coin"><Icon n="coin" size={11} />{r.bricks}</span> : null}{r.xp ? <span className="xp">+{r.xp} XP</span> : null}{r.chest ? <span className={`ch ${r.chest}`}><Icon n="chest" size={11} />{r.chest}</span> : null}</span>;
 }
 export function statOf(me: Me, s: Stat) {
-  switch (s) { case "picks": return me.rounds; case "hits": return me.hits; case "wins": return me.wins; case "hatTricks": return me.hatTricks; case "owned": return me.items.length; case "level": return levelOf(me.xp); case "species": return Object.keys(me.bugs ?? {}).length; default: return me.stats?.[s] ?? 0; }
+  switch (s) { case "picks": return me.rounds; case "hits": return me.hits; case "wins": return me.wins; case "hatTricks": return me.hatTricks; case "owned": return me.items.length; case "level": return levelOf(me.xp); case "species": return Object.keys(me.bugs ?? {}).length; case "fishSpecies": return Object.keys(me.fish ?? {}).length; default: return me.stats?.[s] ?? 0; }
 }
 const left = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s % 60).padStart(2, "0")}s`; };
 
@@ -183,13 +183,14 @@ export function Wardrobe({ me, palette, call, onMe }: { me: Me; palette: Palette
 }
 
 // ------------------------------------------------------------------ collection: achievements and butterflies
-export function CollectionPanel({ me, now, onNet }: { me: Me; now: number; onNet: () => void }) {
-  const [tab, setTab] = useState<"ach" | "bugs">("ach");
+export function CollectionPanel({ me, now, onNet, onFish }: { me: Me; now: number; onNet: () => void; onFish?: () => void }) {
+  const [tab, setTab] = useState<"ach" | "bugs" | "fish">("ach");
+  const fish = me.fish ?? {}, fishKinds = Object.keys(fish).length, fishN = Object.values(fish).reduce((a, b) => a + b, 0), bite = !me.fishAt || me.fishAt <= now * 1000;
   const species = Object.keys(me.bugs ?? {}).length, caught = Object.values(me.bugs ?? {}).reduce((a, b) => a + b, 0), ready = !me.netAt || me.netAt <= now * 1000;
   return (
     <div className="tg-pp">
-      <header className="tg-ph"><p className="tg-k">Collection</p><h2>{tab === "ach" ? `${me.achievements.length} of ${ACHIEVEMENTS.length} achievements` : `${species} of ${BUTTERFLIES.length} butterflies`}</h2></header>
-      <div className="tg-tabs" role="tablist"><button type="button" className={tab === "ach" ? "on" : ""} onClick={() => setTab("ach")}>Achievements</button><button type="button" className={tab === "bugs" ? "on" : ""} onClick={() => setTab("bugs")}>Butterflies</button></div>
+      <header className="tg-ph"><p className="tg-k">Collection</p><h2>{tab === "ach" ? `${me.achievements.length} of ${ACHIEVEMENTS.length} achievements` : tab === "fish" ? `${fishKinds} of ${FISHES.length} fish` : `${species} of ${BUTTERFLIES.length} butterflies`}</h2></header>
+      <div className="tg-tabs" role="tablist"><button type="button" className={tab === "ach" ? "on" : ""} onClick={() => setTab("ach")}>Achievements</button><button type="button" className={tab === "bugs" ? "on" : ""} onClick={() => setTab("bugs")}>Butterflies</button><button type="button" className={tab === "fish" ? "on" : ""} onClick={() => setTab("fish")}>Fish</button></div>
       {tab === "ach" ? (
         <ol className="tg-achs">
           {[...ACHIEVEMENTS].sort((a, b) => Number(me.achievements.includes(b.id)) - Number(me.achievements.includes(a.id))).map((a) => {
@@ -203,7 +204,17 @@ export function CollectionPanel({ me, now, onNet }: { me: Me; now: number; onNet
             );
           })}
         </ol>
-      ) : (<>
+      ) : tab === "fish" ? (<>
+        <div className="tg-netbar"><span><Icon n="fish" size={14} />{n0(fishN)} caught</span>{bite ? <button type="button" className="tg-btn tg-btn-sm tg-btn-go" onClick={onFish}>Go fishing</button> : <span className="tg-tag">next cast in {left((me.fishAt ?? 0) - now * 1000)}</span>}</div>
+        <ol className="tg-bugs">
+          {FISHES.map((f) => { const n = fish[f.id] ?? 0, c = f.rarity === "mythic" ? "#ff5cf0" : RARITY[f.rarity]; return (
+            <li key={f.id} className={n ? "got" : ""} style={{ ["--c" as string]: f.color, ["--r" as string]: c }}>
+              <span className="tg-bug-ic"><Icon n="fish" size={22} /></span>
+              <b>{n ? f.name : "???"}</b><small style={{ color: c }}>{f.rarity}{f.night ? " · night" : ""}</small><em className="mono">{n ? `×${n}` : `+${f.xp} XP`}</em>
+            </li>); })}
+        </ol>
+        <p className="tg-fine">Cast a line from the dock every {FISH_EVERY / 60} minutes. Most bites are common. The Neon Koi turns up about once in 600 casts, and the Moon Whale only bites at night (UTC), about once in 4,000.</p>
+      </>) : (<>
         <div className="tg-netbar"><span><Icon n="bug" size={14} />{n0(caught)} caught</span>{ready ? <button type="button" className="tg-btn tg-btn-sm tg-btn-go" onClick={onNet}>Catch butterflies</button> : <span className="tg-tag">net ready in {left(me.netAt - now * 1000)}</span>}</div>
         <ol className="tg-bugs">
           {BUTTERFLIES.map((b) => { const n = me.bugs?.[b.id] ?? 0; return (

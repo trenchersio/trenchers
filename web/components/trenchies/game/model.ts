@@ -12,7 +12,7 @@ export type Quest = { id: string; n: number; done: boolean; text: string; goal: 
 export type Progress = {
   daily: { claimed: boolean; day: number; rewards: Reward[]; run: number };
   quests: { list: Quest[]; bonus: boolean };
-  chests: Record<ChestTier, number>; bugs: Record<string, number>; achievements: string[]; achievementCount: number;
+  chests: Record<ChestTier, number>; bugs: Record<string, number>; fish?: Record<string, number>; fishAt?: number; achievements: string[]; achievementCount: number;
   stats: Partial<Record<Stat, number>>; wardrobe: string[]; wear: Wear; inbox: Note[]; netAt: number; landValue: number; cheers: number; cheeredToday: number;
 };
 export type Mini = { name: string; nft: number; level: number; x: string | null };

@@ -9,7 +9,7 @@ import type { Ctx } from "./indoor";
 
 type Def = { build: (f: Frame, k: Kit, c: Ctx) => void; wall?: "back" | "left" | "right" | "front" };
 
-const tree = (f: Frame, k: Kit, x: number, z: number, s: number, col = 0x2a5a36, col2 = 0x3c7a45) => {
+const tree = (f: Frame, k: Kit, x: number, z: number, s: number, col = 0x1f5229, col2 = 0x2e6c33) => {
   f.c(x, z, 0, 0.07 * s, 0.9 * s, k.M.darkwood, 7, 0.05 * s);
   f.put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * s, 1), k.flat(col)), x, z, 1.05 * s);
   f.put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.38 * s, 1), k.flat(col2)), x + 0.2 * s, z + 0.05 * s, 1.45 * s);

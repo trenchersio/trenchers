@@ -16,10 +16,14 @@ const inR = (p: Pt, r: R, pad = 0) => p.x > r.x - pad && p.x < r.x + r.w + pad &
 let GRASS: THREE.Texture | null = null;
 function grassTex() {
   if (GRASS) return GRASS;
-  const S = 256, c = document.createElement("canvas"); c.width = c.height = S; const g = c.getContext("2d")!;
-  g.fillStyle = "#16301f"; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 2600; i++) { const v = rnd(); g.fillStyle = v < 0.5 ? "rgba(40,84,52,0.55)" : v < 0.85 ? "rgba(22,52,32,0.6)" : "rgba(64,110,64,0.4)"; g.fillRect(rnd() * S, rnd() * S, 1 + rnd() * 2, 2 + rnd() * 4); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; GRASS = t; return t;
+  const S = 512, c = document.createElement("canvas"); c.width = c.height = S; const g = c.getContext("2d")!;
+  g.fillStyle = "#2a5132"; g.fillRect(0, 0, S, S);
+  // soft lighter and darker patches (tiled: drawn wrapped round the edges)
+  const blob = (x: number, y: number, r: number, col: string) => { for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) { const gr = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r); gr.addColorStop(0, col); gr.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = gr; g.fillRect(x + dx - r, y + dy - r, r * 2, r * 2); } };
+  for (let i = 0; i < 26; i++) blob(rnd() * S, rnd() * S, 40 + rnd() * 90, rnd() < 0.55 ? "rgba(86,138,78,0.22)" : "rgba(22,52,30,0.24)");
+  // fine blades
+  for (let i = 0; i < 9000; i++) { const v = rnd(); g.fillStyle = v < 0.45 ? "rgba(70,120,70,0.45)" : v < 0.8 ? "rgba(30,62,36,0.45)" : "rgba(118,160,96,0.3)"; g.fillRect(rnd() * S, rnd() * S, 1, 2 + rnd() * 3); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; GRASS = t; return t;
 }
 export function ground(k: Kit, pools: THREE.MeshBasicMaterial[]) {
   const slab = new THREE.Mesh(new THREE.BoxGeometry(LAND, 0.1, LAND), new THREE.MeshStandardMaterial({ map: grassTex(), roughness: 0.95 }));
@@ -42,10 +46,27 @@ export function ground(k: Kit, pools: THREE.MeshBasicMaterial[]) {
   return lamp;
 }
 
-/** Flat stepping stones along a straight line. */
-export function stones(k: Kit, a: Pt, b: Pt, w = 0.95) {
-  const m = k.std(0xb9bdb9, 0.85), L = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.floor(L / 0.92)), hz = Math.abs(b.x - a.x) > Math.abs(b.y - a.y);
-  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t; if (hz) k.box(x - 0.4, y - w / 2, -0.01, 0.8, w, 0.03, m, false).castShadow = false; else k.box(x - w / 2, y - 0.4, -0.01, w, 0.8, 0.03, m, false).castShadow = false; }
+/** One flagstone: a low, slightly irregular slab. */
+const SLAB = (() => { const g = new THREE.CylinderGeometry(0.5, 0.52, 0.05, 9); const pos = g.attributes.position; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i), a = Math.atan2(z, x), r = 1 + Math.sin(a * 3 + 1.3) * 0.07 + Math.sin(a * 5 + 0.4) * 0.05; if (Math.hypot(x, z) > 0.2) { pos.setX(i, x * r); pos.setZ(i, z * r); } } g.computeVertexNormals(); g.translate(0, 0.012, 0); return g; })();
+const SLAB_COLS = [0x55534e, 0x4e4c48, 0x5c5953, 0x484642];
+function slab(k: Kit, x: number, y: number, s: number, rot: number) {
+  const m = new THREE.Mesh(SLAB, k.std(SLAB_COLS[Math.floor(rnd() * SLAB_COLS.length)], 0.92)); const p = k.W(x, y); m.position.set(p.x, -0.012, p.z); m.scale.set(s * (0.92 + rnd() * 0.12), 1, s * (0.78 + rnd() * 0.14)); m.rotation.y = rot + (rnd() - 0.5) * 0.5; m.receiveShadow = true; m.castShadow = false; k.root.add(m);
+}
+/** Flagstones along a straight line (and where they went, so later paths don't double up). */
+export function stones(k: Kit, a: Pt, b: Pt, w = 0.95, placed?: Pt[]) {
+  const L = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.floor(L / 0.78)), rot = Math.atan2(b.x - a.x, b.y - a.y);
+  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t; slab(k, x, y, w * 0.66, rot + Math.PI / 2); placed?.push({ x, y }); }
+}
+/** Flagstones along a winding route, skipping stretches that already have a path. */
+export function pave(k: Kit, route: Pt[], placed: Pt[], w = 0.82) {
+  let since = 1e9, last: Pt | null = null;
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1], b = route[i]; since += Math.hypot(b.x - a.x, b.y - a.y);
+    if (since < 0.74) continue; since = 0;
+    if (placed.some((q) => Math.hypot(q.x - b.x, q.y - b.y) < 0.62)) { last = b; continue; }
+    const rot = last ? Math.atan2(b.x - last.x, b.y - last.y) : Math.atan2(b.x - a.x, b.y - a.y);
+    slab(k, b.x, b.y, w * 0.7, rot + Math.PI / 2); placed.push({ x: b.x, y: b.y }); last = b;
+  }
 }
 
 // ------------------------------------------------------------------ the forest
@@ -57,19 +78,20 @@ function bigTree(k: Kit, s: number) {
   return g;
 }
 /** Trees across the forest strip (instanced), leaving clearings where `keepOut` says, and the big oak at its edge. */
-export function forest(k: Kit, keepOut: R[]) {
+export function forest(k: Kit, keepOut: R[], cleared: R[] = []) {
   const trees: THREE.Matrix4[] = [], pines: THREE.Matrix4[] = [], stumps: THREE.Matrix4[] = [];
   const m4 = (x: number, y: number, s: number, ry: number) => { const p = k.W(x, y); return new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s * (0.85 + rnd() * 0.35), s)); };
   for (let y = FOREST.y + 0.6; y < FOREST.y + FOREST.d - 0.4; y += 1.25) for (let x = FOREST.x + 0.5; x < FOREST.x + FOREST.w - 0.3; x += 1.35) {
     const p = { x: x + (rnd() - 0.5) * 0.9, y: y + (rnd() - 0.5) * 0.8 };
     if (keepOut.some((r) => inR(p, r, 0.5)) || Math.hypot(p.x - CHOP.x, p.y - CHOP.y) < 1.9) continue;
+    if (cleared.some((r) => inR(p, r))) { if (rnd() < 0.16) stumps.push(m4(p.x, p.y, 0.75 + rnd() * 0.4, rnd() * 6)); continue; }
     const edge = p.x > FOREST.x + FOREST.w - 1.4; if (edge && rnd() < 0.45) continue;
     const s = 0.95 + rnd() * 0.75;
     if (rnd() < 0.08) { stumps.push(m4(p.x, p.y, 0.7 + rnd() * 0.4, rnd() * 6)); continue; }
     (rnd() < 0.38 ? pines : trees).push(m4(p.x, p.y, s, rnd() * 6));
     k.nav.blockCircle(p, 0.16 * s);
   }
-  const leaf = k.flat(0x1d4428), leaf2 = k.flat(0x285c33), pine = k.flat(0x173d29), bark = k.M.darkwood;
+  const leaf = k.flat(0x1a4d22), leaf2 = k.flat(0x2a6a2c), pine = k.flat(0x133f26), bark = k.M.darkwood;
   const add = (geo: THREE.BufferGeometry, m: THREE.Material, list: THREE.Matrix4[], shadow = true) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, m, list.length); list.forEach((x, i) => im.setMatrixAt(i, x)); im.castShadow = shadow; im.receiveShadow = true; k.keep(im); k.root.add(im); };
   const trunk = new THREE.CylinderGeometry(0.07, 0.11, 0.9, 6); trunk.translate(0, 0.45, 0);
   const crownA = new THREE.IcosahedronGeometry(0.62, 1); crownA.translate(0, 1.2, 0);
@@ -80,7 +102,7 @@ export function forest(k: Kit, keepOut: R[]) {
   add(ptrunk, bark, pines); add(c1, pine, pines); add(c2, pine, pines, false); add(c3, leaf2, pines, false);
   const st = new THREE.CylinderGeometry(0.14, 0.17, 0.22, 9); st.translate(0, 0.11, 0); add(st, k.std(0xb08d64, 0.8), stumps);
   // ferns and mushrooms on the forest floor
-  const fern: THREE.Matrix4[] = []; for (let i = 0; i < 90; i++) { const p = { x: FOREST.x + rnd() * FOREST.w, y: FOREST.y + rnd() * FOREST.d }; if (keepOut.some((r) => inR(p, r))) continue; fern.push(m4(p.x, p.y, 0.6 + rnd() * 0.6, rnd() * 6)); }
+  const fern: THREE.Matrix4[] = []; for (let i = 0; i < 90; i++) { const p = { x: FOREST.x + rnd() * FOREST.w, y: FOREST.y + rnd() * FOREST.d }; if (keepOut.some((r) => inR(p, r)) || cleared.some((r) => inR(p, r))) continue; fern.push(m4(p.x, p.y, 0.6 + rnd() * 0.6, rnd() * 6)); }
   const fg = new THREE.ConeGeometry(0.16, 0.32, 5); fg.translate(0, 0.16, 0); add(fg, k.flat(0x2e6b3a), fern, false);
   // the big oak, with a bench-like root to sit on
   const g = new THREE.Group(), p = k.W(CHOP.x, CHOP.y); g.position.set(p.x, 0, p.z); k.root.add(g);
@@ -117,15 +139,15 @@ export function pond(k: Kit): Pond {
 
 // ------------------------------------------------------------------ grass, flowers
 export function meadow(k: Kit, area: R, keepOut: R[], n = 420) {
-  const tufts: THREE.Matrix4[] = [], flowers: { m: THREE.Matrix4; c: THREE.Color }[] = [], cols = [0xffffff, 0xff7ab8, 0xffd84d, 0xb388ff, 0xff8a65];
-  for (let i = 0; i < n; i++) {
-    const p = { x: area.x + rnd() * area.w, y: area.y + rnd() * area.d }; if (keepOut.some((r) => inR(p, r, 0.15))) continue;
-    const w = k.W(p.x, p.y), s = 0.5 + rnd() * 0.8;
-    if (rnd() < 0.22) flowers.push({ m: new THREE.Matrix4().compose(w.setY(0.18 * s), new THREE.Quaternion(), new THREE.Vector3(s, s, s)), c: new THREE.Color(cols[Math.floor(rnd() * cols.length)]) });
-    else tufts.push(new THREE.Matrix4().compose(w, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * 6, 0)), new THREE.Vector3(s, s * (0.7 + rnd() * 0.6), s)));
+  const flowers: { m: THREE.Matrix4; c: THREE.Color }[] = [], cols = [0xffffff, 0xff7ab8, 0xffd84d, 0xb388ff, 0xff8a65];
+  // a handful of clumps, each a few flowers of one colour
+  for (let c = 0; c < Math.round(n / 26); c++) {
+    const o = { x: area.x + rnd() * area.w, y: area.y + rnd() * area.d }, col = new THREE.Color(cols[Math.floor(rnd() * cols.length)]);
+    for (let i = 0; i < 5; i++) {
+      const p = { x: o.x + (rnd() - 0.5) * 0.7, y: o.y + (rnd() - 0.5) * 0.7 }; if (keepOut.some((r) => inR(p, r, 0.2))) continue;
+      const w = k.W(p.x, p.y), s = 0.6 + rnd() * 0.5; flowers.push({ m: new THREE.Matrix4().compose(w.setY(0.1 * s), new THREE.Quaternion(), new THREE.Vector3(s, s, s)), c: col.clone() });
+    }
   }
-  const tg = new THREE.ConeGeometry(0.07, 0.26, 4); tg.translate(0, 0.13, 0);
-  const tm = new THREE.InstancedMesh(tg, k.flat(0x2f6a3b), Math.max(1, tufts.length)); tufts.forEach((m, i) => tm.setMatrixAt(i, m)); tm.count = tufts.length; k.keep(tm); k.root.add(tm);
   const fm = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.05, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), Math.max(1, flowers.length));
   flowers.forEach((f, i) => { fm.setMatrixAt(i, f.m); fm.setColorAt(i, f.c.multiplyScalar(0.85)); }); fm.count = flowers.length; k.keep(fm); k.root.add(fm);
 }

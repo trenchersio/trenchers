@@ -12,7 +12,7 @@ process.env.TRENCHIES_ALLOW = `${a.address},${b.address}`;
 test("progression: daily calendar, quests, chests, butterflies, wardrobe", async () => {
   const R = await import("../src/trenchies-rewards");
   const C = await import("../src/trenchies-catalog");
-  const p = { addr: "0xa", xp: 0, bricks: 0, wood: 0, stone: 0, fish: 0, items: ["shack", "bike"], hits: 0, wins: 0, hatTricks: 0, rounds: 0, streak: 0, next: {} as Record<string, number>, ...R.emptyProgress() };
+  const p = { addr: "0xa", xp: 0, bricks: 0, wood: 0, stone: 0, items: ["shack", "bike"], hits: 0, wins: 0, hatTricks: 0, rounds: 0, streak: 0, next: {} as Record<string, number>, ...R.emptyProgress() };
   // daily: day 1, then once only, then a missed day starts again
   assert.deepEqual(R.claimDaily(p, 100), C.DAILY[0]); assert.equal(p.bricks, 25);
   assert.equal(R.claimDaily(p, 100), null, "once a day");
@@ -31,6 +31,12 @@ test("progression: daily calendar, quests, chests, butterflies, wardrobe", async
   // butterflies: a net swing, then a cooldown
   const n1 = R.swingNet(p, 1_000_000); assert.ok(!("error" in n1) && n1.got.length >= 1);
   const n2 = R.swingNet(p, 1_000_000 + 1000); assert.ok("error" in n2);
+  // fishing: one cast every 30 minutes, the rarest fish really rare
+  const f1 = R.castLine(p, 2_000_000); assert.ok(!("error" in f1) && f1.got.length >= 1 && Object.keys(p.fish).length >= 1);
+  assert.ok("error" in R.castLine(p, 2_000_000 + 1000), "one cast per 30 minutes");
+  const total = C.FISHES.reduce((s, f) => s + f.weight, 0);
+  assert.ok(C.FISHES.find((f) => f.id === "whalefish")!.weight / total < 1 / 3000, "the Moon Whale is very rare");
+  const old = { ...p, fish: 0 as unknown as Record<string, number>, next: {} as Record<string, number> }; assert.ok(!("error" in R.castLine(old, 5_000_000)) && typeof old.fish === "object", "old saves with fish: 0 still work");
   // wardrobe: free at your level vs bought vs chest-only
   assert.ok(R.canWear(p, "cap")); assert.equal(R.buyCosmetic(p, "partyhat"), "This one only comes from chests.");
   p.bricks = 1000; assert.equal(R.buyCosmetic(p, "beanie"), null); assert.ok(R.canWear(p, "beanie"));

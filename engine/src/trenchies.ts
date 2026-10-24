@@ -9,7 +9,7 @@ import { formatEther } from "viem";
 import type { PrizePot } from "./prizes";
 import { ACHIEVEMENTS, CHEER, COSMETICS, DAY, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_SPLIT, QUESTS, RANK_COINS, RANK_XP, REFERRAL, RENAMED, ROOM_SLOTS, X_XP, cosmetic, deskRound, item, landValue, levelOf, roomLayout, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type Call, type ChestTier, type Slot } from "./trenchies-catalog";
 import type { BtcFeed } from "./btc";
-import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, emptyProgress, ensureQuests, gain, note, openChest, stat, swingNet, type Progress } from "./trenchies-rewards";
+import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, emptyProgress, ensureQuests, gain, note, openChest, stat, swingNet, castLine, type Progress } from "./trenchies-rewards";
 
 /**
  * Trenchies: spawn a little Trenchie with your Trencher, pick 3 Pons coins every day, earn XP when your coins finish
@@ -32,7 +32,7 @@ type Player = Progress & {
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
-  next: Partial<Record<"net", number>>;
+  next: Partial<Record<"net" | "fish", number>>;
   /** The trading desk: current winning streak, best ever, calls paid in full today, recent results. */
   desk: { streak: number; best: number; day: number; paid: number; log: DeskLog[] };
   /** Your own house plan (room to slot), wall and floor paint per room, and where garden things stand. */
@@ -95,6 +95,7 @@ export class Trenchies {
           p.desk ??= { streak: 0, best: 0, day: -1, paid: 0, log: [] }; p.layout ??= {}; p.paint ??= {}; p.place ??= {};
           const e = emptyProgress();
           for (const k of Object.keys(e) as (keyof typeof e)[]) (p as Record<string, unknown>)[k] ??= e[k];
+          if (!p.fish || typeof p.fish !== "object") p.fish = {};
           p.visited ??= { day: -1, lands: [] }; p.cheered ??= { day: -1, lands: [] }; p.notified ??= {}; p.lastSeen ??= p.createdAt;
           p.items = [...new Set(p.items.map((i) => RENAMED[i] ?? i))]; p.vehicle = RENAMED[p.vehicle] ?? p.vehicle;
           this.players.set(p.addr, p);
@@ -351,7 +352,7 @@ export class Trenchies {
       this.save(); send(200, { me: this.me(p, now) }); return true;
     }
     if (op === "leaderboard") {
-      const kind = q.get("kind") ?? "xp", score = (x: Player) => kind === "desk" ? (x.stats.deskWins ?? 0) : kind === "value" ? landValue(x.items) : kind === "cheers" ? (x.stats.cheersGot ?? 0) : kind === "bugs" ? Object.values(x.bugs).reduce((s, n) => s + n, 0) : x.xp;
+      const kind = q.get("kind") ?? "xp", score = (x: Player) => kind === "desk" ? (x.stats.deskWins ?? 0) : kind === "value" ? landValue(x.items) : kind === "cheers" ? (x.stats.cheersGot ?? 0) : kind === "bugs" ? Object.values(x.bugs).reduce((s, n) => s + n, 0) : kind === "fish" ? Object.values(typeof x.fish === "object" && x.fish ? x.fish : {}).reduce((s, n) => s + n, 0) : x.xp;
       const all = [...this.players.values()].sort((x, y) => score(y) - score(x) || y.xp - x.xp);
       send(200, { kind, players: all.slice(0, 100).map((x, i) => ({ rank: i + 1, ...this.pub(x), score: score(x) })), me: all.findIndex((x) => x.addr === addr) + 1 });
       return true;
@@ -372,6 +373,11 @@ export class Trenchies {
       const r = swingNet(p as Progress & { next: Partial<Record<string, number>> }, Date.now());
       if ("error" in r) { send(400, { error: r.error, next: r.next }); return true; }
       bump(p, roundOf(now), "net"); this.save(); send(200, { me: this.me(p, now), got: r.got, xp: r.xp }); return true;
+    }
+    if (op === "fish") {
+      const r = castLine(p as Progress & { next: Partial<Record<string, number>> }, Date.now());
+      if ("error" in r) { send(400, { error: r.error, next: r.next }); return true; }
+      this.save(); send(200, { me: this.me(p, now), got: r.got, xp: r.xp }); return true;
     }
     if (op === "wear") {
       const slot = String(b.slot ?? "") as Slot, id = b.id === null || b.id === "" ? null : String(b.id ?? "");
@@ -450,9 +456,9 @@ export class Trenchies {
     return {
       daily: dailyState(p, today),
       quests: { list: qs.list.map((x) => ({ ...x, ...QUESTS.find((d) => d.id === x.id)! })), bonus: qs.bonus },
-      chests: p.chests, bugs: p.bugs, achievements: p.achievements, achievementCount: ACHIEVEMENTS.length,
+      chests: p.chests, bugs: p.bugs, fish: typeof p.fish === "object" && p.fish ? p.fish : {}, achievements: p.achievements, achievementCount: ACHIEVEMENTS.length,
       stats: { ...p.stats, owned: p.items.length }, wardrobe: COSMETICS.filter((c) => canWear(p, c.id)).map((c) => c.id), wear: p.wear,
-      inbox: p.inbox, netAt: p.next.net ?? 0, landValue: landValue(p.items), cheers: p.stats.cheersGot ?? 0,
+      inbox: p.inbox, netAt: p.next.net ?? 0, fishAt: p.next.fish ?? 0, landValue: landValue(p.items), cheers: p.stats.cheersGot ?? 0,
       cheeredToday: p.cheered.day === today ? p.cheered.lands.length : 0,
     };
   }

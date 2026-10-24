@@ -12,7 +12,7 @@
  *   every week     the best traders split the prize pot
  *   long term      levels (to 40), 180+ things to build, statues, cosmetics, achievements
  */
-export type ItemKind = "house" | "room" | "vehicle" | "indoor" | "outdoor" | "statue" | "pet";
+export type ItemKind = "house" | "room" | "vehicle" | "indoor" | "outdoor" | "statue" | "pet" | "land";
 export type Item = {
   id: string; kind: ItemKind; name: string; level: number; cost: number; blurb: string;
   /** Line icon used in the shop. */
@@ -24,7 +24,7 @@ export type Item = {
   /** Statues and collectibles: how rare it is (shown in the shop). */
   rarity?: "common" | "rare" | "epic" | "legendary";
   /** Rooms: built onto the house (a new wing with a doorway) or as a building in the garden. */
-  site?: "house" | "garden";
+  site?: "house" | "garden" | "forest";
   /** Furniture: the room it goes in when you have that room (else the main house). */
   room?: string;
   /** Your Trenchie can hang out here (a chill spot). */
@@ -221,6 +221,20 @@ export const ITEMS: Item[] = [
   I("s_goldbull", "statue", "Golden Bull", 32, 80000, "bolt", "Solid gold. Only after 100 winning desk calls.", { rarity: "legendary", needsAch: "deskwin100" }),
   I("s_champion", "statue", "Champion Trophy", 1, 0, "trophy", "Only for weekly prize winners. You can't buy this one.", { rarity: "legendary", needsAch: "champion" }),
 
+  // ---------------------------------------------------------------- the forest: chop a plot down, then build on the clearing
+  I("plot1", "land", "Clear the Birch Grove", 3, 300, "axe", "Chop the first stretch of forest. Room for a Lumber Mill."),
+  I("plot2", "land", "Clear the Pine Stand", 6, 800, "axe", "More forest down, more land to build on.", { needs: "plot1" }),
+  I("plot3", "land", "Clear the Old Oaks", 9, 1500, "axe", "Big old trees, a big clearing.", { needs: "plot2" }),
+  I("plot4", "land", "Clear the Fern Hollow", 12, 2500, "axe", "Ferns, mushrooms and space for a camp.", { needs: "plot3" }),
+  I("plot5", "land", "Clear the High Ridge", 15, 3800, "axe", "Up on the ridge, with a view of the whole land.", { needs: "plot4" }),
+  I("plot6", "land", "Clear the Deep Woods", 18, 5500, "axe", "The last of the forest. Something old was waiting in there.", { needs: "plot5" }),
+  I("lumbermill", "outdoor", "Lumber Mill", 4, 650, "axe", "A saw, a log pile and a water wheel. Built on the Birch Grove.", { site: "forest", needs: "plot1" }),
+  I("archery", "outdoor", "Archery Range", 7, 1100, "target", "Straw targets and a rack of bows. Built on the Pine Stand.", { site: "forest", needs: "plot2", chill: true }),
+  I("logcabin", "outdoor", "Log Cabin", 10, 2000, "house", "A cosy cabin with a porch and a smoking chimney. Built on the Old Oaks.", { site: "forest", needs: "plot3", chill: true }),
+  I("campground", "outdoor", "Campground", 13, 2900, "fire", "Tents round a big fire, logs to sit on. Built in the Fern Hollow.", { site: "forest", needs: "plot4", chill: true }),
+  I("lookout", "outdoor", "Lookout Tower", 16, 4200, "star", "A wooden tower to watch the whole land from. Built on the High Ridge.", { site: "forest", needs: "plot5", chill: true }),
+  I("stonecircle", "outdoor", "Stone Circle", 20, 7500, "moon", "Ancient stones that glow on clear nights. Built in the Deep Woods.", { site: "forest", needs: "plot6", rarity: "epic" }),
+
   // ---------------------------------------------------------------- pets: they follow you around
   I("bunny", "pet", "Bunny", 3, 300, "paw", "Hops around the flower beds."),
   I("cat", "pet", "Cat", 4, 500, "paw", "Sleeps on the couch, judges your trades."),
@@ -397,6 +411,27 @@ export const BUTTERFLIES: Bug[] = [
 ];
 export const bug = (id: string) => BUTTERFLIES.find((b) => b.id === id);
 
+/**
+ * Fish in the pond: cast a line every 30 minutes. Most casts bring up something common; a few species are rare,
+ * and the last two are meant to take months (roughly 1 in 600 and 1 in 4,000 casts).
+ */
+export const FISH_EVERY = 30 * 60;
+export type Fish = { id: string; name: string; rarity: Rarity | "uncommon" | "mythic"; weight: number; xp: number; color: string; night?: boolean };
+export const FISHES: Fish[] = [
+  { id: "minnow", name: "Minnow", rarity: "common", weight: 30, xp: 3, color: "#b9c4c9" },
+  { id: "perch", name: "Perch", rarity: "common", weight: 26, xp: 3, color: "#8fae5a" },
+  { id: "bluegill", name: "Bluegill", rarity: "common", weight: 22, xp: 3, color: "#4f86c6" },
+  { id: "trout", name: "Rainbow Trout", rarity: "uncommon", weight: 12, xp: 7, color: "#e8a0b4" },
+  { id: "carp", name: "Mirror Carp", rarity: "uncommon", weight: 10, xp: 7, color: "#c9a25a" },
+  { id: "pike", name: "Pike", rarity: "rare", weight: 4, xp: 18, color: "#6f8f4e" },
+  { id: "koi", name: "Golden Koi", rarity: "rare", weight: 3, xp: 22, color: "#ff8a3d" },
+  { id: "catfish", name: "Midnight Catfish", rarity: "epic", weight: 0.9, xp: 50, color: "#5a4a6b", night: true },
+  { id: "sturgeon", name: "Ancient Sturgeon", rarity: "epic", weight: 0.6, xp: 60, color: "#7d8a8f" },
+  { id: "neonkoi", name: "Neon Koi", rarity: "legendary", weight: 0.18, xp: 150, color: "#39ff88" },
+  { id: "whalefish", name: "Moon Whale", rarity: "mythic", weight: 0.027, xp: 500, color: "#d6f5ff", night: true },
+];
+export const fishOf = (id: string) => FISHES.find((f) => f.id === id);
+
 // ------------------------------------------------------------------------------------------------ picks and XP
 /** XP for a pick that finishes 1st, 2nd or 3rd of all coins picked that day. */
 export const RANK_XP = [100, 60, 40];
@@ -465,7 +500,7 @@ export const CHESTS: Record<ChestTier, { bricks: [number, number]; odds: { brick
 };
 
 // ------------------------------------------------------------------------------------------------ achievements
-export type Stat = "picks" | "hits" | "wins" | "hatTricks" | "bestStreak" | "calls" | "deskWins" | "deskStreak" | "crowdWins" | "podiums" | "bugs" | "species" | "owned" | "cheersGiven" | "cheersGot" | "visits" | "referrals" | "level" | "joined" | "dailyBest" | "visitors";
+export type Stat = "picks" | "hits" | "wins" | "hatTricks" | "bestStreak" | "calls" | "deskWins" | "deskStreak" | "crowdWins" | "podiums" | "bugs" | "species" | "fish" | "fishSpecies" | "owned" | "cheersGiven" | "cheersGot" | "visits" | "referrals" | "level" | "joined" | "dailyBest" | "visitors";
 export type Achievement = { id: string; name: string; text: string; stat: Stat; goal: number; xp: number; chest?: ChestTier; cosmetic?: string };
 export const ACHIEVEMENTS: Achievement[] = [
   { id: "first", name: "First Picks", text: "Play your first day", stat: "picks", goal: 1, xp: 20 },
@@ -489,6 +524,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "champion", name: "Champion", text: "Finish top 3 in a weekly prize", stat: "podiums", goal: 1, xp: 300, chest: "epic" },
   { id: "bugs50", name: "Net Gains", text: "Catch 50 butterflies", stat: "bugs", goal: 50, xp: 100 },
   { id: "allbugs", name: "Collector", text: "Catch every kind of butterfly", stat: "species", goal: 11, xp: 400, chest: "epic", cosmetic: "wings" },
+  { id: "fish25", name: "Angler", text: "Catch 25 fish", stat: "fish", goal: 25, xp: 100 },
+  { id: "fish200", name: "Old Salt", text: "Catch 200 fish", stat: "fish", goal: 200, xp: 400, chest: "rare" },
+  { id: "allfish", name: "Master of the Pond", text: "Catch every kind of fish, the Moon Whale too", stat: "fishSpecies", goal: 11, xp: 1500, chest: "epic" },
   { id: "build10", name: "Builder", text: "Own 10 things", stat: "owned", goal: 10, xp: 60 },
   { id: "build40", name: "Architect", text: "Own 40 things", stat: "owned", goal: 40, xp: 250, chest: "rare" },
   { id: "build100", name: "Tycoon", text: "Own 100 things", stat: "owned", goal: 100, xp: 800, chest: "epic" },

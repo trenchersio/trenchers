@@ -48,7 +48,7 @@ export type Wilds = { group: THREE.Group; update: (night: number) => void };
 
 /** Round low-poly trees, instanced: returns the meshes for a list of placements. */
 export function treeMeshes(list: THREE.Matrix4[]) {
-  const leaf = new THREE.MeshStandardMaterial({ color: 0x173023, roughness: 0.8, flatShading: true }), leaf2 = new THREE.MeshStandardMaterial({ color: 0x1f4130, roughness: 0.8, flatShading: true });
+  const leaf = new THREE.MeshStandardMaterial({ color: 0x12361d, roughness: 0.85, flatShading: true }), leaf2 = new THREE.MeshStandardMaterial({ color: 0x1a4524, roughness: 0.8, flatShading: true });
   const trunkG = new THREE.CylinderGeometry(0.06, 0.09, 0.7, 6); trunkG.translate(0, 0.35, 0);
   const crownG = new THREE.IcosahedronGeometry(0.55, 1); crownG.translate(0, 1.05, 0);
   const crown2 = new THREE.IcosahedronGeometry(0.38, 1); crown2.translate(0.2, 1.45, 0.05);
@@ -77,7 +77,7 @@ export function makeWilds(half: number): Wilds {
   for (let i = 0; i < 500; i++) { const a = rnd() * Math.PI * 2, r = half + 1.5 + rnd() * 14, x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.max(Math.abs(x), Math.abs(z)) < half + 1.2) continue; grass.push(m4(x, 0, z, 0.6 + rnd() * 0.8, rnd() * 6)); }
   for (const m of treeMeshes(trees)) group.add(m);
   const rockG = new THREE.DodecahedronGeometry(1, 0); const rk = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ color: 0x2a2f2e, roughness: 0.9, flatShading: true }), rocks.length); rocks.forEach((x, i) => rk.setMatrixAt(i, x)); rk.castShadow = true; group.add(rk);
-  const tuftG = new THREE.ConeGeometry(0.08, 0.3, 4); tuftG.translate(0, 0.15, 0); const tf = new THREE.InstancedMesh(tuftG, new THREE.MeshStandardMaterial({ color: 0x23432e, roughness: 1, flatShading: true }), grass.length); grass.forEach((x, i) => tf.setMatrixAt(i, x)); group.add(tf);
+  void grass; // no grass tufts: they read as clutter from above
   // fireflies over the meadow at night
   const n = 160, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, r = half + 2 + rnd() * 16; pos[3 * i] = Math.cos(a) * r; pos[3 * i + 1] = 0.4 + rnd() * 1.6; pos[3 * i + 2] = Math.sin(a) * r; }
   const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.BufferAttribute(pos, 3));

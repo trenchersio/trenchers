@@ -7,7 +7,7 @@ import { ownedTrenchers, walletProvider } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { useWallet } from "@/lib/wallet";
 import { ConnectModal } from "@/components/ConnectModal";
-import { ACHIEVEMENTS, CHEER, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
+import { ACHIEVEMENTS, CHEER, DESK, FISHES, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
 import { Terminal } from "./Terminal";
 import { SKY_LABEL, type Sky } from "./weather";
 import { Icon } from "./icons";
@@ -70,7 +70,9 @@ export function TrenchiesGame() {
   const [toast, setToast] = useState<string | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [netted, setNetted] = useState<{ got: string[]; n: number } | null>(null);
-  const [netting, setNetting] = useState<"net" | null>(null);
+  const [netting, setNetting] = useState<"net" | "fish" | null>(null);
+  const [fished, setFished] = useState<{ got: string[]; n: number } | null>(null);
+  const [chop, setChop] = useState<{ id: string; n: number } | null>(null);
   const [ticker, setTicker] = useState<[number, number][] | undefined>(undefined);
   const [placing, setPlacing] = useState<string | null>(null);
   const [sky, setSky] = useState<Sky | null>(null);
@@ -157,6 +159,17 @@ export function TrenchiesGame() {
     catch (e) { say((e as Error).message); }
     setNetting(null);
   };
+  const fishNow = async () => {
+    if (visiting) setVisiting(null);
+    setNetting("fish");
+    try {
+      const j = await call("fish", {}); setFished({ got: j.got, n: Date.now() });
+      const names = (j.got as string[]).map((id) => FISHES.find((f) => f.id === id)?.name ?? id).join(" and ");
+      // the catch shows when the line comes up (about 6 seconds: walk out, cast, wait)
+      setTimeout(() => { apply(j.me); say(`Caught ${names} · +${j.xp} XP`); }, 6500);
+    } catch (e) { say((e as Error).message); }
+    setNetting(null);
+  };
   const claimDaily = async () => {
     setClaiming(true);
     try { const j = await call("daily", {}); apply(j.me); setParty((p) => p + 1); say(`Daily reward: ${rewardText(j.reward)}`); setDailyOpen(false); }
@@ -236,11 +249,13 @@ export function TrenchiesGame() {
   const chests = (me.chests?.common ?? 0) + (me.chests?.rare ?? 0) + (me.chests?.epic ?? 0);
   const todo = (me.daily && !me.daily.claimed ? 1 : 0) + (me.quests?.list.filter((q) => !q.done).length ?? 0) + chests;
   const netReady = !me.netAt || me.netAt <= now * 1000;
+  const fishReady = !me.fishAt || me.fishAt <= now * 1000;
 
   return (
     <div className="tg">
       <Land key={visiting ? `v-${visiting.name}` : "home"} look={look} nft={subject!.nft} celebrate={party} grow={NO_GROW} now={now} mine={!visiting} busy={netting}
         netAt={visiting ? 0 : me.netAt} onNet={net} netted={visiting ? null : netted}
+        fishAt={visiting ? 0 : me.fishAt ?? 0} onFish={visiting ? undefined : () => void fishNow()} fished={visiting ? null : fished} chop={visiting ? null : chop}
         onDesk={() => setPanel("desk")} atDesk={!visiting && (panel === "picks" || panel === "desk")} ticker={ticker} onSky={setSky}
         onPick={placing && !visiting ? (x, y) => void place(x, y) : null}
         guests={guests} follow={visiting && landInfo?.role === "member" ? me.name : null} chat={landInfo && landInfo.land.name === landName ? landInfo.chat : undefined} />
@@ -282,7 +297,10 @@ export function TrenchiesGame() {
           <button type="button" className="tg-btn tg-btn-sm" onClick={() => void place(null)}>Usual spot</button>
           <button type="button" className="tg-btn tg-btn-sm" onClick={() => setPlacing(null)}>Done</button></div>
       )}
-      {!visiting && !placing && netReady && <button type="button" className="tg-card tg-netfab" onClick={() => void net()} disabled={netting === "net"}><Icon n="bug" size={15} /><span>Catch butterflies</span></button>}
+      {!visiting && !placing && (netReady || fishReady) && <div className="tg-fabs">
+        {fishReady && <button type="button" className="tg-card tg-netfab tg-fishfab" onClick={() => void fishNow()} disabled={netting === "fish"}><Icon n="fish" size={15} /><span>Go fishing</span></button>}
+        {netReady && <button type="button" className="tg-card tg-netfab" onClick={() => void net()} disabled={netting === "net"}><Icon n="bug" size={15} /><span>Catch butterflies</span></button>}
+      </div>}
       {landInfo && landInfo.land.name === landName && <LandChat info={landInfo} me={me.name} onSay={(text) => landAct("land/say", { text })} onJoin={() => void landAct("land/request", {}, "Request sent")} />}
       {!me.held && <div className="tg-warn">Trencher #{me.nft} isn&apos;t in this wallet any more. <button type="button" className="linkish" onClick={() => setPanel("me")}>Move your Trenchie</button></div>}
 
@@ -300,22 +318,25 @@ export function TrenchiesGame() {
       {(panel === "picks" || panel === "desk") && (
         <div className={`tg-trade${deskMax ? " max" : ""} show-${panel}`}>
           <div className="tg-trade-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={panel === "desk"} className={panel === "desk" ? "on" : ""} onClick={() => setPanel("desk")}><Icon n="chart" size={14} />Trading desk</button>
-            <button type="button" role="tab" aria-selected={panel === "picks"} className={panel === "picks" ? "on" : ""} onClick={() => setPanel("picks")}><Icon n="target" size={14} />Daily picks{needPicks && <i className="tg-dot" />}</button>
+            <button type="button" role="tab" aria-selected={panel === "desk"} className={panel === "desk" ? "on" : ""} onClick={() => setPanel("desk")}><Icon n="chart" size={14} />Trading desk<small>BTC up or down</small></button>
+            <button type="button" role="tab" aria-selected={panel === "picks"} className={panel === "picks" ? "on" : ""} onClick={() => setPanel("picks")}><Icon n="target" size={14} />Daily picks<small>{needPicks ? `pick before ${left(me.open.lockAt, now)}` : "locked in"}</small>{needPicks && <i className="tg-dot" />}</button>
+            <span className="tg-trade-wallet"><Icon n="coin" size={13} /><b>{n0(me.bricks)}</b><small>coins</small></span>
             <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
           </div>
           <Terminal call={call} onTicker={setTicker} onSettled={refresh} say={say} max={deskMax} onMax={() => setDeskMax((m) => !m)} onClose={() => setPanel(null)} />
-          {!deskMax && <div className="tg-trade-picks"><button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
-            <PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} /></div>}
+          <div className="tg-trade-picks">
+            <PicksPanel me={me} now={now} call={call} onTrade={() => setPanel("desk")} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} /></div>
         </div>
       )}
       {panel && panel !== "picks" && panel !== "desk" && (
         <aside key={panel} className="tg-panel" role="dialog" aria-label={panel}>
           <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
           {panel === "today" && <TodayPanel me={me} onClaim={claimDaily} claiming={claiming} onGo={goQuest} onChest={setChest} onShare={shareLand} invite={inviteUrl(me.name)} />}
-          {panel === "build" && <ShopPanel me={me} call={call} onMe={apply} say={say} onDone={(m, it) => { apply(m); setParty((p) => p + 1); say(`${it.name} added to your land`); }} onPlace={(id) => { setVisiting(null); setPlacing(id); setPanel(null); }} />}
+          {panel === "build" && <ShopPanel me={me} call={call} onMe={apply} say={say} onDone={(m, it) => {
+            if (it.kind === "land") { setPanel(null); setChop({ id: it.id, n: Date.now() }); say("Your Trenchie grabs the axe…"); setTimeout(() => { apply(m); setParty((p) => p + 1); say(`${it.name.replace(/^Clear the /, "The ")} is cleared: build on it from the Forest tab`); }, 7000); return; }
+            apply(m); setParty((p) => p + 1); say(`${it.name} added to your land`); }} onPlace={(id) => { setVisiting(null); setPlacing(id); setPanel(null); }} />}
           {panel === "me" && <ProfilePanel me={me} palette={myPalette} call={call} onMe={(m, bonus) => { apply(m); if (bonus) { setParty((p) => p + 1); say(`X linked: +${bonus} XP`); } }} onRespawn={() => setPhase("spawn")} onShare={shareLand} />}
-          {panel === "collection" && <CollectionPanel me={me} now={now} onNet={() => { setPanel(null); void net(); }} />}
+          {panel === "collection" && <CollectionPanel me={me} now={now} onNet={() => { setPanel(null); void net(); }} onFish={() => { setPanel(null); void fishNow(); }} />}
           {panel === "board" && <BoardPanel call={call} onVisit={(p) => { setVisiting(p); setPanel(null); }} />}
           {panel === "lands" && <LandsPanel me={me} call={call} info={!visiting ? landInfo : null} onOpen={async (open) => { const ok = await landAct("land/open", { name: me.name, open }, open ? "Your land is public: anyone can walk in" : "Your land is private: members only"); if (ok) setMe((m) => (m ? { ...m, isOpen: open } : m)); }} onVisit={(p) => { setVisiting(p); setPanel(null); }} onAnswer={async (who, accept) => { const ok = await landAct("land/answer", { name: me.name, who, accept }, accept ? `${who} can now join your land` : undefined); if (ok) setMe((m) => (m ? { ...m, requests: Math.max(0, m.requests - 1) } : m)); }} onKick={(who) => void landAct("land/leave", { name: me.name, who }, `${who} was removed`)} />}
           {panel === "prizes" && <PrizesPanel prizes={prizes} now={now} call={call} reload={reloadPrizes} />}
@@ -488,7 +509,7 @@ function Spawn({ me, existing, onDone, call }: { me: Address; existing: Me | nul
 }
 
 // ------------------------------------------------------------------ picks
-function PicksPanel({ me, now, call, onSaved }: { me: Me; now: number; call: (op: string, b?: Record<string, unknown>, q?: Record<string, string>) => Promise<{ me: Me; coins?: Coin[]; popular?: { token: string; symbol: string; count: number }[]; dataAt?: number }>; onSaved: (m: Me) => void }) {
+function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void; me: Me; now: number; call: (op: string, b?: Record<string, unknown>, q?: Record<string, string>) => Promise<{ me: Me; coins?: Coin[]; popular?: { token: string; symbol: string; count: number }[]; dataAt?: number }>; onSaved: (m: Me) => void }) {
   const [sel, setSel] = useState(me.open.picks);
   const [coins, setCoins] = useState<Coin[] | null>(null);
   const [popular, setPopular] = useState<{ token: string; symbol: string; count: number }[]>([]);
@@ -504,6 +525,7 @@ function PicksPanel({ me, now, call, onSaved }: { me: Me; now: number; call: (op
     <div className="tg-pp">
       <header className="tg-ph"><p className="tg-k">Daily picks</p><h2>Pick tomorrow&apos;s top 3</h2></header>
       <p className="tg-sub">For <b>{me.open.label}</b> (UTC), locks in <b className="mono">{left(me.open.lockAt, now)}</b>. Each of your picks that finishes in the day&apos;s top 3 earns <b>{RANK_XP.join(" / ")} XP</b>.</p>
+      <div className="tg-picks-cols"><div className="tg-picks-side">
       <div className="tg-slots">
         {Array.from({ length: PICKS }, (_, i) => sel[i]).map((c, i) => (
           <button key={i} type="button" className={`tg-slot${c ? " full" : ""}`} onClick={() => c && toggle(c)} title={c ? "Tap to remove" : "Pick a coin below"}>
@@ -514,6 +536,16 @@ function PicksPanel({ me, now, call, onSaved }: { me: Me; now: number; call: (op
       <button type="button" className="tg-btn tg-btn-go tg-wide" onClick={save} disabled={busy || sel.length !== PICKS || !changed}>{busy ? "Saving…" : !changed && me.open.picks.length === PICKS ? <><Icon n="check" size={14} />Picks locked in</> : `Lock in ${PICKS} picks`}</button>
       {err && <p className="tg-err">{err}</p>}
       {popular.length > 0 && <div className="tg-popular"><span>Most picked</span>{popular.map((p) => <button key={p.token} type="button" className="tg-chip" onClick={() => toggle(p)}>${p.symbol} <small>×{p.count}</small></button>)}</div>}
+      <section className="tg-box">
+        <h3>Today, live <small className="mono">{me.live.label}</small></h3>
+        {me.live.picks.length ? (
+          <ol className="tg-live-picks">{me.live.picks.map((p) => <li key={p.token} className={p.place && p.place <= 3 ? "top" : ""}><span className="tg-place">{p.place ? `#${p.place}` : "–"}</span><b>${p.symbol}</b><em className={`mono ${(p.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(p.pct)}</em></li>)}</ol>
+        ) : <p className="tg-sub">You didn&apos;t pick for today. Make tomorrow&apos;s picks on this page.</p>}
+        {me.live.top.length > 0 && <p className="tg-sub">Leading: {me.live.top.slice(0, 3).map((t, i) => <span key={t.token} className="tg-lead">{PLACE[i]} ${t.symbol} {pct(t.pct)}</span>)}</p>}
+        <p className="tg-fine">Settles 00:00 UTC, in {left(me.live.endsAt, now)} · {me.live.players} player{me.live.players === 1 ? "" : "s"} · prices from Pons, hourly</p>
+      </section>
+        {onTrade && <button type="button" className="tg-crosslink" onClick={onTrade}><Icon n="chart" size={14} /><span><b>Trading desk</b><small>Call Bitcoin up or down every 5 minutes for XP and coins</small></span><Icon n="arrow" size={13} /></button>}
+      </div><div className="tg-picks-main">
       <input className="tg-search" placeholder="Search a ticker or paste an address" value={q} onChange={(e) => setQ(e.target.value)} />
       {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">No coins match. Coins that traded in the last 24 hours show up here.</p> : (
         <ol className="tg-coins">
@@ -524,14 +556,7 @@ function PicksPanel({ me, now, call, onSaved }: { me: Me; now: number; call: (op
             </button></li>); })}
         </ol>
       )}
-      <section className="tg-box">
-        <h3>Today, live <small className="mono">{me.live.label}</small></h3>
-        {me.live.picks.length ? (
-          <ol className="tg-live-picks">{me.live.picks.map((p) => <li key={p.token} className={p.place && p.place <= 3 ? "top" : ""}><span className="tg-place">{p.place ? `#${p.place}` : "–"}</span><b>${p.symbol}</b><em className={`mono ${(p.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(p.pct)}</em></li>)}</ol>
-        ) : <p className="tg-sub">You didn&apos;t pick for today. Tomorrow&apos;s picks are above.</p>}
-        {me.live.top.length > 0 && <p className="tg-sub">Leading: {me.live.top.slice(0, 3).map((t, i) => <span key={t.token} className="tg-lead">{PLACE[i]} ${t.symbol} {pct(t.pct)}</span>)}</p>}
-        <p className="tg-fine">Settles 00:00 UTC, in {left(me.live.endsAt, now)} · {me.live.players} player{me.live.players === 1 ? "" : "s"} · prices from Pons, hourly</p>
-      </section>
+      </div></div>
     </div>
   );
 }
@@ -553,13 +578,13 @@ function ResultsPanel({ me }: { me: Me }) {
 }
 
 // ------------------------------------------------------------------ build (shop)
-const TABS: [ItemKind, string][] = [["house", "House"], ["room", "Rooms"], ["vehicle", "Rides"], ["indoor", "Indoor"], ["outdoor", "Garden"], ["statue", "Statues"], ["pet", "Pets"]];
+const TABS: [ItemKind | "forest", string][] = [["house", "House"], ["room", "Rooms"], ["vehicle", "Rides"], ["indoor", "Indoor"], ["outdoor", "Garden"], ["forest", "Forest"], ["statue", "Statues"], ["pet", "Pets"]];
 const RARE_C: Record<string, string> = { common: "#a9b3ad", rare: "#6ee7ff", epic: "#b388ff", legendary: "#ffcf3a" };
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 /** The house from above: the core in the middle, rooms on both sides, a second row in front. */
 const PLAN_ROWS: string[][] = [["L4", "L3", "L2", "L1", "core", "R1", "R2", "R3", "R4"], ["L4f", "L3f", "L2f", "L1f", "", "R1f", "R2f", "R3f", ""]];
 function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op: string, b?: Record<string, unknown>) => Promise<{ me: Me }>; onDone: (m: Me, it: Item) => void; onMe: (m: Me) => void; onPlace: (id: string) => void; say: (m: string) => void }) {
-  const [tab, setTab] = useState<ItemKind>("room");
+  const [tab, setTab] = useState<ItemKind | "forest">("room");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
@@ -569,7 +594,7 @@ function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op
       const j = await call(op, { id: it.id }); onDone(j.me, it);
       // just built: pick where it goes straight away
       if (op === "buy" && it.kind === "room" && it.site === "house") setEdit(it.id);
-      else if (op === "buy" && (it.kind === "outdoor" || it.kind === "statue")) onPlace(it.id);
+      else if (op === "buy" && ((it.kind === "outdoor" && it.site !== "forest") || it.kind === "statue")) onPlace(it.id);
     } catch (e) { setErr((e as Error).message); }
     setBusy(null);
   };
@@ -582,6 +607,7 @@ function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op
       <div className="tg-tabs tg-tabs-scroll" role="tablist">{TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       {tab === "room" && <p className="tg-fine">Built rooms can be moved to another spot and painted: tap Edit.</p>}
       {(tab === "outdoor" || tab === "statue") && <p className="tg-fine">Garden pieces and statues you own can be moved anywhere in the garden.</p>}
+      {tab === "forest" && <p className="tg-fine">Chop the forest down one plot at a time, then build on the clearing. Each plot unlocks its own building.</p>}
       {err && <p className="tg-err">{err}</p>}
       <div className="tg-items">
         {tab === "house" && (
@@ -589,12 +615,12 @@ function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op
             <div className="tg-item-t"><b>Paint the main house</b><small>New walls or a new floor, {PAINT_COST} coins a coat.</small></div>
             <div className="tg-item-a"><button type="button" className="tg-btn tg-btn-sm" onClick={() => setEdit("core")}>Paint</button></div></div>
         )}
-        {ITEMS.filter((i) => i.kind === tab).sort((a, b) => a.level - b.level || a.cost - b.cost).map((it) => {
+        {(tab === "forest" ? ITEMS.filter((i) => i.kind === "land").flatMap((pl) => [pl, ...ITEMS.filter((b) => b.site === "forest" && b.needs === pl.id)]) : ITEMS.filter((i) => i.kind === tab && i.site !== "forest").sort((a, b) => a.level - b.level || a.cost - b.cost)).map((it) => {
           const own = me.items.includes(it.id), eq = me.house === it.id || me.vehicle === it.id, lock = me.level < it.level;
           const needH = it.needsHouse !== undefined && houseIx < it.needsHouse;
           const needA = it.needsAch && !me.achievements.includes(it.needsAch) ? ACHIEVEMENTS.find((a) => a.id === it.needsAch) : null;
           const short = me.bricks < it.cost;
-          const swap = it.kind === "house" || it.kind === "vehicle", movable = it.kind === "outdoor" || it.kind === "statue";
+          const swap = it.kind === "house" || it.kind === "vehicle", movable = (it.kind === "outdoor" && it.site !== "forest") || it.kind === "statue";
           return (
             <div key={it.id} className={`tg-item${own ? " own" : ""}${lock || needA ? " lock" : ""}${it.rarity ? ` r-${it.rarity}` : ""}`} style={it.rarity ? { ["--r" as string]: RARE_C[it.rarity] } : undefined}>
               <span className="tg-item-i"><Icon n={lock ? "lock" : it.kind === "statue" ? "statue" : it.glyph} size={18} /></span>
@@ -605,12 +631,12 @@ function ShopPanel({ me, call, onDone, onMe, onPlace, say }: { me: Me; call: (op
                 {own ? (swap ? (eq ? <span className="tg-tag on">In use</span> : <button type="button" className="tg-btn tg-btn-sm" disabled={!!busy} onClick={() => act(it, "equip")}>Use</button>)
                     : it.kind === "room" && it.site === "house" ? <button type="button" className="tg-btn tg-btn-sm" onClick={() => setEdit(it.id)}><Icon n="paint" size={12} />Edit</button>
                     : movable ? <button type="button" className="tg-btn tg-btn-sm" onClick={() => onPlace(it.id)}><Icon n="move" size={12} />Move</button>
-                    : <span className="tg-tag on"><Icon n="check" size={11} />Built</span>)
+                    : <span className="tg-tag on"><Icon n="check" size={11} />{it.kind === "land" ? "Cleared" : "Built"}</span>)
                   : lock ? <span className="tg-tag">Lv {it.level}</span>
                   : needH ? <span className="tg-tag">Needs {item(HOUSE_ORDER[it.needsHouse!])?.name}</span>
                   : needA ? <span className="tg-tag" title={needA.text}>Locked</span>
                   : it.needs && !me.items.includes(it.needs) ? <span className="tg-tag">Needs {item(it.needs)?.name}</span>
-                  : <button type="button" className="tg-btn tg-btn-sm tg-btn-go" disabled={!!busy || short} onClick={() => act(it, "buy")}>{busy === it.id ? "…" : it.cost ? "Build" : "Claim"}</button>}
+                  : <button type="button" className="tg-btn tg-btn-sm tg-btn-go" disabled={!!busy || short} onClick={() => act(it, "buy")}>{busy === it.id ? "…" : it.kind === "land" ? "Chop" : it.cost ? "Build" : "Claim"}</button>}
               </div>
             </div>
           );
@@ -661,14 +687,14 @@ function RoomEdit({ me, room, call, onMe, onBack, say }: { me: Me; room: string;
 
 // ------------------------------------------------------------------ leaderboard + visit + rules
 function BoardPanel({ call, onVisit }: { call: Call; onVisit: (p: Pub) => void }) {
-  const [kind, setKind] = useState<"xp" | "desk" | "value" | "cheers" | "bugs">("xp");
+  const [kind, setKind] = useState<"xp" | "desk" | "value" | "cheers" | "bugs" | "fish">("xp");
   const [d, setD] = useState<{ players: (Pub & { rank: number; score: number })[]; me: number } | null>(null);
   useEffect(() => { setD(null); call("leaderboard", undefined, { kind }).then(setD).catch(() => setD({ players: [], me: 0 })); }, [call, kind]);
-  const unit = (p: Pub & { score: number }) => kind === "xp" ? `${n0(p.xp)} XP` : kind === "desk" ? `${n0(p.score ?? 0)} won` : kind === "value" ? `${n0(p.score ?? 0)} coins` : kind === "cheers" ? `${n0(p.score ?? 0)} cheers` : `${n0(p.score ?? 0)} caught`;
+  const unit = (p: Pub & { score: number }) => kind === "xp" ? `${n0(p.xp)} XP` : kind === "desk" ? `${n0(p.score ?? 0)} won` : kind === "value" ? `${n0(p.score ?? 0)} coins` : kind === "cheers" ? `${n0(p.score ?? 0)} cheers` : kind === "fish" ? `${n0(p.score ?? 0)} fish` : `${n0(p.score ?? 0)} caught`;
   return (
     <div className="tg-pp">
       <header className="tg-ph"><p className="tg-k">Leaderboard</p><h2>Top Trenchies</h2></header>
-      <div className="tg-tabs" role="tablist">{([["xp", "XP"], ["desk", "Traders"], ["value", "Land value"], ["cheers", "Cheers"], ["bugs", "Butterflies"]] as const).map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}</button>)}</div>
+      <div className="tg-tabs" role="tablist">{([["xp", "XP"], ["desk", "Traders"], ["value", "Land value"], ["cheers", "Cheers"], ["bugs", "Butterflies"], ["fish", "Fish"]] as const).map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}</button>)}</div>
       {d && d.me > 0 && <p className="tg-sub">You&apos;re <b>#{d.me}</b>. Tap anyone to visit their land and cheer it (+{CHEER.xp} XP for you, +{CHEER.ownerBricks} coins for them).</p>}
       {!d ? <p className="tg-sub">Loading…</p> : (
         <ol className="tg-board">{d.players.map((p) => (
