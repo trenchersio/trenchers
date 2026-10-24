@@ -36,10 +36,17 @@ export const ROOM_STYLE: Record<string, { floor: number; wall: number }> = {
   gameroom: { floor: 0x2b1f3a, wall: 0x3a2a4f }, vault: { floor: 0x2f3438, wall: 0x5b636a }, cinema: { floor: 0x3a1418, wall: 0x241014 }, studio: { floor: 0x2a2a30, wall: 0x22252b },
 };
 export type PlacedRoom = R & { id: string; slot: string; side: -1 | 1; row: 0 | 1; floor: number; wall: number };
+/** A slot's spot for this house: the wings sit flush against the house and each other (no gaps whatever its size). */
+export function slotAt(slot: string, house: string): R & { side: -1 | 1; row: 0 | 1 } {
+  const s = ROOM_SLOTS[slot], c = core(house), base = slot.replace(/f$/, ""), side = s.side, order = [1, 2, 3, 4].map((n) => `${side < 0 ? "L" : "R"}${n}`);
+  let x = side < 0 ? c.x : c.x + c.w;
+  for (const o of order) { const w = ROOM_SLOTS[o].w; if (side < 0) x -= w; if (o === base) break; if (side > 0) x += w; }
+  return { x, y: s.y, w: ROOM_SLOTS[base].w, d: s.d, side: s.side, row: s.row };
+}
 /** Every built room in its slot (your own plan first, then the defaults), with its colours. */
-export function placeRooms(items: string[], layout: Record<string, string> = {}, paint: Record<string, { wall?: number; floor?: number }> = {}): PlacedRoom[] {
+export function placeRooms(items: string[], layout: Record<string, string> = {}, paint: Record<string, { wall?: number; floor?: number }> = {}, house = "palace"): PlacedRoom[] {
   const map = roomLayout(items, layout);
-  return Object.entries(map).map(([id, slot]) => { const s = ROOM_SLOTS[slot], st = ROOM_STYLE[id] ?? { floor: 0x2a2d31, wall: 0x3a4048 }, pt = paint[id] ?? {};
+  return Object.entries(map).map(([id, slot]) => { const s = { ...ROOM_SLOTS[slot], ...slotAt(slot, house) }, st = ROOM_STYLE[id] ?? { floor: 0x2a2d31, wall: 0x3a4048 }, pt = paint[id] ?? {};
     return { id, slot, x: s.x, y: s.y, w: s.w, d: s.d, side: s.side, row: s.row, floor: pt.floor ? FLOORS[pt.floor] : st.floor, wall: pt.wall ? PAINTS[pt.wall] : st.wall }; });
 }
 

@@ -5,4 +5,4 @@ export type Look = { name: string; house: string; vehicle: string; items: string
 /** When the tree and the rock are ready again (ms since epoch, 0 = ready now). */
 export type Grow = { wood: number; stone: number; fish: number };
 /** DOM elements the world keeps pinned to points in 3D (nameplate, speech bubble, tree and rock tags). */
-export type Pins = { plate?: HTMLElement | null; bubble?: HTMLElement | null; tree?: HTMLElement | null; rock?: HTMLElement | null; pond?: HTMLElement | null; net?: HTMLElement | null; fish?: HTMLElement | null; desk?: HTMLElement | null; pop?: HTMLElement | null; layer?: HTMLElement | null };
+export type Pins = { plate?: HTMLElement | null; bubble?: HTMLElement | null; tree?: HTMLElement | null; rock?: HTMLElement | null; pond?: HTMLElement | null; net?: HTMLElement | null; fish?: HTMLElement | null; chop?: HTMLElement | null; desk?: HTMLElement | null; pop?: HTMLElement | null; layer?: HTMLElement | null };

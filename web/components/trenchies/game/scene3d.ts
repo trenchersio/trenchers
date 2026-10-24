@@ -22,7 +22,7 @@ import { makeTrenchie } from "./trenchie3d";
 import { makeVehicle, rollWheels } from "./vehicles";
 import { Nav, along, lengths, smooth, type Pt, type R } from "./nav";
 import { CYAN, GOLD, Kit, NEON, newRegistry, type Kind, type Registry, type Spot } from "./kit";
-import { CHOP, DOCK, DOOR_X, FIXED, FOREST, GARDEN_FP, GARDEN_ROOMS, LAND, PARK, PLOTS, POND, ROAD, Packer, core } from "./layout";
+import { CHOP, DOCK, DOOR_X, FIXED, FOREST, GARDEN_FP, GARDEN_ROOMS, LAND, PARK, PLOTS, POND, ROAD, Packer, core, slotAt } from "./layout";
 import { FOREST_BUILD, forestDoor } from "./forestbuild";
 import { buildHouse, drawLots, gardenBuilding, nextLots } from "./rooms";
 import { GARDEN } from "./garden";
@@ -120,6 +120,10 @@ export class World3D {
   onGround: ((x: number, y: number) => void) | null = null;
   /** Direct control (arrow keys, WASD or the joystick): -1..1, x to the right of the screen, y up the screen. */
   stick = { x: 0, y: 0 };
+  /** Tapping the forest: which plot (you can chop it down from there). */
+  onForest: ((plot: string) => void) | null = null;
+  /** The plot the "chop" tag stands on (the next one you can clear), or none. */
+  chopTag: string | null = null;
   /** Tapping the computer on the desk (opens the trading screen). */
   onDesk: (() => void) | null = null;  private look: Look; private nft: number; private t = 0; private lastScreen = 0;
   private grow: Grow = { wood: 0, stone: 0, fish: 0 };
@@ -206,7 +210,7 @@ export class World3D {
     const house = buildHouse(k, ctx, look.house, look.items, look.layout ?? {}, look.paint ?? {}); this.door = house.door;
     let park: { x: number; y: number; yaw: number } | undefined;
     for (const id of Object.keys(GARDEN_ROOMS)) if (this.has(id)) { const o = gardenBuilding(k, ctx, id); if (o.park) park = o.park; }
-    drawLots(k, nextLots(house.rooms, look.items, look.layout ?? {}, look.level ?? 1));
+    drawLots(k, nextLots(house.rooms, look.items, look.layout ?? {}, look.level ?? 1, look.house));
     // paths: front door to the road, and out to the forest, the pond and the quarry
     const fy = house.door.y - 0.3, junction = 21.2, placed: Pt[] = [];
     stones(k, { x: DOOR_X, y: fy + 0.2 }, { x: DOOR_X, y: LAND - ROAD - 0.75 }, 1.1, placed);
@@ -272,7 +276,7 @@ export class World3D {
   /** Areas the garden packer must leave alone (so the plan stays stable as you build more). */
   private gardenBlocks(door: Pt): R[] {
     const out: R[] = [
-      ...Object.values(ROOM_SLOTS).map((r) => ({ x: r.x - 0.3, y: r.y - 0.3, w: r.w + 0.6, d: r.d + 0.6 })), { ...core("palace"), y: core("palace").y - 0.3, d: core("palace").d + 0.9 },
+      ...Object.keys(ROOM_SLOTS).map((k) => slotAt(k, this.look.house)).map((r) => ({ x: r.x - 0.3, y: r.y - 0.3, w: r.w + 0.6, d: r.d + 0.6 })), { ...core("palace"), y: core("palace").y - 0.3, d: core("palace").d + 0.9 },
       ...Object.values(GARDEN_ROOMS).map((r) => ({ x: r.x - 0.4, y: r.y - 0.4, w: r.w + 0.8, d: r.d + 1.2 })),
       { x: FOREST.x, y: FOREST.y, w: FOREST.w + 0.4, d: FOREST.d },
       { x: POND.x - POND.rx - 0.7, y: POND.y - POND.ry - 0.7, w: POND.rx * 2 + 1.4, d: POND.ry * 2 + 1.4 }, { x: DOCK.x0 - 1.4, y: DOCK.y - 0.9, w: DOCK.x1 - DOCK.x0 + 1.4, d: 1.8 },
@@ -436,6 +440,11 @@ export class World3D {
     if (!this.onGround) { const h = this.raycaster.intersectObject(this.statics, true)[0]; if (h && h.point.y > 0.05) { hit.set(h.point.x, 0, h.point.z); onThing = true; } }
     const x = hit.x + LAND / 2, y = hit.z + LAND / 2; if (x < 0.5 || y < 0.5 || x > LAND - 0.5 || y > LAND - 0.5) return;
     if (this.onGround) { this.onGround(x, y); return; }
+    // a tap on the forest: offer to chop that plot down (if it's still standing)
+    if (this.onForest && x >= FOREST.x && x <= FOREST.x + FOREST.w && y >= FOREST.y && y <= FOREST.y + FOREST.d) {
+      const plot = PLOTS.find((p) => y >= p.y && y < p.y + p.d && !this.has(p.id));
+      if (plot && !(this.has("treehouse") && x > GARDEN_ROOMS.treehouse.x - 0.5 && x < GARDEN_ROOMS.treehouse.x + GARDEN_ROOMS.treehouse.w + 0.5 && y > GARDEN_ROOMS.treehouse.y - 0.5 && y < GARDEN_ROOMS.treehouse.y + GARDEN_ROOMS.treehouse.d + 0.5)) { this.onForest(plot.id); return; }
+    }
     if (this.mode === "ride") return;
     this.steered = this.t; this.atDesk = false;
     // a spot close to the tap: use it; otherwise just walk there
@@ -832,6 +841,7 @@ export class World3D {
     const desk = this.reg.spots.find((x) => x.tag === "desk"); if (desk) place(P.desk, W(desk.pose.x, desk.pose.y).setY(2.1));
     place(P.net, W(this.netAt.x, this.netAt.y).setY(1.3));
     place(P.fish, W(DOCK.x1 - 0.2, DOCK.y).setY(1.2));
+    const cp = this.chopTag ? PLOTS.find((p) => p.id === this.chopTag) : null; place(P.chop, cp ? W(cp.x + cp.w - 1.6, cp.y + cp.d / 2).setY(2.6) : new THREE.Vector3(0, -50, 0), !!cp);
     for (const g of this.guests.values()) { const h = g.tr.position.clone().setY(HT + 0.12); place(g.plate, h.clone()); place(g.bubble, h.clone(), this.t < g.until); if (this.t >= g.until) g.bubble.classList.remove("on"); }
   }
 

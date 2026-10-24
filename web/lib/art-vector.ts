@@ -10,17 +10,33 @@ let loading: Promise<Row[]> | null = null;
 
 /** Absolute on the live site (pages can sit in sub-folders like /agent/862); relative in the static preview. */
 const BASE = process.env.NEXT_PUBLIC_PREVIEW === "1" ? "" : "/";
+let full = false;
 export function loadArt(prefix = ""): Promise<Row[]> {
   if (!prefix) prefix = BASE;
-  if (data) return Promise.resolve(data);
-  if (!loading) loading = fetch(`${prefix}collection/art.json`).then((r) => r.json()).then((d: Row[]) => (data = d));
+  if (full && data) return Promise.resolve(data);
+  if (!loading) loading = fetch(`${prefix}collection/art.json`).then((r) => r.json()).then((d: Row[]) => { full = true; return (data = d); });
   return loading;
+}
+/**
+ * Just the Trenchers you need, 100 to a file (public/collection/art/<n>.json, split from art.json): a page that
+ * shows a handful of them loads a few KB instead of the whole collection.
+ */
+const PART = 100, parts = new Map<number, Promise<void>>();
+export function loadArtFor(ids: number[], prefix = ""): Promise<void> {
+  if (!prefix) prefix = BASE;
+  if (full) return Promise.resolve();
+  const need = [...new Set(ids.filter((i) => i >= 1 && i <= 2000).map((i) => Math.floor((i - 1) / PART)))];
+  return Promise.all(need.map((n) => {
+    let p = parts.get(n);
+    if (!p) { p = fetch(`${prefix}collection/art/${n}.json`).then((r) => r.json()).then((rows: Row[]) => { if (!data) data = new Array(2000); rows.forEach((r, i) => { data![n * PART + i] ??= r; }); }); parts.set(n, p); p.catch(() => parts.delete(n)); }
+    return p;
+  })).then(() => undefined);
 }
 export const artReady = () => data !== null;
 
 /** Draws token `id` filling a size x size square at (x, y) in the context's current units. */
 export function drawArt(ctx: CanvasRenderingContext2D, id: number, size: number, x = 0, y = 0) {
-  if (!data) return false;
+  if (!data || !data[id - 1]) return false;
   const [bg, main, second, eye, sig, eyeType, er, ec, scan, pieces] = data[id - 1];
   const u = size / CELLS;
   const tone = [main, second, sig];
@@ -53,7 +69,7 @@ export function drawArt(ctx: CanvasRenderingContext2D, id: number, size: number,
 }
 
 /** Background colour of a token (for placeholders before the art data loads). */
-export const artBg = (id: number) => (data ? data[id - 1][0] : "#151917");
+export const artBg = (id: number) => (data?.[id - 1] ? data[id - 1][0] : "#151917");
 
 /** A Trencher's colours (for things drawn in its style, like its Trenchie). Call after loadArt(). */
 export function artPalette(id: number): { bg: string; main: string; second: string; sig: string; eye: string } | null {

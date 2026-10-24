@@ -2,7 +2,7 @@
 /** Someone's land, for anyone to look at: their Trenchie in 3D, what they've built, and a way in for you. */
 import { useEffect, useState } from "react";
 import { ArtCanvas } from "@/components/collection/ArtCanvas";
-import { artPalette, loadArt } from "@/lib/art-vector";
+import { artPalette, loadArtFor } from "@/lib/art-vector";
 import { REFERRAL, item } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
 import { Land } from "./Land";
@@ -16,7 +16,7 @@ const n0 = (v: number) => v.toLocaleString("en-US");
 export function PublicLand({ p }: { p: Showcase }) {
   const [palette, setPalette] = useState<Palette>(FALLBACK);
   const [now, setNow] = useState(() => Date.now() / 1000);
-  useEffect(() => { loadArt().then(() => { const x = artPalette(p.nft); if (x) setPalette(x); }).catch(() => {}); const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, [p.nft]);
+  useEffect(() => { loadArtFor([p.nft]).then(() => { const x = artPalette(p.nft); if (x) setPalette(x); }).catch(() => {}); const t = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(t); }, [p.nft]);
   useEffect(() => { try { localStorage.setItem("trenchies:ref", p.name); } catch { /* */ } }, [p.name]);
   const look = { name: p.name, house: p.house, vehicle: p.vehicle, items: p.items, palette, trophies: p.hits, level: p.level, x: p.x, wear: p.wear };
   const play = `/trenchies/play?ref=${encodeURIComponent(p.name)}`;

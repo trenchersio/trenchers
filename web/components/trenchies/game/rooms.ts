@@ -12,7 +12,7 @@
  */
 import * as THREE from "three";
 import { CYAN, GOLD, NEON, PINK, WARM, type Frame, type Kit, type Wall } from "./kit";
-import { DOOR_X, GARDEN_ROOMS, HOUSES, HOUSE_Y, core, placeRooms, type PlacedRoom } from "./layout";
+import { DOOR_X, GARDEN_ROOMS, HOUSES, HOUSE_Y, core, placeRooms, slotAt, type PlacedRoom } from "./layout";
 import { FLOORS, PAINTS, ROOM_SLOTS, roomLayout } from "@/lib/trenchies-catalog";
 import { INDOOR, MODIFIERS, type Ctx } from "./indoor";
 import type { R } from "./nav";
@@ -44,13 +44,13 @@ export function plan(house: string, placed: PlacedRoom[], corePaint: { wall?: nu
   return rooms;
 }
 /** Rooms you could build next (shown as marked-out lots where they'd go), close to your level. */
-export function nextLots(rooms: Room[], items: string[], layout: Record<string, string>, level: number) {
+export function nextLots(rooms: Room[], items: string[], layout: Record<string, string>, level: number, houseId = "palace") {
   const out: { id: string; r: R; name: string; level: number; cost: number }[] = [];
   const cross = (r: R) => rooms.some((m) => m.r.x < r.x + r.w - 0.1 && m.r.x + m.r.w > r.x + 0.1 && m.r.y < r.y + r.d - 0.1 && m.r.y + m.r.d > r.y + 0.1) || out.some((o) => o.r.x === r.x && o.r.y === r.y);
   const house = ITEMS.filter((i) => i.kind === "room" && i.site === "house" && !items.includes(i.id)).sort((a, b) => a.level - b.level);
   for (const it of house) {
     if (it.level > level + 6) continue;
-    const slot = roomLayout([...items, it.id], layout)[it.id], s = slot ? ROOM_SLOTS[slot] : null; if (!s) continue;
+    const slot = roomLayout([...items, it.id], layout)[it.id], s = slot && ROOM_SLOTS[slot] ? slotAt(slot, houseId) : null; if (!s) continue;
     const r = { x: s.x, y: s.y, w: s.w, d: s.d }; if (cross(r)) continue;
     out.push({ id: it.id, r, name: it.name, level: it.level, cost: it.cost });
   }
@@ -317,7 +317,7 @@ const LOUNGES = ["core", "bedroom", "gameroom", "library", "kitchen", "office", 
 // ------------------------------------------------------------------ the whole house
 export type HouseOut = { rooms: Room[]; door: { x: number; y: number }; placed: Set<string> };
 export function buildHouse(k: Kit, c: Ctx, house: string, items: string[], layout: Record<string, string> = {}, paint: Record<string, { wall?: number; floor?: number }> = {}): HouseOut {
-  const H = HOUSES[house] ?? HOUSES.shack, rooms = plan(house, placeRooms(items, layout, paint), paint.core), cr = rooms[0].r;
+  const H = HOUSES[house] ?? HOUSES.shack, rooms = plan(house, placeRooms(items, layout, paint, house), paint.core), cr = rooms[0].r;
   const { doors, hangs } = shell(k, rooms, { trim: H.trim, glass: (r) => r.kind === "core" && !!H.glass, door: DOOR_X, led: c.has("ledstrip") });
   // the front step
   k.box(DOOR_X - 0.7, cr.y + cr.d + 0.07, -0.01, 1.4, 0.45, 0.06, k.M.white);

@@ -386,7 +386,8 @@
 .tg-pubcta { position: absolute; z-index: 4; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 16px; border-radius: 16px; background: var(--glass2); border: 1px solid rgba(57,255,136,.45); box-shadow: 0 20px 50px -20px #000; width: min(620px, calc(100% - 24px)); }
 .tg-pubcta > div { display: grid; gap: 2px; flex: 1; min-width: 0; } .tg-pubcta b { font-size: 14px; } .tg-pubcta span { color: var(--mut); font-size: 11.5px; }
 @media (max-width: 720px) { .tg-pubcta { flex-direction: column; align-items: stretch; gap: 10px; left: 8px; right: 8px; width: auto; transform: none; } }
-@media (max-width: 720px) { .tg-dk span { font-size: 8.5px; letter-spacing: -.01em; max-width: 100%; overflow: hidden; white-space: nowrap; } }
+.tg-dk-short { display: none; }
+@media (max-width: 720px) { .tg-dk-full { display: none; } .tg-dk-short { display: inline; } .tg-dk span { font-size: 8.5px; letter-spacing: -.01em; max-width: 100%; overflow: hidden; white-space: nowrap; } }
 
 /* ---------- coins, weather */
 .tg-coinchip { cursor: pointer; } .tg-coinchip svg { color: var(--gold); }
@@ -498,7 +499,6 @@
 /* the trading desk and the daily picks: one at a time, full screen, with tabs to switch between them */
 .tg-trade { position: absolute; z-index: 5; top: 60px; bottom: 76px; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; animation: tgtrade .28s cubic-bezier(.2,.9,.3,1); }
 .tg-trade.max { top: 12px; bottom: 12px; z-index: 9; }
-.tg-trade.show-desk .tg-trade-picks, .tg-trade.show-picks .tt { display: none; }
 @keyframes tgtrade { from { opacity: 0; transform: translateY(14px) scale(.985); } }
 .tg-trade-tabs { display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(7,10,9,.97); border: 1px solid rgba(255,255,255,.09); box-shadow: 0 20px 60px -24px #000; overflow: hidden; }
 .tg-trade-tabs button[role="tab"] { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 18px 0 14px; border: 0; border-radius: 10px; background: none; color: var(--mut); font: 600 13.5px var(--sans); cursor: pointer; transition: background .15s ease, color .15s ease; }
@@ -509,19 +509,90 @@
 .tg-trade-tabs .tg-dot { top: 7px; right: 7px; }
 .tg-trade-wallet { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--mut); font-size: 12px; } .tg-trade-wallet svg { color: var(--warm); } .tg-trade-wallet b { color: var(--tx); font: 600 13px var(--mono); }
 .tg-trade-tabs .tg-x { position: static; }
+.tg-trade-title { display: inline-flex; align-items: baseline; gap: 10px; padding: 0 12px; min-width: 0; } .tg-trade-title svg { color: var(--n); align-self: center; }
+.tg-trade-title b { font: 700 15px var(--sans); white-space: nowrap; } .tg-trade-title small { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-trade-jump { position: relative; margin-left: auto; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid rgba(255,207,58,.3); background: rgba(255,207,58,.07); color: var(--tx); font: 600 12.5px var(--sans); cursor: pointer; } .tg-trade-jump svg { color: #ffcf3a; } .tg-trade-jump small { color: var(--mut); font: 500 11px var(--mono); }
+.tg-trade-jump.hot { border-color: rgba(255,207,58,.6); }
+.tg-trade-jump + .tg-trade-wallet { margin-left: 0; }
+.tg-trade-scroll { min-height: 0; overflow-y: auto; display: block; border-radius: 14px; background: rgba(4,6,5,.92); box-shadow: 0 30px 90px -20px #000; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; }
+.tg-trade-scroll > .tt { height: min(76vh, 760px); }
+.tg-trade-scroll > * + * { margin-top: 10px; }
+.tg-trade.max .tg-trade-scroll > .tt { height: 100%; }
+.tg-trade.max .tg-trade-scroll { overflow: hidden; }
+.tg-trade-picks { overflow: visible !important; }
+.tg-tag3.chop .tg-tag3-ic { background: rgba(214,160,90,0.16); color: #e3b36d; } .tg-tag3.chop .tg-tag3-go { background: #e3b36d; }
+.tg-confirm { position: absolute; z-index: 9; left: 50%; bottom: 92px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: min(560px, calc(100% - 24px)); padding: 12px 14px; border-radius: 14px; background: rgba(7,10,9,.96); border: 1px solid rgba(227,179,109,.45); box-shadow: 0 24px 60px -20px #000; animation: tgtrade .25s ease; }
+.tg-confirm-ic { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 10px; background: rgba(227,179,109,.14); color: #e3b36d; }
+.tg-confirm div { display: grid; gap: 2px; flex: 1; min-width: 0; } .tg-confirm b { font: 700 14px var(--sans); } .tg-confirm small { color: var(--mut); font-size: 12px; }
 .tg-trade.max .tg-trade-tabs { display: none; }
 .tg-trade.max { grid-template-rows: minmax(0, 1fr); }
-.tg-trade-picks { position: relative; min-height: 0; overflow-y: auto; padding: 22px 26px 26px; border-radius: 14px; background: rgba(7,10,9,.95); border: 1px solid var(--edge); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 30px 80px -24px #000; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; }
-.tg-trade-picks .tg-pp { max-width: 1180px; margin: 0 auto; }
-.tg-picks-cols { display: grid; gap: 14px; }
+.tg-trade-picks { position: relative; padding: 24px 26px 28px; border-radius: 14px; background: #080b0a; border: 1px solid var(--edge); }
+.tg-trade-picks .tg-pp { max-width: 1240px; margin: 0 auto; }
+.tg-picks-cols { display: grid; gap: 16px; }
 .tg-picks-side, .tg-picks-main { display: grid; gap: 12px; align-content: start; min-width: 0; }
+
+/* daily picks */
+.tg-pk { --g1: #ffcf3a; --g2: #d6dde0; --g3: #e39a62; gap: 16px; }
+.tg-pk-hero { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 22px 24px; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,207,58,.18);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255,176,32,.16), transparent 55%), radial-gradient(90% 120% at 100% 100%, rgba(57,255,136,.10), transparent 60%), rgba(255,255,255,.015); }
+.tg-pk-hero h2 { margin: 2px 0 6px; font: 700 30px/1.1 var(--sans); letter-spacing: -.02em; } .tg-pk-hero h2 em { font-style: normal; color: var(--g1); }
+.tg-pk-hero .tg-sub { max-width: 56ch; margin: 0; }
+.tg-pk-ladder { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; }
+.tg-pk-ladder li { display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: 999px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.07); }
+.tg-pk-ladder span { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; } .tg-pk-ladder b { font-size: 13px; } .tg-pk-ladder small { color: var(--mut); font-size: 11px; }
+.tg-pk-ladder .r1 span { color: var(--g1); } .tg-pk-ladder .r2 span { color: var(--g2); } .tg-pk-ladder .r3 span { color: var(--g3); }
+.tg-pk-clock { flex: none; display: grid; justify-items: end; gap: 6px; }
+.tg-pk-clock small { color: var(--mut); font: 600 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.tg-pk-clock div { display: flex; gap: 6px; }
+.tg-pk-clock span { display: grid; place-items: center; min-width: 58px; padding: 9px 6px 7px; border-radius: 12px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.08); }
+.tg-pk-clock b { font: 600 28px/1 var(--mono); letter-spacing: -.02em; } .tg-pk-clock i { font-style: normal; color: var(--dim); font-size: 10px; margin-top: 3px; }
+.tg-pk-card { display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.02); border: 1px solid var(--edge); }
+.tg-pk-card h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0; font: 600 14px var(--sans); } .tg-pk-card h3 small { color: var(--mut); font: 500 11px var(--mono); }
+.tg-pk-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tg-pk-slot { --c: var(--g1); position: relative; display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 112px; padding: 14px 6px 10px; border-radius: 14px; border: 1px dashed rgba(255,255,255,.14); background: rgba(0,0,0,.2); color: var(--tx); cursor: pointer; font: inherit; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.tg-pk-slot.r2 { --c: var(--g2); } .tg-pk-slot.r3 { --c: var(--g3); }
+.tg-pk-slot .tg-pk-n { position: absolute; top: 8px; left: 9px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); font: 700 11px var(--mono); }
+.tg-pk-slot small { color: var(--dim); font-size: 10.5px; } .tg-pk-slot b { font: 700 14px var(--sans); }
+.tg-pk-plus { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px dashed rgba(255,255,255,.18); color: var(--mut); }
+.tg-pk-slot.full { border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: radial-gradient(100% 80% at 50% 0%, color-mix(in srgb, var(--c) 16%, transparent), rgba(0,0,0,.2)); box-shadow: 0 10px 30px -18px var(--c); }
+.tg-pk-slot.full .tg-av { width: 34px; height: 34px; font-size: 15px; }
+.tg-pk-slot:hover { transform: translateY(-1px); }
+.tg-pk-lock { height: 44px; font-size: 14px; } .tg-pk-lock.done { background: rgba(57,255,136,.14); color: var(--n); }
+.tg-pk-lead { list-style: none; display: grid; gap: 4px; margin: 0; padding: 0; }
+.tg-pk-lead li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.025); font-size: 12.5px; }
+.tg-pk-lead span { width: 34px; font: 700 10.5px var(--mono); text-transform: uppercase; } .tg-pk-lead em { margin-left: auto; font-style: normal; }
+.tg-pk-lead .r1 span { color: var(--g1); } .tg-pk-lead .r2 span { color: var(--g2); } .tg-pk-lead .r3 span { color: var(--g3); }
+.tg-pk-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tg-pk-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.025); color: var(--mut); }
+.tg-pk-search:focus-within { border-color: rgba(255,207,58,.45); }
+.tg-pk-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--tx); font: 500 13px var(--sans); outline: none; }
+.tg-pk-sort { display: flex; gap: 2px; padding: 3px; border-radius: 11px; background: rgba(255,255,255,.04); }
+.tg-pk-sort button { height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--mut); font: 600 12px var(--sans); cursor: pointer; } .tg-pk-sort button.on { background: rgba(255,255,255,.09); color: var(--tx); }
+.tg-pk-coins { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tg-pk-coin { width: 100%; display: grid; grid-template-columns: 24px 32px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 34px; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 13px; border: 1px solid var(--edge); background: rgba(255,255,255,.018); color: var(--tx); cursor: pointer; text-align: left; font: inherit; transition: border-color .15s ease, background .15s ease; }
+.tg-pk-coin:hover:not(:disabled) { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.035); }
+.tg-pk-coin:disabled { opacity: .45; cursor: default; }
+.tg-pk-coin.on { border-color: rgba(255,207,58,.55); background: linear-gradient(90deg, rgba(255,207,58,.10), rgba(255,207,58,.02)); }
+.tg-pk-rank { color: var(--dim); font-size: 11px; text-align: right; }
+.tg-pk-coin .tg-av { width: 32px; height: 32px; font-size: 14px; }
+.tg-pk-name { display: grid; gap: 2px; min-width: 0; } .tg-pk-name b { font: 700 14px var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tg-pk-name small { color: var(--dim); font-size: 10.5px; }
+.tg-pk-vol, .tg-pk-move { display: grid; gap: 5px; min-width: 0; }
+.tg-pk-vol small { color: var(--mut); font-size: 11px; }
+.tg-pk-vol i, .tg-pk-move i { display: block; height: 4px; border-radius: 4px; background: rgba(255,255,255,.06); overflow: hidden; }
+.tg-pk-vol s, .tg-pk-move s { display: block; height: 100%; border-radius: 4px; background: rgba(110,200,255,.7); }
+.tg-pk-move em { font-style: normal; font-size: 13px; font-weight: 600; text-align: right; }
+.tg-pk-move.up em { color: var(--up, #2fd27a); } .tg-pk-move.down em { color: var(--dn, #f0516a); }
+.tg-pk-move.up s { background: #2fd27a; margin-left: auto; } .tg-pk-move.down s { background: #f0516a; margin-left: auto; }
+.tg-pk-add { display: inline-flex; align-items: center; justify-content: center; gap: 2px; height: 30px; border-radius: 9px; border: 1px solid var(--edge); color: var(--mut); font: 700 11px var(--mono); }
+.tg-pk-coin.on .tg-pk-add { background: #ffcf3a; border-color: #ffcf3a; color: #1a1406; }
 @media (min-width: 900px) {
-  .tg-trade-picks .tg-ph h2 { font-size: 26px; }
-  .tg-picks-cols { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 22px; }
-  .tg-picks-main .tg-coins { max-height: none; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
-  .tg-picks-main .tg-coin { padding: 10px 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.02); }
-  .tg-picks-main .tg-coin.on { border-color: rgba(57,255,136,.5); background: rgba(57,255,136,.07); }
-  .tg-slot { min-height: 86px; }
+  .tg-picks-cols { grid-template-columns: minmax(320px, 400px) minmax(0, 1fr); gap: 22px; }
+  .tg-picks-side { position: sticky; top: 0; }
+}
+@media (max-width: 720px) {
+  .tg-pk-hero { flex-direction: column; align-items: stretch; padding: 16px; } .tg-pk-hero h2 { font-size: 24px; } .tg-pk-clock { justify-items: start; }
+  .tg-pk-clock span { min-width: 50px; } .tg-pk-clock b { font-size: 22px; }
+  .tg-pk-coin { grid-template-columns: 32px minmax(0, 1fr) minmax(0, .9fr) 30px; gap: 10px; } .tg-pk-rank, .tg-pk-vol { display: none; }
 }
 .tg-crosslink { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.02); color: var(--tx); cursor: pointer; text-align: left; font: inherit; transition: border-color .15s ease, background .15s ease; }
 .tg-crosslink:hover { border-color: rgba(57,255,136,.4); background: rgba(57,255,136,.05); }
@@ -621,7 +692,9 @@
   .tg-trade.show-desk .tg-trade-picks, .tg-trade.show-picks .tt { display: none; }
   .tg-trade-tabs { padding: 8px 10px; border: 0; border-bottom: 1px solid var(--edge); border-radius: 0; box-shadow: none; }
   .tg-trade-tabs button[role="tab"] { height: 36px; padding: 0 12px; font-size: 13px; }
-  .tg-trade-tabs button[role="tab"] small, .tg-trade-wallet { display: none; }
+  .tg-trade-tabs button[role="tab"] small, .tg-trade-wallet, .tg-trade-title small, .tg-trade-jump small { display: none; }
+  .tg-trade-scroll > .tt { height: auto; overflow: visible; }
+  .tg-confirm { bottom: 84px; flex-wrap: wrap; }
   .tg-trade-tabs .tg-dot { top: 6px; right: 4px; }
   .tg-trade-tabs .tg-x { margin-left: auto; }
   .tg-trade-picks { padding: 14px 14px 20px; }

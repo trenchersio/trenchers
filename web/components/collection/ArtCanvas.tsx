@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { drawArt, loadArt } from "@/lib/art-vector";
+import { drawArt, loadArtFor } from "@/lib/art-vector";
 
 const PREFIX = "";
 
@@ -12,7 +12,7 @@ export function ArtCanvas({ id, size, className, label }: { id: number; size: nu
     const c = ref.current!;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     c.width = Math.round(size * dpr); c.height = Math.round(size * dpr);
-    loadArt(PREFIX).then(() => {
+    loadArtFor([id], PREFIX).then(() => {
       if (!alive) return;
       const ctx = c.getContext("2d")!;
       drawArt(ctx, id, c.width);

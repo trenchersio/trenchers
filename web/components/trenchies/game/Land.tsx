@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { loadArt } from "@/lib/art-vector";
+import { loadArtFor } from "@/lib/art-vector";
 import { FISH_EVERY, NET_EVERY } from "@/lib/trenchies-catalog";
 import { Icon } from "./icons";
 import type { Grow, Look } from "./types";
@@ -18,6 +18,8 @@ type Props = {
   fishAt?: number; onFish?: () => void; fished?: { got: string[]; n: number } | null;
   /** A forest plot being cleared right now (the Trenchie goes and chops). */
   chop?: { id: string; n: number } | null;
+  /** The next forest plot you can clear (a tag stands on it), and tapping the forest. */
+  nextPlot?: { id: string; name: string; cost: number; note: string | null } | null; onForest?: (plot: string) => void;
   /** The trading desk: opening it, whether it's open (the Trenchie sits at its desk), and live prices for its screens. */
   onDesk?: () => void; atDesk?: boolean; ticker?: [number, number][];
   /** Placing a garden piece: the next tap on the ground comes back here. */
@@ -33,9 +35,9 @@ type Props = {
 const left = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s % 60).padStart(2, "0")}s`; };
 
 /** The living land in 3D, with HTML pinned onto it: nameplates, speech bubbles, and the desk and butterfly tags. */
-export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onNet, netted, busy, fishAt = 0, onFish, fished, chop = null, onDesk, atDesk = false, ticker, onPick = null, onSky, guests = [], follow = null, chat, className = "" }: Props & { className?: string }) {
+export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onNet, netted, busy, fishAt = 0, onFish, fished, chop = null, nextPlot = null, onForest, onDesk, atDesk = false, ticker, onPick = null, onSky, guests = [], follow = null, chat, className = "" }: Props & { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), desk = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), fishRef = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
+  const plate = useRef<HTMLDivElement>(null), bubble = useRef<HTMLDivElement>(null), pop = useRef<HTMLDivElement>(null), desk = useRef<HTMLDivElement>(null), net = useRef<HTMLDivElement>(null), fishRef = useRef<HTMLDivElement>(null), chopRef = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
   const world = useRef<import("./scene3d").World3D | null>(null);
   const latest = useRef({ look, nft, grow, guests, follow, onPick, onSky, atDesk, onDeskTap: mine ? onDesk : undefined }); latest.current = { look, nft, grow, guests, follow, onPick, onSky, atDesk, onDeskTap: mine ? onDesk : undefined };
   const seen = useRef<number>(-1);
@@ -44,13 +46,13 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
     // phones: a lighter renderer and at most ~40 frames a second (a hidden tab doesn't draw at all)
     const slow = window.matchMedia?.("(max-width: 720px)").matches || (navigator.hardwareConcurrency ?? 8) <= 4;
     (async () => {
-      const [{ World3D }] = await Promise.all([import("./scene3d"), loadArt().catch(() => null)]);
+      const [{ World3D }] = await Promise.all([import("./scene3d"), loadArtFor([latest.current.nft, ...latest.current.guests.map((g) => g.nft)]).catch(() => null)]);
       if (!alive) return;
       const w = (world.current = new World3D(c, latest.current.look, latest.current.nft, { lite: slow }));
       w.setGrow(latest.current.grow);
       // ?debug in the URL: the world is reachable from the console (camera, time of day) for checks and screenshots
       if (/[?&]debug\b/.test(window.location.search)) (window as unknown as { __world: unknown }).__world = w;
-      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, desk: desk.current, net: net.current, fish: fishRef.current, layer: layer.current });
+      w.attach({ plate: plate.current, bubble: bubble.current, pop: pop.current, desk: desk.current, net: net.current, fish: fishRef.current, chop: chopRef.current, layer: layer.current });
       w.setGuests(latest.current.guests, latest.current.follow);
       w.setDesk(latest.current.atDesk);
       if (latest.current.onPick) w.onGround = (x, y) => latest.current.onPick?.(x, y);
@@ -72,17 +74,19 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
     c.addEventListener("pointerdown", pd); c.addEventListener("pointerup", pu);
     return () => { alive = false; cancelAnimationFrame(raf); ro?.disconnect(); c.removeEventListener("pointerdown", pd); c.removeEventListener("pointerup", pu); world.current?.dispose(); world.current = null; };
   }, []);
-  useEffect(() => { world.current?.setLook(look, nft); }, [look, nft]);
   useEffect(() => { world.current?.setGrow(grow); }, [grow]);
   useEffect(() => { if (celebrate) world.current?.celebrate(); }, [celebrate]);
   useEffect(() => { if (netted) world.current?.net(netted.got); }, [netted]);
   useEffect(() => { world.current?.setDesk(atDesk); }, [atDesk]);
   useEffect(() => { if (fished) world.current?.fish(fished.got); }, [fished]);
   useEffect(() => { if (chop) world.current?.chopPlot(chop.id); }, [chop]);
+  const forestRef = useRef(onForest); forestRef.current = onForest;
+  useEffect(() => { const w = world.current; if (!w) return; w.chopTag = mine && nextPlot ? nextPlot.id : null; w.onForest = mine ? (p) => forestRef.current?.(p) : null; });
   useEffect(() => { if (ticker) world.current?.setTicker(ticker); }, [ticker]);
   useEffect(() => { if (world.current) world.current.onGround = onPick ? (x, y) => latest.current.onPick?.(x, y) : null; }, [onPick]);
   const gkey = guests.map((g) => `${g.name}:${g.level}`).join();
-  useEffect(() => { world.current?.setGuests(latest.current.guests, latest.current.follow); }, [gkey, follow]);
+  useEffect(() => { void loadArtFor(latest.current.guests.map((g) => g.nft)).catch(() => null).then(() => world.current?.setGuests(latest.current.guests, latest.current.follow)); }, [gkey, follow]);
+  useEffect(() => { void loadArtFor([nft]).catch(() => null).then(() => world.current?.setLook(look, nft)); }, [look, nft]);
   useEffect(() => {
     // the first load just remembers where the chat is; lines after that get bubbles
     if (!chat) return;
@@ -129,6 +133,12 @@ export function Land({ look, nft, celebrate = 0, grow, now, mine, netAt = 0, onN
             <span className="tg-tag3-ic"><Icon n="fish" size={15} /></span>
             <span className="tg-tag3-t"><small>Fishing · every {FISH_EVERY / 60} min</small><b>{bite ? "Something's biting" : left(fishAt - now * 1000)}</b></span>
             {bite && <button type="button" className="tg-tag3-go" disabled={busy === "fish"} onClick={() => onFish()}>{busy === "fish" ? "…" : "Cast"}</button>}
+          </div><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>)}</div>
+        <div ref={chopRef} className="tg-pin tg-pin-tag">{mine && nextPlot && (
+          <div className="tg-pin-in"><div className="tg-tag3 chop">
+            <span className="tg-tag3-ic"><Icon n="axe" size={15} /></span>
+            <span className="tg-tag3-t"><small>Forest · {nextPlot.cost} coins</small><b>{nextPlot.note ?? nextPlot.name}</b></span>
+            {!nextPlot.note && <button type="button" className="tg-tag3-go" onClick={() => onForest?.(nextPlot.id)}>Chop</button>}
           </div><i className="tg-tag3-stem" /><i className="tg-tag3-dot" /></div>)}</div>
         <div ref={plate} className="tg-pin"><div className="tg-plate"><span className="tg-plate-lv">Lv {look.level ?? 1}</span><b>{look.name}</b>{look.x && <span className="tg-plate-x"><Icon n="x" size={9} />{look.x}</span>}</div></div>
         <div className="tg-pin tg-bubble" ref={bubble} />
