@@ -311,16 +311,20 @@ function Use({ n, xp, title, text, href, cta, unit = "" }: { n: number; xp: numb
   );
 }
 
-/** The giveaway prize pool: the ETH in the $TRENCHERS deployer wallet (live), plus Trencher NFTs. */
+/** The giveaway prize pool: the ETH and $TRENCHERS in the $TRENCHERS deployer wallet (live, tokens at the Pons price), plus Trencher NFTs. */
 const MILESTONES = [0.25, 0.5, 1, 2, 3, 5, 10, 20, 50, 100];
 function PrizePool() {
-  const [g, setG] = useState<{ wallet: string | null; eth: string | null; nfts: number; updatedAt: number } | null>(null);
+  const [g, setG] = useState<{ wallet: string | null; eth: string | null; nfts: number; updatedAt: number; trenchers?: number | null; trenchersEth?: number | null; totalEth?: number | null } | null>(null);
   const [shown, setShown] = useState(0);
   useEffect(() => {
     const load = () => fetch(`${ENGINE_URL}/giveaway`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j && "eth" in j) setG(j); }).catch(() => {});
     load(); const t = setInterval(load, 30_000); return () => clearInterval(t);
   }, []);
-  const eth = g?.eth ? Number(g.eth) : null;
+  const ethOnly = g?.eth ? Number(g.eth) : null;
+  // The meter tracks the whole pool: ETH plus the $TRENCHERS held, valued in ETH.
+  const eth = g?.totalEth ?? ethOnly;
+  const tokEth = g?.trenchersEth ?? null, tok = g?.trenchers ?? null;
+  const compact = (v: number) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
   // count up to the balance once it arrives
   useEffect(() => {
     if (eth === null) return;
@@ -340,12 +344,15 @@ function PrizePool() {
         <b className="mono">{eth === null ? "…" : shown.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}<span> ETH</span></b>
         <em>+ {nfts} Trencher NFTs</em>
       </div>
-      <div className="tx-meter" role="meter" aria-valuemin={prev} aria-valuemax={next} aria-valuenow={eth ?? 0} aria-label="Prize pool in ETH">
+      {tokEth !== null && tok !== null && tok > 0 && ethOnly !== null && (
+        <div className="tx-pool-split mono"><span><i className="eth" />{ethOnly.toFixed(3)} ETH</span><span><i className="tr" />{compact(tok)} $TRENCHERS ≈ {tokEth.toFixed(3)} ETH</span></div>
+      )}
+      <div className="tx-meter" role="meter" aria-valuemin={prev} aria-valuemax={next} aria-valuenow={eth ?? 0} aria-label="Prize pool in ETH, $TRENCHERS included">
         <i style={{ width: `${fill * 100}%` }} />
         {Array.from({ length: 9 }, (_, k) => <s key={k} style={{ left: `${(k + 1) * 10}%` }} />)}
       </div>
       <div className="tx-meter-k mono"><span>{prev} ETH</span><span>next: {next} ETH</span></div>
-      <p className="tx-fine">Held in the $TRENCHERS deployer wallet{g?.wallet && <> <a className="mono" href={`${EXPLORER}/address/${g.wallet}`} target="_blank" rel="noreferrer">{g.wallet.slice(0, 6)}…{g.wallet.slice(-4)} ↗</a></>}. Earn XP to be in the running.</p>
+      <p className="tx-fine">ETH and $TRENCHERS held in the $TRENCHERS deployer wallet, the tokens valued at the live Pons price{g?.wallet && <> <a className="mono" href={`${EXPLORER}/address/${g.wallet}`} target="_blank" rel="noreferrer">{g.wallet.slice(0, 6)}…{g.wallet.slice(-4)} ↗</a></>}. Earn XP to be in the running.</p>
     </section>
   );
 }

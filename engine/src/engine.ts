@@ -721,6 +721,18 @@ export class Engine {
     return ((r.eth * coins) / (r.coins + coins)) * 98n / 100n;
   }
 
+  /** Spot price of a Pons coin in ETH per whole coin (no price impact, no fees): curve or pool. */
+  async spotPrice(token: Address): Promise<number | null> {
+    const tok = this.tokens.get(lc(token)) ?? (await this.ensureToken(lc(token)).catch(() => null));
+    if (!tok) return null;
+    if (!(await this.onPool(tok))) {
+      const [q, k] = await this.pub.readContract({ address: tok.curve, abi: CURVE_ABI, functionName: "getReserves" });
+      return k > 0n ? Number(q) / Number(k) : null;
+    }
+    const r = await this.poolReserves(tok);
+    return r.coins > 0n ? Number(r.eth) / Number(r.coins) : null;
+  }
+
   /** Exact result of a trade, by simulating the agent wallet's own call from the engine (minOut 0). */
   private async simulateTrade(wallet: Address, value: bigint, data: Hex): Promise<bigint> {
     const { result } = await this.pub.simulateContract({ address: wallet, abi: AGENT_ABI, functionName: "trade", args: [value, data], account: this.wallet?.account ?? this.engineAddress! });

@@ -102,6 +102,10 @@
 .tx-pool-big b { font-size: clamp(40px, 9vw, 64px); line-height: 1; letter-spacing: -.03em; color: #ffcf3a; text-shadow: 0 0 34px rgba(255,207,58,.45); font-variant-numeric: tabular-nums; }
 .tx-pool-big b span { font-size: .45em; color: var(--fog); text-shadow: none; letter-spacing: 0; }
 .tx-pool-big em { font-style: normal; font: 600 18px var(--sans); color: var(--n); }
+.tx-pool-split { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; color: var(--quiet); font-size: 12px; }
+.tx-pool-split span { display: inline-flex; align-items: center; gap: 7px; }
+.tx-pool-split i { width: 8px; height: 8px; border-radius: 50%; background: #ffcf3a; }
+.tx-pool-split i.tr { background: var(--green, #39FF88); }
 .tx-meter { position: relative; height: 14px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
 .tx-meter i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: linear-gradient(90deg, #ff9f1a, #ffcf3a 70%, #fff3b8); box-shadow: 0 0 22px rgba(255,207,58,.6); transition: width 1.4s cubic-bezier(.2,.9,.3,1); }
 .tx-meter i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: txshine 2.6s ease-in-out infinite; }
