@@ -22,7 +22,7 @@ test("original posts: sent in once, one a day, reviewed by the team", async () =
   const X = x as unknown as { users: Map<string, unknown>; session: (id: string) => string; tasks: () => Promise<unknown[]> };
   X.tasks = async () => [];
   const mk = (id: string, handle: string) => { X.users.set(id, { id, handle, name: handle, avatar: "", createdAt: 0, lastSeen: 0, xp: 0, followed: null, done: {}, log: [] }); return X.session(id); };
-  const a = mk("10", "alice"), team = mk("20", "trenchersio");
+  const a = mk("10", "alice"), team = mk("20", "trenchersx");
   const call = async (op: string, body?: Record<string, unknown>, s?: string) => {
     const raw = body ? JSON.stringify(body) : "";
     const req = Object.assign((async function* () { if (raw) yield raw; })(), { method: body ? "POST" : "GET", url: `/xp/${op}${body ? "" : `?s=${s}`}`, headers: {} });
