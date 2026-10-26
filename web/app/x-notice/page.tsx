@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ROUTES } from "@/lib/constants";
 
-const TELEGRAM = "https://t.me/+zukclspjgK8zYzA8";
+const TELEGRAM = "https://t.me/trenchersio";
 const DEV = "https://t.me/tunafishcannn";
 
 export const metadata: Metadata = { title: "X Suspension Notice · Trenchers", description: "Our X account is temporarily suspended. All protocols are running as they should. Join our Telegram group in the meantime." };

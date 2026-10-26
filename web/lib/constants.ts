@@ -42,7 +42,7 @@ export const TELEGRAM_FEED = process.env.NEXT_PUBLIC_TELEGRAM_FEED_URL ?? "https
 export const SOCIALS = {
   x: "/x-notice", // our X account is suspended for now: every X link leads to the notice
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "",
-  telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "https://t.me/+zukclspjgK8zYzA8",
+  telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "https://t.me/trenchersio",
 };
 
 // Page links. The static preview serves pages as .html files next to each other.
