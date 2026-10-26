@@ -3152,3 +3152,7 @@ a.ct-wallet:hover { color: var(--tone, var(--green)); }
 }
 .ct .cpa-pct button.on { background: color-mix(in srgb, var(--tone, var(--violet)) 18%, transparent); color: var(--tone, var(--violet)); }
 .ct-stats small, .ct-last { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Temporary notice on the home page (X account suspended). */
+.x-notice { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px; padding-block: 11px; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); background: rgba(255,176,32,.12); border-bottom: 1px solid rgba(255,176,32,.45); color: var(--fog); font-size: 14px; line-height: 1.45; text-align: center; }
+.x-notice-k { flex: none; padding: 3px 8px; border-radius: 6px; background: var(--amber); color: #0B0D0C; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }

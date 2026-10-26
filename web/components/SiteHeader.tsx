@@ -67,6 +67,12 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
         </nav>
         <MobileMenu page={page} />
       </header>
+      {page === "home" && (
+        <div className="x-notice" role="status">
+          <span className="x-notice-k mono">Notice</span>
+          <span>Our X account has been suspended. We&apos;re working to get it back up. Until then, this site is the place for official news, and please be careful with accounts claiming to be us.</span>
+        </div>
+      )}
       <FlywheelBand on={where} wide={wide} />
       <WakeBanner page={page} />
       <ConnectModal />
