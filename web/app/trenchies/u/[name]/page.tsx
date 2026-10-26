@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   const p = await load(name);
   const title = p ? `${p.name}'s land · Trenchies` : "Trenchies";
   const description = p ? `A level ${p.level} Trenchie with a land worth ${p.landValue.toLocaleString("en-US")} bricks. Pick coins, build your land, catch butterflies. Come build next to them.` : "Pick coins, build your land, catch butterflies.";
-  return { title, description, robots: { index: false, follow: false }, openGraph: { title, description, siteName: "Trenchers", type: "website" }, twitter: { card: "summary_large_image", site: "@trenchersio", title, description } };
+  return { title, description, robots: { index: false, follow: false }, openGraph: { title, description, siteName: "Trenchers", type: "website" }, twitter: { card: "summary_large_image", site: "@trenchersx", title, description } };
 }
 
 /** A Trenchie's land, public: the share link players post (and the invite link: it carries their name as the referrer). */

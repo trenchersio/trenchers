@@ -1034,5 +1034,5 @@ Nothing in this repository or on the website is financial advice. Trading newly 
 
 **New products.** Inference Markets, the P2P Marketplace, the V4 Builder and Trenchers Credit are new and may still
 have bugs; Trenchers Credit's contracts have had internal reviews and a large test suite, not an external audit.
-Backers in Trenchers Credit can lose part of their backing if loans default, and can't leave without 7 days' notice. Use them with care, start small, and report anything that looks wrong to the team ([X suspension notice](https://www.trenchers.io/x-notice), Telegram: [t.me/tunafishcannn](https://t.me/tunafishcannn)).
+Backers in Trenchers Credit can lose part of their backing if loans default, and can't leave without 7 days' notice. Use them with care, start small, and report anything that looks wrong to [@trenchersx](https://x.com/trenchersx).
 Coins launched through the V4 Builder are created by their launchers, not by Trenchers.

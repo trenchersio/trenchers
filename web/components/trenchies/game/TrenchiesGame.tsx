@@ -194,7 +194,7 @@ export function TrenchiesGame() {
   };
   const shareLand = () => {
     if (!me) return;
-    const text = `My Trenchie ${me.name} is level ${me.level} with a land worth ${me.landValue.toLocaleString("en-US")} coins. Come build next to me in Trenchies by @trenchersio`;
+    const text = `My Trenchie ${me.name} is level ${me.level} with a land worth ${me.landValue.toLocaleString("en-US")} coins. Come build next to me in Trenchies by @trenchersx`;
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(inviteUrl(me.name))}`, "_blank", "noopener");
     void call("shared", {}).then((j) => apply(j.me)).catch(() => {});
   };

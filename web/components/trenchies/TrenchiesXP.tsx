@@ -1,7 +1,7 @@
 "use client";
 /**
  * trenchers.io/trenchies before the game opens: sign in with X, earn XP and climb the leaderboard.
- * Follow @trenchersio once, like and reply to its latest posts every day, and link a wallet for XP from using
+ * Follow @trenchersx once, like and reply to its latest posts every day, and link a wallet for XP from using
  * Trenchers (Trencher NFTs, their trades, coins launched, inference bought). Everything is checked by the engine.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -151,10 +151,10 @@ export function TrenchiesXP() {
               <ol className="tx-posts">
                 {me.posts.map((p) => (
                   <li key={p.id}>
-                    <a className="tx-post" href="/x-notice" target="_blank" rel="noreferrer"><X s={12} /><span>{p.text.length > 160 ? `${p.text.slice(0, 157)}…` : p.text}</span><small className="mono">{ago(p.at)}</small></a>
+                    <a className="tx-post" href={`https://x.com/${me.account}/status/${p.id}`} target="_blank" rel="noreferrer"><X s={12} /><span>{p.text.length > 160 ? `${p.text.slice(0, 157)}…` : p.text}</span><small className="mono">{ago(p.at)}</small></a>
                     <div className="tx-acts">
-                      <Task done={p.liked} label="Like" xp={rules.like} wait={!!pending[`like:${p.id}`]} busy={busy === `like:${p.id}`} go={() => open("/x-notice", `like:${p.id}`)} check={() => void check(`like:${p.id}`)} />
-                      <Task done={p.replied} label="Reply" xp={rules.reply} wait={!!pending[`reply:${p.id}`]} busy={busy === `reply:${p.id}`} go={() => open("/x-notice", `reply:${p.id}`)} check={() => void check(`reply:${p.id}`)} />
+                      <Task done={p.liked} label="Like" xp={rules.like} wait={!!pending[`like:${p.id}`]} busy={busy === `like:${p.id}`} go={() => open(`https://x.com/intent/like?tweet_id=${p.id}`, `like:${p.id}`)} check={() => void check(`like:${p.id}`)} />
+                      <Task done={p.replied} label="Reply" xp={rules.reply} wait={!!pending[`reply:${p.id}`]} busy={busy === `reply:${p.id}`} go={() => open(`https://x.com/intent/tweet?in_reply_to=${p.id}`, `reply:${p.id}`)} check={() => void check(`reply:${p.id}`)} />
                     </div>
                   </li>
                 ))}
@@ -171,7 +171,7 @@ export function TrenchiesXP() {
             <div className="tx-once">
               <div className={`tx-row${me.followed ? " done" : ""}`}>
                 <span className="tx-ic"><X s={16} /></span><div><b>Follow <XLink h={me.account} /></b><small>+{rules.follow} XP</small></div>
-                <Task done={me.followed} label="Follow" xp={rules.follow} wait={!!pending.follow} busy={busy === "follow"} go={() => open("/x-notice", "follow")} check={() => void check("follow")} />
+                <Task done={me.followed} label="Follow" xp={rules.follow} wait={!!pending.follow} busy={busy === "follow"} go={() => open(`https://x.com/intent/follow?screen_name=${me.account}`, "follow")} check={() => void check("follow")} />
               </div>
             </div>
           </div>
@@ -202,7 +202,7 @@ export function TrenchiesXP() {
         <section className="tx-how">
           <h2>How to earn</h2>
           <ul>
-            <li><b className="mono">+{rules.follow}</b><span>Follow <XLink h="trenchersio" /> (once)</span></li>
+            <li><b className="mono">+{rules.follow}</b><span>Follow <XLink h="trenchersx" /> (once)</span></li>
             <li><b className="mono">+{rules.like}</b><span>Like each of its latest posts, every day</span></li>
             <li><b className="mono">+{rules.reply}</b><span>Reply to each of its latest posts, every day</span></li>
             <li><b className="mono">+{rules.original}</b><span>Write your own post about Trenchies (one a day, checked by the team)</span></li>
@@ -236,7 +236,7 @@ export function TrenchiesXP() {
   );
 }
 
-const POST_TEXT = "My Trencher is getting its own land in Trenchies, the game coming to @trenchersio. Earning XP before it opens:";
+const POST_TEXT = "My Trencher is getting its own land in Trenchies, the game coming to @trenchersx. Earning XP before it opens:";
 function OriginalCard({ me, rules, session, onMe, say }: { me: Me; rules: Rules; session: string; onMe: (m: Me) => void; say: (t: string, good?: boolean) => void }) {
   const [url, setUrl] = useState(""), [busy, setBusy] = useState(false);
   const today = Math.floor(Date.now() / 86_400_000), used = me.originals.filter((o) => o.status !== "no" && Math.floor(o.at / 86_400_000) === today).length >= rules.originalsPerDay;
@@ -295,7 +295,7 @@ function ReviewCard({ session, count, say, onDone }: { session: string; count: n
 }
 
 /** An @handle that opens the X profile. */
-function XLink({ h }: { h: string }) { return <a className="tx-xlink" href="/x-notice" target="_blank" rel="noreferrer">@{h}</a>; }
+function XLink({ h }: { h: string }) { return <a className="tx-xlink" href={`https://x.com/${h}`} target="_blank" rel="noreferrer">@{h}</a>; }
 
 function Task({ done, label, xp, wait, busy, go, check }: { done: boolean; label: string; xp: number; wait: boolean; busy: boolean; go: () => void; check: () => void }) {
   if (done) return <span className="tx-done mono">✓ +{xp}</span>;

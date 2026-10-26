@@ -40,7 +40,7 @@ export const TELEGRAM_FEED = process.env.NEXT_PUBLIC_TELEGRAM_FEED_URL ?? "https
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
-  x: "/x-notice", // our X account is suspended for now: every X link leads to the notice
+  x: "https://x.com/trenchersx",
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "",
   telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "https://t.me/trenchersio",
 };

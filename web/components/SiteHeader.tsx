@@ -35,7 +35,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   const community: NavItem[] = [
     { label: "Chat", href: ROUTES.chat, hint: CHAT_OPEN ? "For Trenchers holders" : "Opens after the $TRENCHERS launch", disabled: !CHAT_OPEN, unread: "chat" },
     ...(TELEGRAM_FEED ? [{ label: "Live feed", href: TELEGRAM_FEED, hint: "Every mint, awakening and sale, on Telegram", external: true }] : []),
-    ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersio", external: true }] : []),
+    ...(SOCIALS.x ? [{ label: "X", href: SOCIALS.x, hint: "@trenchersx", external: true }] : []),
     ...(SOCIALS.discord ? [{ label: "Discord", href: SOCIALS.discord, external: true }] : []),
     ...(SOCIALS.telegram ? [{ label: "Telegram", href: SOCIALS.telegram, external: true }] : []),
     { label: "GitHub", href: GITHUB_URL, hint: "Contracts, site and docs", external: true },
@@ -67,12 +67,6 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
         </nav>
         <MobileMenu page={page} />
       </header>
-      {page === "home" && (
-        <div className="x-notice" role="status">
-          <span className="x-notice-k mono">Notice</span>
-          <span>Our X account is temporarily suspended and we&apos;re working to get it back. All protocols are running as normal. <a href="/x-notice">Read the notice</a> · <a href="https://t.me/trenchersio" target="_blank" rel="noreferrer">Join our Telegram ↗</a> · <a href="https://t.me/tunafishcannn" target="_blank" rel="noreferrer">Contact the dev ↗</a></span>
-        </div>
-      )}
       <FlywheelBand on={where} wide={wide} />
       <WakeBanner page={page} />
       <ConnectModal />

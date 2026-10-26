@@ -6,7 +6,7 @@ import { getAddress, isAddress, verifyMessage } from "viem";
 
 /**
  * Trenchies early XP: sign in with X on trenchers.io/trenchies, then earn XP before the game opens.
- *   follow @trenchersio once          +5 XP
+ *   follow @trenchersx once          +5 XP
  *   like each of its recent posts      +1 XP per post
  *   reply to each of its recent posts  +1 XP per post
  * And for using Trenchers, once a wallet is linked (one signature):
@@ -26,9 +26,9 @@ import { getAddress, isAddress, verifyMessage } from "viem";
  * Settings (Railway, Mainnet service):
  *   X_CLIENT_ID, X_CLIENT_SECRET  the OAuth 2.0 keys of your X developer app (User authentication settings:
  *                                 type "Web App", callback URL https://<engine>/xp/callback, website trenchers.io)
- *   X_BEARER_TOKEN                optional: the app's bearer token, used to read @trenchersio's posts before the
+ *   X_BEARER_TOKEN                optional: the app's bearer token, used to read @trenchersx's posts before the
  *                                 account itself has signed in here
- *   X_ACCOUNT                     the account to follow (default trenchersio)
+ *   X_ACCOUNT                     the account to follow (default trenchersx)
  *   X_REDIRECT_URI                optional: the exact callback URL, if it differs from https://<host>/xp/callback
  *   XPOINTS_FILE                  where profiles are kept (default next to the chat file, on the volume)
  *   XPOINTS_BUDGET_USD            daily cap on X API spend for checks (default 5)
@@ -37,7 +37,7 @@ const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g
 const FILE = clean(process.env.XPOINTS_FILE) || `${dirname(clean(process.env.CHAT_FILE) || "./chat.json")}/xpoints.json`;
 const SECRET = clean(process.env.XPOINTS_SECRET) || clean(process.env.TRENCHIES_SECRET) || clean(process.env.CHAT_SECRET) || randomBytes(32).toString("hex");
 const ID = () => clean(process.env.X_CLIENT_ID), KEY = () => clean(process.env.X_CLIENT_SECRET), BEARER = () => clean(process.env.X_BEARER_TOKEN);
-const ACCOUNT = () => (clean(process.env.X_ACCOUNT) || "trenchersio").replace(/^@/, "");
+const ACCOUNT = () => (clean(process.env.X_ACCOUNT) || "trenchersx").replace(/^@/, "");
 const BUDGET = () => Number(clean(process.env.XPOINTS_BUDGET_USD) || 5);
 const SITE = () => (clean(process.env.SITE_URL) || "https://www.trenchers.io").replace(/\/$/, "");
 const API = "https://api.x.com/2";
@@ -139,7 +139,7 @@ export class XPoints {
     if (j.data?.id) { this.account.id = j.data.id; this.save(); }
     return this.account.id;
   }
-  /** @trenchersio's latest posts (not replies or reposts), refreshed every 10 minutes. */
+  /** @trenchersx's latest posts (not replies or reposts), refreshed every 10 minutes. */
   async tasks(userToken?: string) {
     if (Date.now() - this.posts.at < 10 * 60_000 && this.posts.list.length) return this.posts.list;
     const owner = await this.ownerToken(), t = owner ?? BEARER() ?? userToken; if (!t) return this.posts.list;

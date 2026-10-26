@@ -3153,17 +3153,3 @@ a.ct-wallet:hover { color: var(--tone, var(--green)); }
 .ct .cpa-pct button.on { background: color-mix(in srgb, var(--tone, var(--violet)) 18%, transparent); color: var(--tone, var(--violet)); }
 .ct-stats small, .ct-last { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Temporary notice on the home page (X account suspended). */
-.x-notice { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px; padding-block: 11px; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); background: rgba(255,176,32,.12); border-bottom: 1px solid rgba(255,176,32,.45); color: var(--fog); font-size: 14px; line-height: 1.45; text-align: center; }
-.x-notice-k { flex: none; padding: 3px 8px; border-radius: 6px; background: var(--amber); color: #0B0D0C; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.x-notice a { color: var(--amber); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-.xn { max-width: 720px; margin: 0 auto; padding-block: 80px 96px; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
-.xn-k { margin: 0; display: inline-flex; align-items: center; gap: 8px; color: var(--amber); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
-.xn-k i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px var(--amber); }
-.xn h1 { margin: 0; font: 700 clamp(34px, 6vw, 56px)/1.05 var(--sans); letter-spacing: -.02em; text-wrap: balance; }
-.xn-body { display: grid; gap: 14px; padding: 24px; border: 1px solid rgba(255,176,32,.35); border-radius: 16px; background: rgba(255,176,32,.06); }
-.xn-body p { margin: 0; font-size: 17px; line-height: 1.6; color: var(--fog); }
-.xn-body b { color: var(--green); }
-.xn-act { display: flex; flex-wrap: wrap; gap: 12px; }
-.xn-act a { text-decoration: none; }
-.xn-fine { margin: 0; color: var(--quiet); font-size: 12px; }
