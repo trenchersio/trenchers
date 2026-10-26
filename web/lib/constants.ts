@@ -40,9 +40,9 @@ export const TELEGRAM_FEED = process.env.NEXT_PUBLIC_TELEGRAM_FEED_URL ?? "https
 
 // Social links: leave a variable empty to hide that link.
 export const SOCIALS = {
-  x: process.env.NEXT_PUBLIC_X_URL || "https://x.com/trenchersio",
+  x: "/x-notice", // our X account is suspended for now: every X link leads to the notice
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "",
-  telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "",
+  telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "https://t.me/+zukclspjgK8zYzA8",
 };
 
 // Page links. The static preview serves pages as .html files next to each other.

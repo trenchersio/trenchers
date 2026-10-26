@@ -3,6 +3,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { ROUTES } from "@/lib/constants";
 
 const TELEGRAM = "https://t.me/+zukclspjgK8zYzA8";
+const DEV = "https://t.me/tunafishcannn";
 
 export const metadata: Metadata = { title: "X Suspension Notice · Trenchers", description: "Our X account is temporarily suspended. All protocols are running as they should. Join our Telegram group in the meantime." };
 
@@ -20,6 +21,7 @@ export default function XNotice() {
         </div>
         <div className="xn-act">
           <a className="gf-btn go" href={TELEGRAM} target="_blank" rel="noreferrer">Join the Telegram group ↗</a>
+          <a className="gf-btn ghost" href={DEV} target="_blank" rel="noreferrer">Contact the dev on Telegram ↗</a>
           <a className="gf-btn ghost" href={ROUTES.home}>Back to trenchers.io</a>
         </div>
         <p className="xn-fine mono">Be careful with accounts claiming to be us. Official links are on trenchers.io.</p>
