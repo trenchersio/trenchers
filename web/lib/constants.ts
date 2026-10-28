@@ -75,3 +75,4 @@ export const ENGINE_URL = (process.env.NEXT_PUBLIC_ENGINE_URL || (MAINNET ? "htt
 
 /** Trenchers Credit is deployed and open. Until then the site marks it "coming soon" (flip with the contract addresses in lib/credit.ts). */
 export const CREDIT_LIVE = true;
+
