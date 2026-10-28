@@ -6,7 +6,7 @@ import { getAddress, isAddress, verifyMessage } from "viem";
 
 /**
  * Trenchies early XP: sign in with X on trenchers.io/trenchies, then earn XP before the game opens.
- *   follow @trenchersx once           +5 XP
+ *   follow @trenchersx once            +5 XP
  *   like each of its recent posts      +1 XP per post
  *   reply to each of its recent posts  +1 XP per post
  * And for using Trenchers, once a wallet is linked (one signature):
