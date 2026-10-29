@@ -41,7 +41,7 @@ export const ENV = {
   LOG_RANGE_MAX: BigInt(opt("LOG_RANGE_MAX", "50000")),
   /** On a restart, every Pons coin's curve trades are read only for this many recent blocks. */
   CURVE_REPLAY_BLOCKS: BigInt(opt("CURVE_REPLAY_BLOCKS", "100000")),
-  POLL_MS: Number(opt("POLL_MS", "6000")),
+  POLL_MS: Number(opt("POLL_MS", "12000")),
   /** ETH price in USD, for "volume crosses $X" rules. */
   ETH_USD: Number(opt("ETH_USD", "3000")),
   /** Pons charges a snipe tax in the first seconds after launch (99% decaying to 0 over ~5s); buys wait this long. */

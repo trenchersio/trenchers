@@ -47,17 +47,17 @@ export function transport(list: string[], opts: { retryCount?: number; retryDela
 
 /**
  * A hard ceiling on RPC use, for the whole process (engine, inference desk, builder index, everything).
- * - RPC_MAX_PER_DAY (default 100,000): the day's budget, per UTC day.
+ * - RPC_MAX_PER_DAY (default 60,000): the day's budget, per UTC day.
  * - RPC_MAX_PER_MIN (default 400): a burst allowance, so trades in a busy minute are never slowed.
- * - Once the day's budget is spent, RPC_SLOW_PER_MIN (default 20) a minute until the day ends: the Arena and
- *   trading keep going, slowly, and the bill stays bounded (at most ~129,000 requests a day with the defaults).
+ * - Once the day's budget is spent, RPC_SLOW_PER_MIN (default 10) a minute until the day ends: the Arena and
+ *   trading keep going, slowly, and the bill stays bounded (at most ~74,000 requests a day with the defaults).
  * A bug or a restart loop can therefore never run up the RPC bill again. /health shows the budget.
  */
 const num = (v: string | undefined, d: number) => { const n = Number((v ?? "").trim()); return Number.isFinite(n) && n > 0 ? n : d; };
 export const budget = new (class Budget {
   readonly perMin = num(process.env.RPC_MAX_PER_MIN, 400);
-  readonly perDay = num(process.env.RPC_MAX_PER_DAY, 100_000);
-  readonly slowPerMin = num(process.env.RPC_SLOW_PER_MIN, 20);
+  readonly perDay = num(process.env.RPC_MAX_PER_DAY, 60_000);
+  readonly slowPerMin = num(process.env.RPC_SLOW_PER_MIN, 10);
   private times: number[] = [];
   private day = new Date().toISOString().slice(0, 10);
   usedToday = 0;
