@@ -32,7 +32,7 @@ export type Result = {
 export class Backtest {
   private series = new Map<Address, Series>();
   private cursor = 0n;
-  private span = new Span(50_000n);
+  private span = new Span(30_000n);
   private running = false;
   updatedAt = 0;
   status = "waiting for the engine to start";

@@ -38,7 +38,7 @@ export const ENV = {
   /** Max blocks per log query, for RPCs that cap ranges. */
   LOG_RANGE: BigInt(opt("LOG_RANGE", "5000")),
   /** Largest window of blocks per log query; windows grow up to this while the chain is quiet. */
-  LOG_RANGE_MAX: BigInt(opt("LOG_RANGE_MAX", "50000")),
+  LOG_RANGE_MAX: BigInt(opt("LOG_RANGE_MAX", "30000")),
   /** On a restart, every Pons coin's curve trades are read only for this many recent blocks. */
   CURVE_REPLAY_BLOCKS: BigInt(opt("CURVE_REPLAY_BLOCKS", "100000")),
   POLL_MS: Number(opt("POLL_MS", "12000")),

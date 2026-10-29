@@ -33,7 +33,23 @@ export function rpcStats() {
     sinceStart: { since: new Date(since).toISOString(), total, perDayIncludingStartup: Math.round((total / hours) * 24), byMethod: Object.fromEntries([...counts].sort((a, b) => b[1] - a[1])) } };
 }
 
-export function transport(list: string[], opts: { retryCount?: number; retryDelay?: number; timeout?: number } = {}): Transport {
+/**
+ * Robinhood's free public RPC goes first and a paid Alchemy URL is only the backup, so the bill is only what the
+ * public RPC can't serve. Set RPC_PAID_FIRST=1 to use the paid URL first again.
+ */
+export function freeFirst(list: string[]): string[] {
+  if (/^(1|true|yes)$/i.test((process.env.RPC_PAID_FIRST ?? "").trim())) return list;
+  const free: string[] = [];
+  for (const u of list) {
+    if (/robinhood-mainnet\.g\.alchemy\.com/i.test(u)) free.push("https://rpc.mainnet.chain.robinhood.com");
+    else if (/robinhood-testnet\.g\.alchemy\.com/i.test(u)) free.push("https://rpc.testnet.chain.robinhood.com");
+  }
+  const out = [...new Set(free)].filter((f) => !list.some((u) => u.replace(/\/$/, "") === f));
+  return [...out, ...list];
+}
+
+export function transport(given: string[], opts: { retryCount?: number; retryDelay?: number; timeout?: number } = {}): Transport {
+  const list = freeFirst(given);
   const ts = list.map((u) => http(u, { retryCount: opts.retryCount ?? 1, retryDelay: opts.retryDelay ?? 1_000, timeout: opts.timeout ?? 20_000,
     onFetchRequest: async (req) => { try { count(await req.clone().json()); } catch { count(null); } } }));
   const inner = ts.length === 1 ? ts[0] : fallback(ts, { rank: false, retryCount: 1 });
@@ -47,17 +63,17 @@ export function transport(list: string[], opts: { retryCount?: number; retryDela
 
 /**
  * A hard ceiling on RPC use, for the whole process (engine, inference desk, builder index, everything).
- * - RPC_MAX_PER_DAY (default 60,000): the day's budget, per UTC day.
+ * - RPC_MAX_PER_DAY (default 40,000): the day's budget, per UTC day.
  * - RPC_MAX_PER_MIN (default 400): a burst allowance, so trades in a busy minute are never slowed.
- * - Once the day's budget is spent, RPC_SLOW_PER_MIN (default 10) a minute until the day ends: the Arena and
- *   trading keep going, slowly, and the bill stays bounded (at most ~74,000 requests a day with the defaults).
+ * - Once the day's budget is spent, RPC_SLOW_PER_MIN (default 6) a minute until the day ends: the Arena and
+ *   trading keep going, slowly, and the bill stays bounded (at most ~49,000 requests a day with the defaults, about $1 a day on Alchemy even if every one were a log query).
  * A bug or a restart loop can therefore never run up the RPC bill again. /health shows the budget.
  */
 const num = (v: string | undefined, d: number) => { const n = Number((v ?? "").trim()); return Number.isFinite(n) && n > 0 ? n : d; };
 export const budget = new (class Budget {
   readonly perMin = num(process.env.RPC_MAX_PER_MIN, 400);
-  readonly perDay = num(process.env.RPC_MAX_PER_DAY, 60_000);
-  readonly slowPerMin = num(process.env.RPC_SLOW_PER_MIN, 10);
+  readonly perDay = num(process.env.RPC_MAX_PER_DAY, 40_000);
+  readonly slowPerMin = num(process.env.RPC_SLOW_PER_MIN, 6);
   private times: number[] = [];
   private day = new Date().toISOString().slice(0, 10);
   usedToday = 0;

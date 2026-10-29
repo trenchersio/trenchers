@@ -70,7 +70,7 @@ export class BuilderIndex {
   private coins = new Map<string, Coin>();
   private byPool = new Map<string, string>();
   private cursor = -1;
-  private span = new Span(50_000n);
+  private span = new Span(30_000n);
   private times = new Map<bigint, number>();
   private manager: Address;
   private weth: string;

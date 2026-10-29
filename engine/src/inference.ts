@@ -248,7 +248,7 @@ class OtcIndex {
   orders = new Map<number, OtcOrder>();
   fills: OtcFill[] = [];
   cursor: number;
-  private span = new Span(50_000n);
+  private span = new Span(30_000n);
   private symbols = new Map<string, string>();
   constructor(private readonly pub: PublicClient, private readonly otc: Address, start: number, private readonly range: number,
     private readonly desk: string | null, private readonly verify: (token: string) => { verified: boolean; agent: number | null }) { this.cursor = start - 1; }

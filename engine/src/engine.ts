@@ -188,8 +188,8 @@ export class Engine {
     const head = latest.number!;
     this.headTime = Number(latest.timestamp);
     if (head !== this.lastHead) { this.lastHead = head; this.clockOffset = Math.max(this.clockOffset, Number(latest.timestamp) - Date.now() / 1000); }
-    // The team's emergency stop: one cheap read every 15 s (agents themselves are re-read on their events, and every 5 minutes as a backstop).
-    if (Date.now() - this.lastPauseRead > 15_000) { this.lastPauseRead = Date.now(); await this.readPause(); }
+    // The team's emergency stop: one cheap read a minute (agents themselves are re-read on their events, and every 5 minutes as a backstop).
+    if (Date.now() - this.lastPauseRead > 60_000) { this.lastPauseRead = Date.now(); await this.readPause(); }
     this.head = head;
     if (head > this.cursor) {
       try { await this.sync(head, true); this.syncError = null; }
