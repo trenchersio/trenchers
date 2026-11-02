@@ -56,7 +56,7 @@ test("a batch with an approval inside is as bad as its worst call", () => {
 
 function guard(extra: Partial<ConstructorParameters<typeof Guard>[0]> = {}) {
   const sent: { to: string; title: string }[] = [];
-  const g = new Guard({ pub: null, site: "https://www.trenchers.io", explorer: "https://x", log: () => {}, owned: () => [], trusted: { [ROUTER]: "Router" }, secret: "s", notify: (to, m) => sent.push({ to, title: m.title }), ...extra });
+  const g = new Guard({ pub: null, site: "https://www.trenchers.io", explorer: "https://x", log: () => {}, owned: () => [], trusted: { [ROUTER]: "Router" }, secret: "s", forceOpen: true, notify: (to, m) => sent.push({ to, title: m.title }), ...extra });
   return { g, sent };
 }
 const log = (topics: string[], data = "0x", address = TOKEN, tx = "0xaa") => ({ address, topics, data, transactionHash: tx, blockNumber: "0x1" });
@@ -99,6 +99,15 @@ test("watch limits, sessions and the key-use check", async () => {
   g2.keyUsed(me, "k1", "sk-…abcd", "8.8.8.8");
   assert.equal(sent.length, 1);
   assert.equal(g2.state(me).alerts[0].kind, "key-new-network");
+});
+
+test("Guard is hidden until GUARD_OPEN=1", async () => {
+  const g = new Guard({ pub: null, site: "", explorer: "", log: () => {}, owned: () => [], trusted: {}, secret: "s" });
+  assert.equal((await call(g, "/guard/status")).code, 404);
+  assert.equal((await call(g, "/guard/scan", { method: "eth_sign", params: [] })).code, 404);
+  process.env.GUARD_OPEN = "1";
+  assert.equal((await call(g, "/guard/status")).code, 200);
+  delete process.env.GUARD_OPEN;
 });
 
 test("login verifies the wallet signature over HTTP", async () => {

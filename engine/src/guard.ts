@@ -60,6 +60,8 @@ export type GuardDeps = {
   telegramLink?: (addr: string) => string | null;
   secret: string;
   now?: () => number;
+  /** Tests and local runs: behave as if GUARD_OPEN=1. */
+  forceOpen?: boolean;
 };
 
 export class Guard {
@@ -236,7 +238,7 @@ export class Guard {
   async tick() {
     const pub = this.d.pub;
     const wallets = this.watched();
-    if (!pub || !wallets.length || this.busy) return;
+    if (!pub || !wallets.length || this.busy || (!Guard.open() && !this.d.forceOpen)) return;
     if (this.now() - this.lastScan < this.every - 1000) return;
     this.busy = true;
     try {
@@ -282,6 +284,7 @@ export class Guard {
    * a history. Called on every authenticated key use; costs nothing (no RPC).
    */
   keyUsed(owner: string, keyId: string, display: string, ip: string) {
+    if (!Guard.open() && !this.d.forceOpen) return;
     const net = ip.includes(":") ? ip.split(":").slice(0, 3).join(":") : ip.split(".").slice(0, 3).join(".");
     if (!net || net === "?") return;
     const k = this.keyNets.get(keyId) ?? { nets: [], t: this.now() };
@@ -316,8 +319,12 @@ export class Guard {
     return h.length > per;
   }
 
+  /** Guard stays hidden (every /guard/ route answers 404, no alerts, no chain reads) until GUARD_OPEN=1 in Railway. */
+  static open = () => clean(process.env.GUARD_OPEN) === "1";
+
   async handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
     if (!path.startsWith("/guard/")) return false;
+    if (!Guard.open() && !this.d.forceOpen) { res.statusCode = 404; res.end(JSON.stringify({ error: "not found" })); return true; }
     res.setHeader("cache-control", "no-store");
     const send = (code: number, body: unknown) => { res.statusCode = code; res.end(JSON.stringify(body)); };
     if (req.method === "OPTIONS") { res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS"); res.setHeader("Access-Control-Allow-Headers", "content-type, authorization"); res.statusCode = 204; res.end(); return true; }
