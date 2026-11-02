@@ -10,3 +10,4 @@ art/preview/
 web/out/
 __pycache__/
 art/out/release/images/
+extension/dist/

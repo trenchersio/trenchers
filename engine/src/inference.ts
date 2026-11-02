@@ -340,6 +340,8 @@ export function trencherPersona(a: { id: number; wallet: string; rule: string | 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 export class InferenceDesk {
+  /** Trenchers Guard: told about every key use (owner, key, IP) so a key used from a new network is flagged. */
+  onKeyUse?: (owner: string, keyId: string, display: string, ip: string) => void;
   readonly s: InferenceSettings;
   readonly config: IcmConfig;
   readonly ledger: Ledger;
@@ -723,8 +725,9 @@ export class InferenceDesk {
         // trencher-<id>: the Trencher itself, thinking with the desk's chosen model and speaking as itself. Only
         // keys made for that Trencher (by its holder) can call it, and it is paid from the Trencher's own credit.
         if (path.startsWith("/icm/v1/") && auth.startsWith("Bearer ")) {
-          let found: { key: { id: string } } | null = null;
+          let found = null as { key: { id: string; display?: string }; account?: { owner?: string } } | null;
           try { found = this.ledger.authenticate(auth.slice(7).trim()); } catch { found = null; } // the surface explains bad keys
+          if (found && this.onKeyUse) { try { const f = found as { key: { id: string; display?: string }; account?: { owner?: string } }; if (f.account?.owner) this.onKeyUse(f.account.owner, f.key.id, f.key.display ?? f.key.id.slice(0, 8), String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "?").split(",")[0].trim()); } catch { /* never block a call over this */ } }
           const tag = found ? this.state.get(`tkey:${found.key.id}`) : null;
           if (tag) {
             const { id, holder } = JSON.parse(tag) as { id: number; holder: string };

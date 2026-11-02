@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Trenchers Guard</title>
+<style>
+  body{margin:0;width:300px;background:#0B0D0C;color:#E8ECE9;font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .w{padding:16px;display:grid;gap:14px}
+  .top{display:flex;gap:10px;align-items:center}
+  .brand{font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:#8A938E}
+  h1{font-size:16px;margin:0}
+  .on{color:#39FF88}.off{color:#FFB020}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stats div{background:#121514;border:1px solid #232826;border-radius:10px;padding:10px;text-align:center}
+  .stats b{display:block;font:600 18px ui-monospace,Menlo,monospace}
+  .stats span{color:#8A938E;font-size:11px}
+  label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+  .muted{color:#8A938E;font-size:11px}
+  button{font:inherit;background:transparent;color:#8A938E;border:1px solid #232826;border-radius:8px;padding:6px 10px;cursor:pointer}
+  a{color:#39FF88}
+</style></head>
+<body><div class="w">
+  <div class="top"><img src="icon48.png" width="32" height="32" alt=""><div><div class="brand">TRENCHERS · BETA</div><h1>Guard</h1></div></div>
+  <div id="state" class="on">On</div>
+  <div class="stats"><div><b id="checked">0</b><span>checked</span></div><div><b id="flagged">0</b><span>flagged</span></div><div><b id="rejected">0</b><span>rejected</span></div></div>
+  <label><input type="checkbox" id="on"> Check wallet requests before they reach my wallet</label>
+  <label><input type="checkbox" id="every"> Also show safe requests (not only risky ones)</label>
+  <div class="muted">Checks run on this computer. Nothing you sign is sent to us. <span id="list"></span> <button id="refresh">Update</button></div>
+  <div class="muted">Watch your wallets around the clock: <a href="https://www.trenchers.io/protect" target="_blank">trenchers.io/protect</a></div>
+</div><script src="popup.js"></script></body></html>

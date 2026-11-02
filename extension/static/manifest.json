@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Trenchers Guard (Beta)",
+  "short_name": "Trenchers Guard",
+  "version": "0.1.0",
+  "description": "Reads every wallet request before you sign and warns you in plain English when it could drain your wallet.",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "action": { "default_popup": "popup.html", "default_title": "Trenchers Guard", "default_icon": { "16": "icon16.png", "48": "icon48.png" } },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage"],
+  "host_permissions": ["https://raw.githubusercontent.com/*", "https://mainnet-production-c38a.up.railway.app/*"],
+  "content_scripts": [
+    { "matches": ["http://*/*", "https://*/*"], "js": ["inject.js"], "run_at": "document_start", "world": "MAIN", "all_frames": true },
+    { "matches": ["http://*/*", "https://*/*"], "js": ["bridge.js"], "run_at": "document_start", "all_frames": true }
+  ]
+}

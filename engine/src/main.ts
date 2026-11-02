@@ -18,6 +18,8 @@ import { XPoints } from "./xpoints";
 import { BtcFeed } from "./btc";
 import { PrizePot } from "./prizes";
 import { Giveaway } from "./giveaway";
+import { Guard } from "./guard";
+import { createHash } from "node:crypto";
 
 /** Runs the engine loop and serves the live Arena data the website reads. */
 /** The last lines of the engine's log, shown on /health so problems are visible without opening Railway. */
@@ -174,6 +176,20 @@ const xpoints = new XPoints(log, {
 });
 setInterval(() => { try { xpoints.tick(); } catch (e) { log(`XP: ${(e as Error).message}`); } }, 600_000);
 const market = new Market(ENV.NFT);
+// Trenchers Guard (Protocol 06): watches wallets people sign up, explains wallet requests, flags odd key use.
+const guard = new Guard({
+  pub: engine ? (engine.pub as never) : null, site: ENV.SITE_URL, explorer: ENV.EXPLORER_URL, log,
+  owned: (a) => (engine ? engine.ownedBy(a) : []),
+  trusted: Object.fromEntries([[ENV.ADAPTER, "Trenchers trading adapter"], [ENV.PONS_FACTORY, "Pons"], [ENV.NFT, "Trenchers NFT"], [ENV.TRENCHERS_TOKEN, "$TRENCHERS"]]
+    .concat((process.env.GUARD_TRUSTED ?? "").split(/[\s,]+/).filter((x) => /^0x[0-9a-fA-F]{40}(=.+)?$/.test(x)).map((x) => [x.split("=")[0], x.split("=")[1] ?? "Trusted contract"]))
+    .filter(([a]) => /^0x[0-9a-fA-F]{40}$/.test(String(a))).map(([a, n]) => [String(a).toLowerCase(), n])),
+  notify: (a, m) => engine?.push.notify(a, m),
+  telegram: (a, html) => engine?.alerts?.text(a, html),
+  telegramLink: (a) => engine?.alerts?.linkCode(a) ?? null,
+  secret: (process.env.GUARD_SECRET ?? "").trim() || createHash("sha256").update(`trenchers-guard:${process.env.ENGINE_KEY ?? ""}:${ENV.NFT}`).digest("hex"),
+});
+inference.onKeyUse = (o, k, d, ip) => guard.keyUsed(o, k, d, ip);
+setInterval(() => { if (lastTick) void guard.tick(); }, 15_000);
 // Last week's recap is saved right after the week ends, from the cached Arena (no extra chain reads).
 setInterval(() => { if (engine && lastTick) recaps.check(async () => JSON.parse(await shared("arena", 60_000, async () => JSON.stringify(await engine.arena())))).catch(() => {}); }, 60_000);
 const server = createServer(async (req, res) => {
@@ -191,13 +207,14 @@ const server = createServer(async (req, res) => {
     if (backtest && await backtest.handle(req, res, path)) return;
     if (trenchies && await trenchies.handle(req, res, path)) return;
     if (await market.handle(req, res, path)) return;
+    if (await guard.handle(req, res, path)) return;
     if (engine && await engine.push.handle(req, res, path)) return;
     if (engine?.alerts && await engine.alerts.handle(req, res, path)) return;
     if (path === "/health" || path === "/") {
       // Always 200 while the process is up, so Railway keeps it running and you can read what's wrong here.
       if (!engine) { res.end(JSON.stringify({ ok: false, status, problems: PROBLEMS }, null, 2)); return; }
       const healthy = Date.now() - lastTick < Math.max(30_000, ENV.POLL_MS * 10);
-      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", rpc: rpcStats(), block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), ruleTest: backtest?.status ?? "off", market: market.status, push: engine.push.view(), trenchies: trenchies?.view() ?? "off", btc: btc.view(), xp: xpoints.view(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, tradesSkipped: engine.telegram.tradesSkipped, lastError: engine.telegram.lastError, alerts: engine.alerts?.view() ?? "off" } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
+      res.end(scrub(JSON.stringify({ ok: healthy, status: !healthy ? status : engine.paused ? "emergency stop: trading paused by the team" : "running", rpc: rpcStats(), block: engine.cursor.toString(), blocksBehind: engine.head > engine.cursor ? (engine.head - engine.cursor).toString() : "0", readError: engine.syncError, agents: engine.agents.size, coins: engine.tokens.size, tradingRoute: engine.adapter, lastError, tradingWallet: engine.engineAddress ?? "none: ENGINE_KEY not set, watching only", dryRun: ENV.DRY_RUN, feeShare: (() => { try { return engine.feeKeeper.diag(); } catch { return "error"; } })(), inference: inference.status(), builder: builder.status(), ruleTest: backtest?.status ?? "off", market: market.status, push: engine.push.view(), trenchies: trenchies?.view() ?? "off", btc: btc.view(), xp: xpoints.view(), guard: guard.view(), trading: (() => { try { return engine.diag(); } catch (e) { return { error: (e as Error).message }; } })(), telegram: engine.telegram ? { ready: engine.telegram.ready, posted: engine.telegram.posted, tradesSkipped: engine.telegram.tradesSkipped, lastError: engine.telegram.lastError, alerts: engine.alerts?.view() ?? "off" } : "off (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT)", recent }, null, 2)));
     } else if (path === "/livecheck") {
       // Read-only proof against Robinhood Chain mainnet (see selfcheck.ts); cached for 5 minutes.
       // Runs in the background (it scans a lot of history); this returns the latest finished result.

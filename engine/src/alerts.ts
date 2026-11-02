@@ -25,7 +25,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 export class Alerts {
   private subs: Sub[] = [];
-  private codes = new Map<string, { addr: string; exp: number }>();
+  private codes = new Map<string, { addr: string; exp: number; guard?: boolean }>();
   private offset = 0;
   private queue: Promise<unknown> = Promise.resolve();
   private waiting = 0;
@@ -96,6 +96,11 @@ export class Alerts {
       this.codes.delete(arg!);
       if (!this.subs.some((s) => s.chat === chat && s.addr === c.addr)) this.subs.push({ chat, addr: c.addr, t: Date.now() });
       this.save();
+      if (c.guard) {
+        await this.say(chat, `🛡️ <b>Trenchers Guard alerts are on</b> for <code>${short(c.addr)}</code>.\n\nYou'll get a message here when something looks wrong with a wallet you watch: an unlimited approval to an unknown contract, every NFT in a collection handed over, several tokens leaving at once, or your wallet being delegated to a contract.\n\nSend /stop to turn alerts off.`);
+        this.log(`alerts: a chat linked ${short(c.addr)} for Guard`);
+        return;
+      }
       const ids = this.owned(c.addr);
       await this.say(chat, `✅ <b>Alerts are on</b> for wallet <code>${short(c.addr)}</code>.\n\nYou'll get a message here whenever ${ids.length === 1 ? `Trencher #${ids[0]}` : ids.length ? `one of your agents (#${ids.join(", #")})` : "one of your agents"} buys or sells. Alerts follow the NFT, so they stop if you sell it.\n\nSend /stop to turn them off.`);
       this.log(`alerts: a chat linked ${short(c.addr)}`);
@@ -124,6 +129,32 @@ export class Alerts {
         if (!r.ok && r.error_code !== 403) r = await this.say(chat, caption).catch(() => ({ ok: false }));
         if (r.ok) this.sent++;
         // 403: the person blocked the bot; stop messaging that chat.
+        else if (r.error_code === 403) { this.subs = this.subs.filter((s) => s.chat !== chat); this.save(); }
+        await new Promise((res) => setTimeout(res, 1100));
+      }).catch(() => {}).finally(() => { this.waiting--; });
+    }
+  }
+
+  /** A one-time t.me link that turns on Guard alerts for `addr` (no Trencher needed). Null while the bot is offline. */
+  linkCode(addr: string): string | null {
+    if (!this.username) return null;
+    for (const [k, v] of this.codes) if (v.exp < Date.now()) this.codes.delete(k);
+    if (this.codes.size > 5_000) this.codes.clear();
+    const code = randomBytes(12).toString("base64url");
+    this.codes.set(code, { addr: addr.toLowerCase(), exp: Date.now() + 15 * 60_000, guard: true });
+    return `https://t.me/${this.username}?start=${code}`;
+  }
+
+  /** A plain HTML message to every chat linked to `owner` (Guard alerts). */
+  text(owner: string, html: string) {
+    if (!this.username) return;
+    const chats = [...new Set(this.subs.filter((s) => s.addr === owner.toLowerCase()).map((s) => s.chat))];
+    for (const chat of chats) {
+      if (this.waiting > 300) return;
+      this.waiting++;
+      this.queue = this.queue.then(async () => {
+        const r = await this.say(chat, html).catch(() => ({ ok: false } as { ok: boolean; error_code?: number }));
+        if (r.ok) this.sent++;
         else if (r.error_code === 403) { this.subs = this.subs.filter((s) => s.chat !== chat); this.save(); }
         await new Promise((res) => setTimeout(res, 1100));
       }).catch(() => {}).finally(() => { this.waiting--; });
