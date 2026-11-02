@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createWalletClient, custom, getAddress } from "viem";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
+import { useTrenchiesLive } from "@/lib/trenchies-live";
 import { walletProvider } from "@/lib/chain";
 import { useWallet } from "@/lib/wallet";
 import { ConnectModal } from "@/components/ConnectModal";
@@ -34,6 +35,7 @@ export function TrenchiesXP() {
   const [session, setSession] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [ready, setReady] = useState<boolean | null>(null);
+  const live = useTrenchiesLive();
   const [rules, setRules] = useState<Rules>(DEF);
   const [board, setBoard] = useState<{ players: number; top: Row[] } | null>(null);
   const [pending, setPending] = useState<Record<string, number>>({});
@@ -119,8 +121,14 @@ export function TrenchiesXP() {
       <section className="tx-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="tx-logo" src="/trenchies/logo.webp" alt="Trenchies" width={420} height={140} />
+        {live ? <>
+          <h1>Trenchies is live</h1>
+          <p>Spawn your Trenchie, call Bitcoin at the trading desk, pick tomorrow&apos;s top Pons coins and build a land like nobody else&apos;s. Hold a Trencher to play in its colours, or jump in as a Recruit. Early XP still counts toward the prize pool.</p>
+          <div className="tx-cta"><a className="tx-btn tx-btn-play" href={ROUTES.trenchiesPlay}>Play Trenchies</a>{live.players > 0 && <span className="tx-count mono"><i />{n0(live.players)} playing</span>}</div>
+        </> : <>
         <h1>Earn Early XP and Win Prizes</h1>
         <p>Trenchies, our upcoming SocialFi meets Web3 Gaming protocol. Make trades, pick memecoin winners, and earn real-world and in-game prizes. Sign in with X, earn XP before the game opens, and climb the leaderboard for a share of the prize pool.</p>
+        </>}
         {!me && (
           <div className="tx-cta">
             <button type="button" className="tx-btn tx-btn-x" onClick={login} disabled={ready === false}><X s={16} />{ready === false ? "Sign-in opens soon" : "Sign in with X"}</button>

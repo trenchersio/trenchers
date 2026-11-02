@@ -4,6 +4,7 @@ import { MobileMenu } from "./MobileMenu";
 import { NavDropdown, type NavItem } from "./NavDropdown";
 import { CopyCA } from "@/components/CopyCA";
 import { WakeBanner } from "@/components/WakeBanner";
+import { TrenchiesLiveBanner } from "@/components/TrenchiesLiveBanner";
 import { SectionSwitch } from "@/components/SectionSwitch";
 import { FlywheelBand } from "@/components/FlywheelBand";
 import { CHAT_OPEN, GITHUB_URL, ROUTES, SOCIALS, TELEGRAM_FEED } from "@/lib/constants";
@@ -42,6 +43,7 @@ export function SiteHeader({ page, wide = false }: { page: Page; wide?: boolean 
   ];
   return (
     <>
+      <TrenchiesLiveBanner />
       <SectionSwitch on={where} wide={wide} mintOn={page === "mint"} />
       <header className={`bar${wide ? " bar-wide" : ""}`}>
         <a href={page === "home" ? "#top" : ROUTES.home} aria-label="Trenchers home" className="inf-brand">

@@ -5,7 +5,7 @@ import type { ChatMsg } from "./Land";
 export type Pick = { token: string; symbol: string; pct: number | null; rank: number | null };
 export type Result = { round: number; picks: Pick[]; xp: number; coins?: number; parts: { label: string; xp: number }[]; at: number };
 export type Wear = Partial<Record<Slot, string>>;
-export type Pub = { name: string; nft: number; level: number; xp: number; streak: number; hits: number; wins: number; hatTricks: number; rounds: number; items: string[]; house: string; vehicle: string; x: string | null; wear?: Wear;
+export type Pub = { name: string; nft: number; guest?: boolean; createdAt?: number; level: number; xp: number; streak: number; hits: number; wins: number; hatTricks: number; rounds: number; items: string[]; house: string; vehicle: string; x: string | null; wear?: Wear;
   layout?: Record<string, string>; paint?: Record<string, { wall?: number; floor?: number }>; place?: Record<string, { x: number; y: number }>; isOpen?: boolean };
 export type Note = { id: number; kind: string; text: string; at: number };
 export type Quest = { id: string; n: number; done: boolean; text: string; goal: number; xp: number; bricks: number };

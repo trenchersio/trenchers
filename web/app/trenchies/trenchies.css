@@ -15,6 +15,8 @@
 .tx-btn:hover { background: rgba(255,255,255,0.08); } .tx-btn:active { transform: scale(.97); } .tx-btn:disabled { opacity: .55; cursor: default; }
 .tx-btn-x { height: 50px; padding: 0 26px; border-radius: 14px; background: #fff; color: #000; border-color: #fff; font-size: 16px; box-shadow: 0 10px 40px -12px rgba(255,255,255,.35); }
 .tx-btn-x:hover { background: #fff; filter: brightness(.95); }
+.tx-btn-play { height: 50px; padding: 0 30px; border-radius: 14px; background: #39FF88; color: #04140A; border-color: #39FF88; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 10px 40px -12px rgba(57,255,136,.55); }
+.tx-btn-play:hover { filter: brightness(1.06); }
 .tx-btn-go { background: var(--n); border-color: var(--n); color: #04130a; } .tx-btn-go:hover { background: var(--n); filter: brightness(1.06); }
 .tx-btn-sm { height: 32px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; } .tx-btn-sm .mono { color: var(--n); font-size: 11px; } .tx-btn-go .mono { color: inherit; }
 .tx-me { display: grid; gap: 12px; }

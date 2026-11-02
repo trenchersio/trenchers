@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -16,9 +16,12 @@ import { buyCosmetic, bump, canWear, checkAchievements, claimDaily, dailyState, 
  * in the day's top 3 (of every coin anyone picked), and spend it on a bigger house, a better ride and decor.
  *
  * Rounds: picks made during UTC day D count for round D+1 (00:00 to 24:00 UTC), settled a few minutes after it ends,
- * from the Pons prices the engine already keeps (backtest.ts). Invite-only while it's being built:
- *   TRENCHIES_ALLOW  wallets that may play, comma separated (default: CHAT_ADMINS, else the Deployer)
- *   TRENCHIES_OPEN=1 lets every Trencher holder in.
+ * from the Pons prices the engine already keeps (backtest.ts). Who can play:
+ *   TRENCHIES_ALLOW    wallets that may play before launch, comma separated (default: CHAT_ADMINS, else the Deployer)
+ *   TRENCHIES_OPEN=1   launch: every wallet can play (holders spawn from their Trencher, everyone else as a Recruit)
+ *   TRENCHIES_OPEN_AT  optional launch time (ISO, e.g. 2026-11-03T15:00:00Z): opens by itself at that moment
+ *   TRENCHIES_SECRET   signs sessions (falls back to CHAT_SECRET, then a key derived from ENGINE_KEY, so a redeploy
+ *                      doesn't sign everyone out)
  * Players are kept next to the chat (trenchies.json).
  */
 export const loginText = (addr: string, time: string) => `Sign in to Trenchies\n\nWallet: ${addr}\nTime: ${time}\n\nThis only proves you hold this wallet. It costs nothing and sends no transaction.`;
@@ -29,6 +32,8 @@ type DeskLog = { r: number; call: Call; result: "win" | "loss" | "push" | "void"
 type DeskRound = { calls: Record<string, Call>; open?: number | null; close?: number | null; done?: boolean };
 type Player = Progress & {
   addr: string; name: string; nft: number; held: boolean; createdAt: number;
+  /** A Recruit: plays without a Trencher (its look is borrowed art, shown in grey). Spawning from a Trencher later upgrades it. */
+  guest?: boolean;
   xp: number; bricks: number; streak: number; lastRound: number | null;
   hits: number; wins: number; hatTricks: number; rounds: number;
   items: string[]; house: string; vehicle: string;
@@ -62,9 +67,13 @@ type Host = {
 
 const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
 const FILE = clean(process.env.TRENCHIES_FILE) || `${dirname(clean(process.env.CHAT_FILE) || "./chat.json")}/trenchies.json`;
-const SECRET = clean(process.env.TRENCHIES_SECRET) || clean(process.env.CHAT_SECRET) || randomBytes(32).toString("hex");
+const SECRET = clean(process.env.TRENCHIES_SECRET) || clean(process.env.CHAT_SECRET) || (clean(process.env.ENGINE_KEY) ? createHash("sha256").update(`trenchies-sessions:${clean(process.env.ENGINE_KEY)}`).digest("hex") : randomBytes(32).toString("hex"));
 const ALLOW = new Set((clean(process.env.TRENCHIES_ALLOW) || clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
-const OPEN = () => clean(process.env.TRENCHIES_OPEN) === "1";
+const OPEN_AT = Date.parse(clean(process.env.TRENCHIES_OPEN_AT) || "");
+/** Open to everyone: TRENCHIES_OPEN=1, or the launch time in TRENCHIES_OPEN_AT has passed. */
+export const OPEN = () => clean(process.env.TRENCHIES_OPEN) === "1" || (Number.isFinite(OPEN_AT) && Date.now() >= OPEN_AT);
+/** A Recruit (no Trencher in the wallet) still gets a look: one of the 2,000 artworks, picked from the wallet address. */
+export const recruitArt = (addr: string) => 1 + (parseInt(addr.slice(2, 10), 16) % 2000);
 const ADMINS = new Set((clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
 const HERE = 40_000; // a member counts as "on the land" for 40 s after their last check-in
 const MAX_MEMBERS = 24;
@@ -114,7 +123,7 @@ export class Trenchies {
       renameSync(`${FILE}.tmp`, FILE);
     } catch { /* keep in memory */ }
   }
-  view() { return { players: this.players.size, rounds: this.rounds.size, invite: OPEN() ? "open to holders" : `${ALLOW.size} wallet(s)`, status: this.status, prizes: this.host.pot?.view() ?? "off", weeksPaid: [...this.prizes.values()].filter((z) => z.paid).length }; }
+  view() { return { players: this.players.size, rounds: this.rounds.size, invite: OPEN() ? "open to everyone" : `${ALLOW.size} wallet(s)${Number.isFinite(OPEN_AT) ? `, opens ${new Date(OPEN_AT).toISOString()}` : ""}`, status: this.status, prizes: this.host.pot?.view() ?? "off", weeksPaid: [...this.prizes.values()].filter((z) => z.paid).length }; }
 
   // ------------------------------------------------------------------ sessions
 
@@ -188,7 +197,7 @@ export class Trenchies {
   }
 
   private pub(p: Player) {
-    return { name: p.name, nft: p.nft, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt, wear: p.wear, layout: p.layout, paint: p.paint, place: p.place, isOpen: !!p.open };
+    return { name: p.name, nft: p.nft, guest: !!p.guest, level: levelOf(p.xp), xp: p.xp, streak: p.streak, hits: p.hits, wins: p.wins, hatTricks: p.hatTricks, rounds: p.rounds, items: p.items, house: p.house, vehicle: p.vehicle, x: p.x?.handle ?? null, createdAt: p.createdAt, wear: p.wear, layout: p.layout, paint: p.paint, place: p.place, isOpen: !!p.open };
   }
   private me(p: Player, now: number) {
     const open = roundOf(now) + 1, live = roundOf(now), last = live - 1;
@@ -233,11 +242,12 @@ export class Trenchies {
       const addr = a.toLowerCase();
       if (!this.allowed(addr)) { send(403, { error: "invite-only", allowed: false }); return true; }
       const p = this.players.get(addr);
-      if (p) { p.held = await this.holds(addr, p.nft); this.save(); }
+      if (p && !p.guest) { p.held = await this.holds(addr, p.nft); this.save(); }
       send(200, { token: this.token(addr), allowed: true, me: p ? this.me(p, now) : null });
       return true;
     }
 
+    if (op === "status") { res.setHeader("cache-control", "public, max-age=30"); send(200, { open: OPEN(), opensAt: Number.isFinite(OPEN_AT) ? OPEN_AT : null, players: this.players.size }); return true; }
     if (op === "prizes") { send(200, this.prizeView(now, this.who(q.get("token")))); return true; }
     if (op === "public") {
       const v = this.byName(q.get("name"));
@@ -254,15 +264,16 @@ export class Trenchies {
     if (op === "state") { if (p) { p.lastSeen = Date.now(); ensureQuests(p, roundOf(now)); } send(200, { me: p ? this.me(p, now) : null, now }); return true; }
 
     if (op === "spawn") {
-      const nft = Number(b.nft), name = String(b.name ?? "").trim();
+      const guest = b.guest === true, nft = guest ? recruitArt(addr) : Number(b.nft), name = String(b.name ?? "").trim();
       if (!Number.isInteger(nft) || nft < 1 || nft > 2000) { send(400, { error: "Pick one of your Trenchers." }); return true; }
       if (!NAME.test(name)) { send(400, { error: "Names are 3 to 16 letters, numbers or _." }); return true; }
       const taken = [...this.players.values()].find((x) => x.name.toLowerCase() === name.toLowerCase() && x.addr !== addr);
       if (taken) { send(409, { error: "That name is taken. Try another." }); return true; }
-      if (!(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
-      if (p) { p.nft = nft; p.name = name; p.held = true; }
+      if (guest && p && !p.guest) { send(400, { error: "Your Trenchie already wears a Trencher's colours." }); return true; }
+      if (!guest && !(await this.holds(addr, nft))) { send(403, { error: `This wallet doesn't hold Trencher #${nft}.` }); return true; }
+      if (p) { p.nft = nft; p.name = name; p.held = true; if (guest) p.guest = true; else delete p.guest; }
       else {
-        const np: Player = { addr, name, nft, held: true, createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", next: {}, members: [], requests: [], results: [], seen: null, desk: { streak: 0, best: 0, day: -1, paid: 0, log: [] }, layout: {}, paint: {}, place: {},
+        const np: Player = { addr, name, nft, held: true, ...(guest ? { guest: true } : {}), createdAt: Date.now(), xp: 0, bricks: 0, streak: 0, lastRound: null, hits: 0, wins: 0, hatTricks: 0, rounds: 0, items: ["shack", "bike"], house: "shack", vehicle: "bike", next: {}, members: [], requests: [], results: [], seen: null, desk: { streak: 0, best: 0, day: -1, paid: 0, log: [] }, layout: {}, paint: {}, place: {},
           ...emptyProgress(), visited: { day: -1, lands: [] }, cheered: { day: -1, lands: [] }, notified: {}, lastSeen: Date.now() };
         // invited by a friend (their Trenchie name): you both get bricks now, they get a chest once you've played a day
         const ref = this.byName(b.ref);
@@ -555,7 +566,7 @@ export class Trenchies {
 
   // ------------------------------------------------------------------ lands: join requests, members, chat
 
-  private mini(p: Player) { return { name: p.name, nft: p.nft, level: levelOf(p.xp), x: p.x?.handle ?? null, wear: p.wear }; }
+  private mini(p: Player) { return { name: p.name, nft: p.nft, guest: !!p.guest, level: levelOf(p.xp), x: p.x?.handle ?? null, wear: p.wear }; }
   private byName(n: unknown) { const s = String(n ?? "").trim().toLowerCase(); return [...this.players.values()].find((x) => x.name.toLowerCase() === s) ?? null; }
   private land(op: string, p: Player, b: Record<string, unknown>, q: URLSearchParams, send: (c: number, x: unknown) => void) {
     const h = this.byName(b.name ?? q.get("name"));

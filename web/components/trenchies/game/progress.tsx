@@ -45,7 +45,7 @@ export function DailyModal({ me, onClaim, onClose, busy }: { me: Me; onClaim: ()
   return (
     <div className="tg-modal" onClick={onClose}><div className="tg-mbox tg-dailybox" onClick={(e) => e.stopPropagation()}>
       <p className="tg-k">Daily reward</p>
-      <h2 className="tg-mh">{me.daily.run > 0 ? `${me.daily.run} day${me.daily.run === 1 ? "" : "s"} in a row` : "Welcome back"}</h2>
+      <h2 className="tg-mh">{me.daily.run > 0 ? `${me.daily.run} day${me.daily.run === 1 ? "" : "s"} in a row` : Date.now() - (me.createdAt ?? 0) < 86_400_000 ? "Welcome to Trenchies" : "Welcome back"}</h2>
       <p className="tg-sub">Come back every day: the rewards grow to a rare chest on day 7. Miss a day and it starts again.</p>
       <Calendar me={me} />
       <button type="button" className="tg-btn tg-btn-go tg-wide" disabled={busy} onClick={onClaim}>{busy ? "…" : `Claim day ${me.daily.day + 1}`}</button>

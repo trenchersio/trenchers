@@ -3153,3 +3153,13 @@ a.ct-wallet:hover { color: var(--tone, var(--green)); }
 .ct .cpa-pct button.on { background: color-mix(in srgb, var(--tone, var(--violet)) 18%, transparent); color: var(--tone, var(--violet)); }
 .ct-stats small, .ct-last { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+
+/* Trenchies launch strip (shows only once the game is open) */
+.tl-banner { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); background: linear-gradient(90deg, rgba(57,255,136,0.16), rgba(57,255,136,0.05)); border-bottom: 1px solid rgba(57,255,136,0.35); color: var(--fog, #E8ECE9); font-size: 14px; text-decoration: none; text-align: center; }
+.tl-banner b { color: #39FF88; }
+.tl-banner .tl-sub { color: #B9C1BC; }
+.tl-banner .tl-go { font-weight: 700; color: #39FF88; }
+.tl-banner:hover .tl-go { text-decoration: underline; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; background: #39FF88; box-shadow: 0 0 12px #39FF88; animation: tl-pulse 1.6s ease-in-out infinite; }
+@keyframes tl-pulse { 50% { opacity: 0.35; } }
+@media (max-width: 560px) { .tl-banner .tl-sub { display: none; } }

@@ -35,11 +35,15 @@ const PLACE = ["1st", "2nd", "3rd"];
 function left(ts: number, now: number) { const s = Math.max(0, Math.floor(ts - now)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; }
 
 function useNow() { const [n, setN] = useState(() => Date.now() / 1000); useEffect(() => { const t = setInterval(() => setN(Date.now() / 1000), 1000); return () => clearInterval(t); }, []); return n; }
-function usePalette(nft: number | null) {
+/** A Recruit's colours: its borrowed artwork, drained to grey (a Trencher brings the colour). */
+const grey = (hex: string) => { const n = parseInt(hex.replace("#", "").slice(0, 6), 16); if (!Number.isFinite(n)) return hex; const l = Math.round(0.3 * (n >> 16 & 255) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)); return `#${l.toString(16).padStart(2, "0").repeat(3)}`; };
+function usePalette(nft: number | null, guest = false) {
   const [p, setP] = useState<Palette>(FALLBACK);
-  useEffect(() => { if (!nft) return; loadArtFor([nft]).then(() => { const x = artPalette(nft); if (x) setP(x); }).catch(() => {}); }, [nft]);
+  useEffect(() => { if (!nft) return; loadArtFor([nft]).then(() => { const x = artPalette(nft); if (x) setP(guest ? { bg: grey(x.bg), main: grey(x.main), second: grey(x.second), sig: grey(x.sig), eye: x.eye } : x); }).catch(() => {}); }, [nft, guest]);
   return p;
 }
+/** Same pick as the engine: a Recruit's look comes from its wallet address. */
+const recruitArt = (addr: string) => 1 + (parseInt(addr.toLowerCase().slice(2, 10), 16) % 2000);
 const DOCK: [Panel, string, string][] = [["desk", "chart", "Trading Desk"], ["today", "gift", "Today"], ["build", "build", "Build"], ["me", "shirt", "Trenchie"], ["collection", "medal", "Collect"], ["board", "ranks", "Ranks"], ["lands", "users", "Lands"], ["more", "more", "More"]];
 const NO_GROW = { wood: 0, stone: 0, fish: 0 };
 const SKY_ICON: Record<Sky, string> = { sun: "sun", clouds: "fan", rain: "drop", snow: "sparkle" };
@@ -229,8 +233,8 @@ export function TrenchiesGame() {
   }, [landName, phase, token]);
   const landAct = async (op: string, body: Record<string, unknown>, ok?: string) => { try { const j = await call(op, { name: landName, ...body }) as LandInfo; setLandInfo(j); if (ok) say(ok); return true; } catch (e) { say((e as Error).message); return false; } };
 
-  const myPalette = usePalette(me?.nft ?? null);
-  const palette = usePalette(visiting?.nft ?? me?.nft ?? null);
+  const myPalette = usePalette(me?.nft ?? null, !!me?.guest);
+  const palette = usePalette(visiting?.nft ?? me?.nft ?? null, !!(visiting ? visiting.guest : me?.guest));
   const subject = visiting ?? me;
   const look: Look | null = useMemo(() => subject ? { name: subject.name, house: subject.house, vehicle: subject.vehicle, items: subject.items, palette, trophies: subject.hits, level: subject.level, x: subject.x, wear: subject.wear, layout: subject.layout, paint: subject.paint, place: subject.place } : null, [subject, palette]);
   const guests = useMemo(() => (landInfo && landInfo.land.name === landName ? landInfo.present : []), [landInfo, landName]);
@@ -239,7 +243,7 @@ export function TrenchiesGame() {
   if (phase === "boot" || !addr) return (
     <Splash>
       <p className="tg-lede">Spawn your Trenchie, pick tomorrow&apos;s top coins, trade Bitcoin at your desk, and build a land like nobody else&apos;s.</p>
-      {prizes?.pot && <PotBadge prizes={prizes} now={now} />}
+      {prizes?.pot && Number(prizes.pot.potEth) >= 0.001 && <PotBadge prizes={prizes} now={now} />}
       <button type="button" className="tg-btn tg-btn-go" onClick={w.openModal}>Connect wallet</button>
       <ConnectModal />
       <HowShort />
@@ -254,8 +258,8 @@ export function TrenchiesGame() {
   );
   if (phase === "invite") return (
     <Splash>
-      <p className="tg-lede">Trenchies is invite-only while we build it. Join the waitlist to be among the first in.</p>
-      <a className="tg-btn tg-btn-go" href={ROUTES.trenchies}>Join the waitlist</a>
+      <p className="tg-lede">Trenchies opens very soon. Earn Early XP now so you start ahead.</p>
+      <a className="tg-btn tg-btn-go" href={ROUTES.trenchies}>Earn Early XP</a>
     </Splash>
   );
   if (phase === "spawn" || !me || !look) return <Spawn me={addr} existing={me} onDone={(m) => { apply(m); setPhase("play"); setParty((p) => p + 1); setPanel(null); }} call={call} />;
@@ -282,7 +286,7 @@ export function TrenchiesGame() {
         <div className="tg-hud-l">
           <a className="tg-card tg-home" href={ROUTES.home} title="Back to trenchers.io" aria-label="Back to trenchers.io"><Icon n="home" size={15} /></a>
           <button type="button" className="tg-card tg-who" onClick={() => setPanel("me")}>
-            <ArtCanvas id={me.nft} size={34} />
+            <ArtCanvas id={me.nft} size={34} className={me.guest ? "tg-recruit" : undefined} />
             <span className="tg-who-t">
               <b>{me.name}</b>
               <span className="tg-lv"><span className="tg-lvb">Lv {level}</span><span className="tg-bar"><i style={{ width: `${prog * 100}%` }} /></span><small>{n0(me.xp - lo)} / {n0(hi - lo)}</small></span>
@@ -294,7 +298,7 @@ export function TrenchiesGame() {
           {me.desk?.streak > 1 && <button type="button" className="tg-card tg-stat hot" title="Trading desk: calls right in a row" onClick={() => setPanel("desk")}><Icon n="chart" size={14} /><b>{me.desk.streak}</b></button>}
           {sky && <span className={`tg-card tg-stat tg-sky tg-hide-s ${sky}`} title={`Weather on this land: ${SKY_LABEL[sky]}`}><Icon n={SKY_ICON[sky]} size={14} /><span>{SKY_LABEL[sky]}</span></span>}
           {chests > 0 && <button type="button" className="tg-card tg-stat tg-chestchip" onClick={() => setPanel("today")} title="Chests to open"><Icon n="chest" size={14} /><b>{chests}</b></button>}
-          {prizes?.pot && <button type="button" className="tg-card tg-stat tg-potchip" onClick={() => setPanel("prizes")} title="This week's prize pot"><Icon n="trophy" size={14} /><b>{eth(prizes.pot.potEth)} ETH</b></button>}
+          {prizes?.pot && Number(prizes.pot.potEth) >= 0.001 && <button type="button" className="tg-card tg-stat tg-potchip" onClick={() => setPanel("prizes")} title="This week's prize pot"><Icon n="trophy" size={14} /><b>{eth(prizes.pot.potEth)} ETH</b></button>}
           <span className={`tg-card tg-stat${me.streak > 1 ? " hot" : ""}`} title="Days in a row"><Icon n="flame" size={14} /><b>{me.streak}</b></span>
           <button type="button" className={`tg-card tg-stat tg-lock${needPicks ? " urgent" : ""}`} onClick={() => setPanel("picks")}><Icon n="clock" size={14} /><span>{needPicks ? "Pick before" : "Locked in"}</span><b className="mono">{left(me.open.lockAt, now)}</b></button>
         </div>
@@ -516,20 +520,26 @@ function Spawn({ me, existing, onDone, call }: { me: Address; existing: Me | nul
   useEffect(() => { ownedTrenchers(me).then((x) => { setIds(x); setPick((p) => p ?? x[0] ?? null); if (!name && x[0]) setName(`Trenchie${x[0]}`); }).catch(() => setIds([])); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
   const [ref] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("ref"); if (q) localStorage.setItem("trenchies:ref", q); return q ?? localStorage.getItem("trenchies:ref") ?? ""; } catch { return ""; } });
-  const go = async () => { if (!pick) return; setBusy(true); setErr(null); try { const j = await call("spawn", { nft: pick, name: name.trim(), ...(ref && !existing ? { ref } : {}) }); onDone(j.me); } catch (e) { setErr((e as Error).message); } setBusy(false); };
+  const recruit = ids !== null && ids.length === 0 && !existing;
+  useEffect(() => { if (recruit && !name) setName(`Recruit${recruitArt(me) % 1000}`); }, [recruit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const go = async () => { if (!pick && !recruit) return; setBusy(true); setErr(null); try { const j = await call("spawn", { ...(recruit ? { guest: true } : { nft: pick }), name: name.trim(), ...(ref && !existing ? { ref } : {}) }); onDone(j.me); } catch (e) { setErr((e as Error).message); } setBusy(false); };
   return (
     <div className="tg-splash tg-spawn">
       <a className="tg-back" href={ROUTES.home}><Icon n="home" size={14} />trenchers.io</a>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/trenchies/symbol.webp" alt="" className="tg-sym" />
       <h1>{existing ? "Move your Trenchie" : "Spawn your Trenchie"}</h1>
-      <p className="tg-lede">{existing ? "Pick another Trencher you hold. Your XP, coins and land come along." : "Pick the Trencher it's born from. Your Trenchie wears its colours."}</p>
+      <p className="tg-lede">{existing ? "Pick another Trencher you hold. Your XP, coins and land come along." : recruit ? "Name it and you're in. Everyone starts with a shack, a bike and 3 picks a day." : "Pick the Trencher it's born from. Your Trenchie wears its colours."}</p>
       {ref && !existing && <p className="tg-invited"><Icon n="gift" size={14} />Invited by <b>{ref}</b>: you start with +{REFERRAL.newBricks} coins and a chest.</p>}
-      {ids === null ? <p className="tg-lede">Finding your Trenchers…</p> : ids.length === 0 ? <p className="tg-err">This wallet doesn&apos;t hold a Trencher. You need one to spawn a Trenchie.</p> : (
+      {ids === null ? <p className="tg-lede">Finding your Trenchers…</p> : ids.length === 0 ? (existing ? <p className="tg-err">This wallet doesn&apos;t hold a Trencher to move into.</p> : (
+        <div className="tg-recruit-card">
+          <ArtCanvas id={recruitArt(me)} size={96} className="tg-recruit" />
+          <div><b>Play as a Recruit</b><p>No Trencher in this wallet? Jump in anyway: your Trenchie starts in grey. Get a Trencher later and it moves in with its colours, keeping your XP, coins and land.</p><a href={ROUTES.mint}>Mint a Trencher →</a></div>
+        </div>)) : (
         <div className="tg-nfts">{ids.slice(0, 24).map((id) => <button key={id} type="button" className={`tg-nft${pick === id ? " on" : ""}`} onClick={() => setPick(id)}><ArtCanvas id={id} size={72} /><span>#{id}</span></button>)}</div>
       )}
       <label className="tg-name"><span>Name your Trenchie</span><input value={name} maxLength={16} onChange={(e) => setName(e.target.value.replace(/[^A-Za-z0-9_]/g, ""))} placeholder="3 to 16 letters" /></label>
-      <button type="button" className="tg-btn tg-btn-go" onClick={go} disabled={busy || !pick || name.length < 3}>{busy ? "Spawning…" : existing ? "Move in" : "Spawn"}</button>
+      <button type="button" className="tg-btn tg-btn-go" onClick={go} disabled={busy || (!pick && !recruit) || name.length < 3}>{busy ? "Spawning…" : existing ? "Move in" : recruit ? "Spawn a Recruit" : "Spawn"}</button>
       {err && <p className="tg-err">{err}</p>}
     </div>
   );
@@ -792,7 +802,7 @@ function ProfilePanel({ me, palette, call, onMe, onRespawn, onShare }: { me: Me;
   const post = me.xPending ? `My Trenchie ${me.name} just moved into the trench. ${me.xPending.code}\n\ntrenchers.io/trenchies` : "";
   return (
     <div className="tg-pp">
-      <div className="tg-prof"><ArtCanvas id={me.nft} size={44} /><div><h2>{me.name}</h2><p className="tg-sub">Trencher #{me.nft} · Level {me.level} · {n0(me.xp)} XP</p></div></div>
+      <div className="tg-prof"><ArtCanvas id={me.nft} size={44} className={me.guest ? "tg-recruit" : undefined} /><div><h2>{me.name}</h2><p className="tg-sub">{me.guest ? "Recruit" : `Trencher #${me.nft}`} · Level {me.level} · {n0(me.xp)} XP</p></div></div>
       <Wardrobe me={me} palette={palette} call={call} onMe={(m) => onMe(m)} />
       <dl className="tg-kpis">
         <div><dt>Land value</dt><dd>{n0(me.landValue ?? 0)}</dd></div><div><dt>Cheers</dt><dd>{me.cheers ?? 0}</dd></div>
