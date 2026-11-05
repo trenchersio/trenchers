@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { getAddress, isAddress, verifyMessage, type Address, type PublicClient } from "viem";
 import { NFT_OWNER_ABI } from "./abis";
 import type { Backtest } from "./backtest";
+import type { PicksPrices } from "./trenchies-prices";
 import { formatEther } from "viem";
 import type { PrizePot } from "./prizes";
 import { ACHIEVEMENTS, CHEER, COSMETICS, DAY, DESK, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_SPLIT, QUESTS, RANK_COINS, RANK_XP, REFERRAL, RENAMED, ROOM_SLOTS, X_XP, cosmetic, deskRound, item, landValue, levelOf, roomLayout, roundLabel, roundOf, roundStart, streakXp, weekLabel, weekOf, weekStart, type Call, type ChestTier, type Slot } from "./trenchies-catalog";
@@ -61,7 +62,7 @@ type Round = { picks: Record<string, Address[]>; settled?: Settled };
 type Msg = { id: number; by: string; nft: number; text: string; at: number };
 type Prize = { week: number; label: string; feesWei: string; potWei: string; winners: { name: string; addr: string; nft: number; xp: number; share: number; wei: string }[]; at: number; paid: string | null };
 type Host = {
-  pub: PublicClient; nft: Address; prices: Backtest; symbolOf: (t: Address) => Promise<string>; log: (m: string) => void;
+  pub: PublicClient; nft: Address; prices: Backtest | PicksPrices; symbolOf: (t: Address) => Promise<string>; log: (m: string) => void;
   pot?: PrizePot; btc?: BtcFeed; announce?: (ids: number[], text: string) => void; notify?: (addr: string, msg: { title: string; body: string; url: string; tag?: string }) => void; site?: string;
 };
 
@@ -299,6 +300,9 @@ export class Trenchies {
       const list = (this.coinCache.list as { token: string; symbol: string }[]).filter((c) => !s || c.symbol.toLowerCase().includes(s) || c.token.includes(s));
       // A pasted address that isn't in the list: say why, so nobody thinks the search is broken.
       let note: string | null = null;
+      // a graduated coin pasted by address: priced from its Uniswap pool from now on
+      const lookup = (this.host.prices as { lookup?: (t: Address) => Promise<unknown> }).lookup;
+      if (!list.length && /^0x[0-9a-f]{40}$/.test(s) && lookup) { const c = await lookup.call(this.host.prices, s as Address).catch(() => null); if (c) list.push(c as never); }
       if (!list.length && /^0x[0-9a-f]{40}$/.test(s)) {
         const info = (this.host.prices as { info?: (t: Address) => { symbol: string; graduated: boolean; lastTrade: number | null } | null }).info?.(s as Address) ?? null;
         note = !info ? "That isn't a Pons coin. Daily picks are Pons launchpad coins."
@@ -314,6 +318,7 @@ export class Trenchies {
       if (toks.length !== PICKS || !toks.every((t) => /^0x[0-9a-f]{40}$/.test(t) && this.host.prices.known(t as Address))) { send(400, { error: `Pick ${PICKS} different Pons coins.` }); return true; }
       const open = roundOf(now) + 1;
       this.round(open).picks[addr] = toks as Address[];
+      for (const t of toks) (this.host.prices as { follow?: (t: Address) => void }).follow?.(t as Address); // graduated ones: follow the pool price
       bump(p, roundOf(now), "pick");
       this.save();
       send(200, { me: this.me(p, now) });

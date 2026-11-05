@@ -17,7 +17,7 @@ import type { Call, LandInfo, Me, Mini, Note, Pub, Result } from "./model";
 import type { Look, Palette } from "./types";
 
 // ------------------------------------------------------------------ types + api
-type Coin = { token: string; symbol: string; price: number; changePct: number; volEth: number; trades: number };
+type Coin = { token: string; symbol: string; price: number; changePct: number; volEth: number; trades: number; graduated?: boolean };
 type Prizes = {
   pot: { wallet: string | null; bps: number; potEth: string; feesEth: string; end: number; updatedAt: number; error: string | null } | null; split: number[];
   week: { label: string; end: number }; standings: (Mini & { rank: number; xp: number; hits: number })[]; me: { rank: number | null; xp: number; players: number } | null; admin: boolean;
@@ -577,7 +577,7 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
         <div className="tg-pk-hero-t">
           <p className="tg-k">Daily picks · {me.open.label} UTC</p>
           <h2>Pick tomorrow&apos;s <em>top 3</em></h2>
-          <p className="tg-sub">Every coin anyone picks is ranked by how far it climbs that day. Finish in the top 3 and you earn XP and coins.</p>
+          <p className="tg-sub">Every coin anyone picks is ranked by how far it climbs that day, on Pons or, once graduated, on Uniswap. Finish in the top 3 and you earn XP and coins.</p>
           <ol className="tg-pk-ladder">{RANK_XP.map((x, i) => <li key={i} className={`r${i + 1}`}><span>{PLACE[i]}</span><b>+{x} XP</b><small>+{RANK_COINS[i]} coins</small></li>)}</ol>
         </div>
         <div className="tg-pk-clock" aria-label="Time left to pick"><small>Locks in</small><div className="mono">{t.map((x, i) => <span key={i}><b>{x}</b><i>{["h", "m", "s"][i]}</i></span>)}</div></div>
@@ -603,7 +603,7 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
             <ol className="tg-live-picks">{me.live.picks.map((p) => <li key={p.token} className={p.place && p.place <= 3 ? "top" : ""}><span className="tg-place">{p.place ? `#${p.place}` : "–"}</span><span className="tg-lp-name"><b>${p.symbol}</b><small className="mono">{ethPx(p.from)} → {ethPx(p.now)} ETH</small></span><em className={`mono ${(p.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(p.pct)}</em></li>)}</ol>
           ) : <p className="tg-sub">No picks running today. Tomorrow&apos;s start here.</p>}
           {me.live.top.length > 0 && <ol className="tg-pk-lead">{me.live.top.slice(0, 3).map((t, i) => <li key={t.token} className={`r${i + 1}`}><span>{PLACE[i]}</span><b>${t.symbol}</b><em className="mono up">{pct(t.pct)}</em></li>)}</ol>}
-          <p className="tg-fine">Settles 00:00 UTC · {me.live.players} player{me.live.players === 1 ? "" : "s"} · prices from Pons, hourly</p>
+          <p className="tg-fine">Settles 00:00 UTC · {me.live.players} player{me.live.players === 1 ? "" : "s"} · prices from Pons and Uniswap</p>
         </section>
         <section className="tg-pk-card">
           <h3>Your past picks <small>{me.results.length ? `last ${me.results.length}` : ""}</small></h3>
@@ -621,14 +621,14 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
           <label className="tg-pk-search"><Icon n="target" size={14} /><input placeholder="Search a ticker or paste an address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
           <div className="tg-pk-sort" role="radiogroup" aria-label="Sort">{([["vol", "Volume"], ["up", "Top movers"], ["trades", "Most trades"]] as const).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={sort === k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{l}</button>)}</div>
         </div>
-        {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">{found?.note ?? "No coins match. Pons launchpad coins that traded in the last 24 hours show up here."}</p> : (
+        {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">{found?.note ?? "No coins match. Pons coins that traded in the last 24 hours show up here; paste the address of a graduated coin to add it."}</p> : (
           <ol className="tg-pk-coins">
             {list.map((c, i) => { const on = sel.some((x) => x.token === c.token), slot = sel.findIndex((x) => x.token === c.token), up = c.changePct >= 0, n = picked.get(c.token); return (
               <li key={c.token}><button type="button" className={`tg-pk-coin${on ? " on" : ""}`} onClick={() => toggle(c)} disabled={!on && sel.length >= PICKS}>
                 <span className="tg-pk-rank mono">{i + 1}</span>
                 <Avatar s={c.symbol} />
-                <span className="tg-pk-name"><b>${c.symbol}</b><small className="mono">{n ? `picked ×${n} · ` : ""}{c.trades.toLocaleString("en-US")} trades</small></span>
-                <span className="tg-pk-vol"><small className="mono">{c.volEth.toFixed(2)} ETH</small><i><s style={{ width: `${Math.max(4, (c.volEth / maxVol) * 100)}%` }} /></i></span>
+                <span className="tg-pk-name"><b>${c.symbol}</b><small className="mono">{n ? `picked ×${n} · ` : ""}{c.graduated ? "graduated · Uniswap price" : `${c.trades.toLocaleString("en-US")} trades`}</small></span>
+                <span className="tg-pk-vol">{c.graduated ? <small className="mono">Uniswap</small> : <><small className="mono">{c.volEth.toFixed(2)} ETH</small><i><s style={{ width: `${Math.max(4, (c.volEth / maxVol) * 100)}%` }} /></i></>}</span>
                 <span className={`tg-pk-move ${up ? "up" : "down"}`}><em className="mono">{pct(c.changePct)}</em><i><s style={{ width: `${Math.max(4, Math.min(100, (Math.abs(c.changePct) / maxMove) * 100))}%` }} /></i></span>
                 <span className="tg-pk-add">{on ? <><Icon n="check" size={12} />{slot + 1}</> : <Icon n="plus" size={13} />}</span>
               </button></li>); })}
