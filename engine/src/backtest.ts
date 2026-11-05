@@ -124,6 +124,8 @@ export class Backtest {
   }
   symbolOf(token: Address) { const tk = this.host.tokens.get(token); return tk ? tk.symbol ?? token.slice(2, 8).toUpperCase() : null; }
   known(token: Address) { return this.host.tokens.has(token); }
+  /** What we know about one coin (for "why can't I pick this?"). */
+  info(token: Address) { const tk = this.host.tokens.get(token); if (!tk) return null; const P = this.series.get(token)?.pts; return { symbol: tk.symbol ?? token.slice(2, 8).toUpperCase(), graduated: tk.graduated, lastTrade: P?.length ? P[P.length - 4] : null }; }
 
   /** Replays `rule` over the last 7 days. `size`: ETH per trade, for the ETH result. */
   run(text: string, size = 0.01): Result {

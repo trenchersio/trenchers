@@ -7,7 +7,7 @@ import { ownedTrenchers, walletProvider } from "@/lib/chain";
 import { ENGINE_URL, EXPLORER, ROUTES, chain } from "@/lib/constants";
 import { useWallet } from "@/lib/wallet";
 import { ConnectModal } from "@/components/ConnectModal";
-import { ACHIEVEMENTS, CHEER, DESK, FISHES, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
+import { ACHIEVEMENTS, CHEER, DESK, FISHES, FLOORS, HAT_TRICK_XP, HOUSE_ORDER, ITEMS, LEVEL_COINS, NET_EVERY, PAINTS, PAINT_COST, PICKS, PLAY_COINS, PLAY_XP, PRIZE_BPS, PRIZE_SPLIT, RANK_COINS, RANK_XP, REFERRAL, ROOM_SLOTS, X_XP, bug, item, levelOf, roomLayout, roundStart, xpFor, type ChestTier, type Item, type ItemKind } from "@/lib/trenchies-catalog";
 import { Terminal } from "./Terminal";
 import { SKY_LABEL, type Sky } from "./weather";
 import { Icon } from "./icons";
@@ -338,17 +338,17 @@ export function TrenchiesGame() {
       </nav>
 
       {(panel === "picks" || panel === "desk") && (
-        <div className={`tg-trade${deskMax ? " max" : ""}`}>
-          <div className="tg-trade-tabs">
-            <span className="tg-trade-title"><Icon n="chart" size={15} /><b>Trading Desk</b><small>Bitcoin up or down, and tomorrow&apos;s top 3 coins</small></span>
-            <button type="button" className={`tg-trade-jump${needPicks ? " hot" : ""}`} onClick={() => document.getElementById("tg-picks")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Icon n="target" size={13} />Daily picks<small>{needPicks ? left(me.open.lockAt, now) : "locked in"}</small></button>
+        <div className={`tg-trade${deskMax && panel === "desk" ? " max" : ""} show-${panel}`}>
+          <div className="tg-trade-tabs" role="tablist" aria-label="Trading Desk">
+            <button type="button" role="tab" aria-selected={panel === "desk"} className={panel === "desk" ? "on" : ""} onClick={() => setPanel("desk")}><Icon n="chart" size={15} />Bitcoin<small>up or down · 5 min</small></button>
+            <button type="button" role="tab" aria-selected={panel === "picks"} className={panel === "picks" ? "on" : ""} onClick={() => setPanel("picks")}><Icon n="target" size={15} />Memecoin picks<small>{needPicks ? `${left(me.open.lockAt, now)} left` : "locked in"}</small>{needPicks && panel !== "picks" && <i className="tg-dot" />}</button>
             <span className="tg-trade-wallet"><Icon n="coin" size={13} /><b>{n0(me.bricks)}</b><small>coins</small></span>
             <button type="button" className="tg-x" aria-label="Close" onClick={() => setPanel(null)}><Icon n="close" size={14} /></button>
           </div>
           <div className="tg-trade-scroll">
-            <Terminal call={call} onTicker={setTicker} onSettled={refresh} say={say} max={deskMax} onMax={() => setDeskMax((m) => !m)} onClose={() => setPanel(null)} />
-            {!deskMax && <div className="tg-trade-picks" id="tg-picks">
-              <PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} /></div>}
+            {panel === "desk"
+              ? <Terminal call={call} onTicker={setTicker} onSettled={refresh} say={say} max={deskMax} onMax={() => setDeskMax((m) => !m)} onClose={() => setPanel(null)} />
+              : <div className="tg-trade-picks" id="tg-picks"><PicksPanel me={me} now={now} call={call} onSaved={(m) => { apply(m); say(`Picks locked in for ${m.open.label}`); }} /></div>}
           </div>
         </div>
       )}
@@ -555,7 +555,14 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { call("coins", undefined, {}).then((j) => { setCoins(j.coins ?? []); setPopular(j.popular ?? []); }).catch((e) => setErr(e.message)); }, [call]);
-  const list = (coins ?? []).filter((c) => !q || c.symbol.toLowerCase().includes(q.toLowerCase()) || c.token.includes(q.toLowerCase()))
+  // A pasted contract address that isn't in the list: ask the server, which can add the coin or say why it can't be picked.
+  const [found, setFound] = useState<{ q: string; coins: Coin[]; note: string | null } | null>(null);
+  useEffect(() => {
+    const a = q.trim().toLowerCase(); if (!/^0x[0-9a-f]{40}$/.test(a) || (coins ?? []).some((c) => c.token === a)) { setFound(null); return; }
+    let alive = true; call("coins", undefined, { q: a }).then((j) => { if (alive) setFound({ q: a, coins: j.coins ?? [], note: (j as { note?: string | null }).note ?? null }); }).catch(() => {});
+    return () => { alive = false; };
+  }, [q, coins, call]);
+  const list = [...(coins ?? []), ...(found?.coins ?? []).filter((c) => !(coins ?? []).some((x) => x.token === c.token))].filter((c) => !q || c.symbol.toLowerCase().includes(q.trim().toLowerCase().replace(/^\$/, "")) || c.token.includes(q.trim().toLowerCase()))
     .sort((a, b) => sort === "up" ? b.changePct - a.changePct : sort === "trades" ? b.trades - a.trades : b.volEth - a.volEth);
   const maxVol = Math.max(1e-9, ...(coins ?? []).map((c) => c.volEth)), maxMove = Math.max(1, ...(coins ?? []).map((c) => Math.abs(c.changePct)));
   const picked = new Map(popular.map((p) => [p.token, p.count]));
@@ -593,10 +600,20 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
         <section className="tg-pk-card">
           <h3>Today, live <small className="mono">{me.live.label}</small></h3>
           {me.live.picks.length ? (
-            <ol className="tg-live-picks">{me.live.picks.map((p) => <li key={p.token} className={p.place && p.place <= 3 ? "top" : ""}><span className="tg-place">{p.place ? `#${p.place}` : "–"}</span><b>${p.symbol}</b><em className={`mono ${(p.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(p.pct)}</em></li>)}</ol>
+            <ol className="tg-live-picks">{me.live.picks.map((p) => <li key={p.token} className={p.place && p.place <= 3 ? "top" : ""}><span className="tg-place">{p.place ? `#${p.place}` : "–"}</span><span className="tg-lp-name"><b>${p.symbol}</b><small className="mono">{ethPx(p.from)} → {ethPx(p.now)} ETH</small></span><em className={`mono ${(p.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(p.pct)}</em></li>)}</ol>
           ) : <p className="tg-sub">No picks running today. Tomorrow&apos;s start here.</p>}
           {me.live.top.length > 0 && <ol className="tg-pk-lead">{me.live.top.slice(0, 3).map((t, i) => <li key={t.token} className={`r${i + 1}`}><span>{PLACE[i]}</span><b>${t.symbol}</b><em className="mono up">{pct(t.pct)}</em></li>)}</ol>}
           <p className="tg-fine">Settles 00:00 UTC · {me.live.players} player{me.live.players === 1 ? "" : "s"} · prices from Pons, hourly</p>
+        </section>
+        <section className="tg-pk-card">
+          <h3>Your past picks <small>{me.results.length ? `last ${me.results.length}` : ""}</small></h3>
+          {me.results.length ? (
+            <ol className="tg-pk-hist">{me.results.map((r) => (
+              <li key={r.round}>
+                <div className="tg-pk-hist-h"><span className="mono">{dayLabel(r.round)}</span><b className="mono">+{r.xp} XP{r.coins ? ` · +${r.coins} coins` : ""}</b></div>
+                <div className="tg-pk-hist-p">{r.picks.map((x) => <span key={x.token} className={x.rank && x.rank <= 3 ? "top" : ""}><b>${x.symbol}</b><em className={`mono ${(x.pct ?? 0) >= 0 ? "up" : "down"}`}>{pct(x.pct)}</em><small className="mono">{x.rank ? `#${x.rank}` : "–"}</small></span>)}</div>
+              </li>))}</ol>
+          ) : <p className="tg-sub">Your settled days show up here: what you picked, how each coin did and what you earned.</p>}
         </section>
         {onTrade && <button type="button" className="tg-crosslink" onClick={onTrade}><Icon n="chart" size={16} /><span><b>Trading desk</b><small>Call Bitcoin up or down every 5 minutes</small></span><Icon n="arrow" size={13} /></button>}
       </div><div className="tg-picks-main">
@@ -604,7 +621,7 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
           <label className="tg-pk-search"><Icon n="target" size={14} /><input placeholder="Search a ticker or paste an address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
           <div className="tg-pk-sort" role="radiogroup" aria-label="Sort">{([["vol", "Volume"], ["up", "Top movers"], ["trades", "Most trades"]] as const).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={sort === k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{l}</button>)}</div>
         </div>
-        {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">No coins match. Coins that traded in the last 24 hours show up here.</p> : (
+        {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">{found?.note ?? "No coins match. Pons launchpad coins that traded in the last 24 hours show up here."}</p> : (
           <ol className="tg-pk-coins">
             {list.map((c, i) => { const on = sel.some((x) => x.token === c.token), slot = sel.findIndex((x) => x.token === c.token), up = c.changePct >= 0, n = picked.get(c.token); return (
               <li key={c.token}><button type="button" className={`tg-pk-coin${on ? " on" : ""}`} onClick={() => toggle(c)} disabled={!on && sel.length >= PICKS}>
@@ -621,6 +638,10 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
     </div>
   );
 }
+/** A Pons coin price in ETH, readable at any size (0.00000123 rather than 1.23e-6). */
+function ethPx(x: number | null | undefined) { return x === null || x === undefined || !Number.isFinite(x) ? "–" : x.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 18 }); }
+/** "6 Nov" for a picks round (a UTC day). */
+function dayLabel(r: number) { return new Date(roundStart(r) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }); }
 function Avatar({ s }: { s: string }) { return <span className="tg-av" style={{ background: `hsl(${hue(s)} 55% 38%)` }}>{s.slice(0, 1)}</span>; }
 
 // ------------------------------------------------------------------ results

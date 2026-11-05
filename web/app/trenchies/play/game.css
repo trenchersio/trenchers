@@ -497,7 +497,7 @@
 
 /* ---------- trading screen: the terminal next to the daily picks */
 /* the trading desk and the daily picks: one at a time, full screen, with tabs to switch between them */
-.tg-trade { position: absolute; z-index: 5; top: 60px; bottom: 76px; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; animation: tgtrade .28s cubic-bezier(.2,.9,.3,1); }
+.tg-trade { position: absolute; z-index: 5; top: 84px; bottom: 80px; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; animation: tgtrade .28s cubic-bezier(.2,.9,.3,1); }
 .tg-trade.max { top: 12px; bottom: 12px; z-index: 9; }
 @keyframes tgtrade { from { opacity: 0; transform: translateY(14px) scale(.985); } }
 .tg-trade-tabs { display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(7,10,9,.97); border: 1px solid rgba(255,255,255,.09); box-shadow: 0 20px 60px -24px #000; overflow: hidden; }
@@ -643,7 +643,7 @@
 .tt-box-h b { font-size: 11.5px; color: var(--tx); }
 .tt-count { display: flex; justify-content: space-between; align-items: baseline; }
 .tt-count small { color: var(--dim); font-size: 11px; }
-.tt-count b { font-size: 26px; letter-spacing: -.02em; color: var(--tx); } .tt-count b.soon { color: #ffb24d; }
+.tt-count b { font-size: 26px; letter-spacing: -.02em; color: var(--tx); } .tt-count b.tt-soon { color: #ffb24d; }
 .tt-ud { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tt-ud button { display: grid; justify-items: center; gap: 1px; padding: 11px 6px 9px; border-radius: 9px; border: 1px solid; font: inherit; color: var(--tx); cursor: pointer; transition: transform .1s ease, background .15s ease, box-shadow .2s ease; }
 .tt-ud b { font: 700 15px var(--sans); letter-spacing: .06em; text-transform: uppercase; } .tt-ud small { color: var(--mut); font-size: 10px; }
@@ -730,3 +730,20 @@
 .tg-recruit-card p { margin: 0 0 6px; font-size: 14px; line-height: 1.45; color: #B9C1BC; }
 .tg-recruit-card a { font-size: 13px; color: #39FF88; }
 @media (max-width: 480px) { .tg-recruit-card { flex-direction: column; text-align: center; } }
+
+/* picks: live picks with prices, and past days */
+.tg-live-picks .tg-lp-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tg-live-picks .tg-lp-name small { color: var(--dim); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-pk-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 320px; overflow-y: auto; }
+.tg-pk-hist li { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid var(--edge); }
+.tg-pk-hist-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; color: var(--mut); }
+.tg-pk-hist-h b { color: var(--n); font-size: 12px; }
+.tg-pk-hist-p { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tg-pk-hist-p span { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,.04); font-size: 12px; }
+.tg-pk-hist-p span.top { background: rgba(57,255,136,.1); box-shadow: inset 0 0 0 1px rgba(57,255,136,.3); }
+.tg-pk-hist-p small { color: var(--dim); font-size: 10.5px; }
+.tg-pk-hist-p em, .tg-live-picks em { font-style: normal; }
+.tg-pk-hist-p .up { color: var(--n); } .tg-pk-hist-p .down { color: #ff5d6c; }
+.tt-how { margin: 2px 0 10px; color: var(--mut); font-size: 11.5px; line-height: 1.45; }
+.tt-how b.up { color: var(--up); } .tt-how b.down { color: var(--dn); }
+.tt-pill.pending { background: rgba(255,216,77,.12); color: #ffd84d; }

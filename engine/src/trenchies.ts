@@ -212,7 +212,7 @@ export class Trenchies {
       week: this.weekRank(p.addr, now), xPending: p.xPending ? { handle: p.xPending.handle, code: p.xPending.code } : null,
       open: { round: open, label: roundLabel(open), lockAt: roundStart(open), picks: (this.rounds.get(open)?.picks[p.addr] ?? []).map((t) => ({ token: t, symbol: this.host.prices.symbolOf(t) ?? t.slice(2, 8) })) },
       live: { round: live, label: roundLabel(live), endsAt: roundStart(live + 1), dataAt: this.host.prices.updatedAt, players: Object.keys(this.rounds.get(live)?.picks ?? {}).length,
-        picks: (this.rounds.get(live)?.picks[p.addr] ?? []).map((t) => { const i = st.findIndex((x) => x.token === t); return { token: t, symbol: st[i]?.symbol ?? t.slice(2, 8), pct: st[i]?.pct ?? null, place: i >= 0 ? i + 1 : null }; }),
+        picks: (this.rounds.get(live)?.picks[p.addr] ?? []).map((t) => { const i = st.findIndex((x) => x.token === t); return { token: t, symbol: st[i]?.symbol ?? t.slice(2, 8), pct: st[i]?.pct ?? null, place: i >= 0 ? i + 1 : null, from: this.host.prices.priceAt(t, roundStart(live)) ?? null, now: this.host.prices.priceAt(t, now) ?? null }; }),
         top: st.slice(0, 5) },
       last: (() => { const s = this.rounds.get(last)?.settled; return s ? { round: last, label: roundLabel(last), top: s.coins.slice(0, 5), players: s.players } : null; })(),
       results: p.results.slice(0, 10), unseen: p.results[0] && p.results[0].round !== p.seen ? p.results[0] : null,
@@ -289,14 +289,23 @@ export class Trenchies {
     if (!p) { send(404, { error: "Spawn your Trenchie first." }); return true; }
 
     if (op === "coins") {
-      if (!this.coinCache || Date.now() - this.coinCache.at > 300_000) {
-        const list = this.host.prices.active(now - DAY, 60);
+      // an empty list (prices still loading after a restart) is retried on the next request instead of kept 5 minutes
+      if (!this.coinCache || !this.coinCache.list.length || Date.now() - this.coinCache.at > 300_000) {
+        const list = this.host.prices.active(now - DAY, 150);
         await Promise.all(list.filter((c) => /^[0-9A-F]{6}$/.test(c.symbol)).slice(0, 60).map(async (c) => { c.symbol = await this.host.symbolOf(c.token).catch(() => c.symbol); }));
         this.coinCache = { at: Date.now(), list };
       }
       const s = (q.get("q") ?? "").trim().toLowerCase();
       const list = (this.coinCache.list as { token: string; symbol: string }[]).filter((c) => !s || c.symbol.toLowerCase().includes(s) || c.token.includes(s));
-      send(200, { coins: list, dataAt: this.host.prices.updatedAt, popular: this.popular(roundOf(now) + 1) });
+      // A pasted address that isn't in the list: say why, so nobody thinks the search is broken.
+      let note: string | null = null;
+      if (!list.length && /^0x[0-9a-f]{40}$/.test(s)) {
+        const info = (this.host.prices as { info?: (t: Address) => { symbol: string; graduated: boolean; lastTrade: number | null } | null }).info?.(s as Address) ?? null;
+        note = !info ? "That isn't a Pons coin. Daily picks are Pons launchpad coins."
+          : info.graduated ? `$${info.symbol} has graduated to Uniswap. Daily picks are coins still trading on the Pons launchpad, where every trade is priced.`
+          : `$${info.symbol} hasn't traded on Pons in the last 24 hours. Picks are coins that traded today.`;
+      }
+      send(200, { coins: list, note, dataAt: this.host.prices.updatedAt, popular: this.popular(roundOf(now) + 1) });
       return true;
     }
     if (op === "picks") {

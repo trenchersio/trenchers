@@ -20,7 +20,7 @@ export type Me = Pub & Progress & {
   bricks: number; held: boolean; desk: { streak: number; best: number; paidLeft: number }; xPending: { handle: string; code: string } | null;
   requests: number; lands: Mini[]; week: { rank: number | null; xp: number; players: number };
   open: { round: number; label: string; lockAt: number; picks: { token: string; symbol: string }[] };
-  live: { round: number; label: string; endsAt: number; dataAt: number; players: number; picks: { token: string; symbol: string; pct: number | null; place: number | null }[]; top: { token: string; symbol: string; pct: number | null; by: number }[] };
+  live: { round: number; label: string; endsAt: number; dataAt: number; players: number; picks: { token: string; symbol: string; pct: number | null; place: number | null; from?: number | null; now?: number | null }[]; top: { token: string; symbol: string; pct: number | null; by: number }[] };
   last: { round: number; label: string; top: { token: string; symbol: string; pct: number | null }[]; players: number } | null;
   results: Result[]; unseen: Result | null;
 };

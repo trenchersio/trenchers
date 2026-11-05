@@ -65,7 +65,7 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
     const list = [...j.log.map((x) => ({ r: x.r, call: x.call, res: x.result as string })), ...(j.live.call ? [{ r: j.live.round, call: j.live.call, res: "live" }] : [])]
       .filter((x) => x.r * DESK.round >= first).sort((a, b) => a.r - b.r)
       .map((x) => ({ time: (Math.floor((x.r * DESK.round) / t) * t) as T, position: x.call === "up" ? "belowBar" as const : "aboveBar" as const, shape: x.call === "up" ? "arrowUp" as const : "arrowDown" as const,
-        color: x.res === "win" ? UP : x.res === "loss" ? DOWN : x.res === "live" ? "#ffd84d" : "#8a948f", text: x.res === "win" ? "won" : x.res === "loss" ? "lost" : x.res === "live" ? "you" : "" }));
+        color: x.res === "win" ? UP : x.res === "loss" ? DOWN : x.res === "live" ? "#ffd84d" : "#8a948f", text: x.res === "win" ? "won" : x.res === "loss" ? "lost" : x.res === "live" ? `your ${x.call.toUpperCase()}` : "" }));
     ser.setMarkers(list);
   };
 
@@ -115,7 +115,7 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
         const p = j.price; if (p !== null && prev.current !== null && p !== prev.current) { setFlash(p > prev.current ? "up" : "down"); setTimeout(() => setFlash(null), 450); } prev.current = p;
         const ser = tfRef.current === 1 ? area.current : candles.current;
         if (ser) { if (openLine.current) { try { ser.removePriceLine(openLine.current); } catch { /* the other series */ } openLine.current = null; }
-          if (j.live.open) openLine.current = ser.createPriceLine({ price: j.live.open, color: "#ffd84d", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "round open" }); }
+          if (j.live.open) openLine.current = ser.createPriceLine({ price: j.live.open, color: j.live.call === "up" ? UP : j.live.call === "down" ? DOWN : "#ffd84d", lineWidth: j.live.call ? 2 : 1, lineStyle: 2, axisLabelVisible: true, title: j.live.call ? `your ${j.live.call.toUpperCase()} entry` : "round open" }); }
         const top = j.log[0]?.r ?? -1;
         if (seenLog.current !== null && top > seenLog.current && j.log[0]) { cb.current.say(resultText(j.log[0])); cb.current.onSettled(); }
         if (seenLog.current !== top || fresh.length) marks();
@@ -147,6 +147,7 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
   const settled = (v?.log ?? []).filter((x) => x.result === "win" || x.result === "loss"), wins = settled.filter((x) => x.result === "win").length;
   const liveCls = winning === true ? "win" : winning === false ? "lose" : "";
 
+  const nCalls = (v?.log.length ?? 0) + (live?.call ? 1 : 0) + (next?.call ? 1 : 0);
   return (
     <section className={`tt${max ? " max" : ""}`} aria-label="Trading terminal">
       {/* ------------------------------------------------ header */}
@@ -174,7 +175,7 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
         <div className="tt-chartcol">
           <div className="tt-toolbar">
             <div className="tt-seg" role="radiogroup" aria-label="Timeframe">{TFS.map((x) => <button key={x.s} type="button" role="radio" aria-checked={tf === x.s} className={tf === x.s ? "on" : ""} onClick={() => setTf(x.s)}>{x.l}</button>)}</div>
-            <span className="tt-legend mono"><i className="o" />round open {px(live?.open)}<i className="u" />your calls</span>
+            <span className="tt-legend mono"><i className="o" />{live?.call ? `your ${live.call.toUpperCase()} entry` : "round open"} {px(live?.open)}<i className="u" />your calls</span>
             <span className="tt-src mono tt-hide-s">Coinbase spot</span>
           </div>
           <div className="tt-chart" ref={box}>{!ready || !v ? <p className="tt-wait">Connecting to the live price…</p> : null}</div>
@@ -189,7 +190,10 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
         <aside className="tt-ticket">
           <div className="tt-box">
             <div className="tt-box-h"><span>Next round</span><b className="mono">{next ? `${hhmm(next.start)}–${hhmm(next.start + DESK.round)}` : "–"}</b></div>
-            <div className="tt-count"><small>Calls lock in</small><b className={`mono${leftNext < 30 ? " soon" : ""}`}>{mmss(leftNext)}</b></div>
+            <p className="tt-how">{next?.call
+              ? <>You&apos;re in: <b className={next.call}>{next.call.toUpperCase()}</b> from {hhmm(next.start)}. Your entry price is Bitcoin at {hhmm(next.start)}; you win if it closes {next.call === "up" ? "higher" : "lower"} at {hhmm(next.start + DESK.round)}.</>
+              : next ? <>Call where Bitcoin goes from {hhmm(next.start)} to {hhmm(next.start + DESK.round)}. Your entry price is the price at {hhmm(next.start)}.</> : null}</p>
+            <div className="tt-count"><small>Calls lock in</small><b className={`mono${leftNext < 30 ? " tt-soon" : ""}`}>{mmss(leftNext)}</b></div>
             <div className="tt-ud">
               <button type="button" className={`up${next?.call === "up" ? " on" : ""}`} disabled={!!busy || !price} onClick={() => void make("up")}><Icon n="up" size={18} /><b>Up</b><small>{next?.call === "up" ? "your call" : "closes higher"}</small></button>
               <button type="button" className={`down${next?.call === "down" ? " on" : ""}`} disabled={!!busy || !price} onClick={() => void make("down")}><Icon n="down" size={18} /><b>Down</b><small>{next?.call === "down" ? "your call" : "closes lower"}</small></button>
@@ -197,15 +201,16 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
             <dl className="tt-kv mono">
               <div><dt>If right</dt><dd className="up">+{winPay.xp} XP · +{winPay.coins} coins</dd></div>
               <div><dt>Beat the crowd</dt><dd>+{DESK.crowd.xp} XP · +{DESK.crowd.coins} coins</dd></div>
+              <div><dt>Your call</dt><dd className={next?.call ?? ""}>{next?.call ? `${next.call.toUpperCase()} · ${hhmm(next.start)}–${hhmm(next.start + DESK.round)}` : "none yet"}</dd></div>
               <div><dt>Paid calls left</dt><dd>{v?.paidLeft ?? DESK.paidPerDay} / {DESK.paidPerDay}</dd></div>
             </dl>
             <div className="tt-sent"><div className="tt-sent-bar"><i style={{ width: `${upShare * 100}%` }} /></div><p className="mono"><span className="up">{next?.crowd.up ?? 0} up</span><span>crowd</span><span className="down">{next?.crowd.down ?? 0} down</span></p></div>
           </div>
           <div className={`tt-box tt-live ${liveCls}`}>
-            <div className="tt-box-h"><span>Running round</span><b className="mono">{mmss(leftLive)} left</b></div>
+            <div className="tt-box-h"><span>{live?.call ? "Your live call" : "Running round"}</span><b className="mono">{mmss(leftLive)} left</b></div>
             <dl className="tt-kv mono">
-              <div><dt>Open</dt><dd>{px(live?.open)}</dd></div>
-              <div><dt>Last</dt><dd>{px(price)}</dd></div>
+              <div><dt>{live?.call ? "Entry" : "Open"} ({live ? hhmm(live.start) : "–"})</dt><dd>{px(live?.open)}</dd></div>
+              <div><dt>Now</dt><dd>{px(price)}</dd></div>
               <div><dt>Your call</dt><dd className={live?.call ?? ""}>{live?.call ? live.call.toUpperCase() : "none"}</dd></div>
               <div><dt>Status</dt><dd className={winning === true ? "up" : winning === false ? "down" : ""}>{!live?.call ? "–" : winning === null ? "level" : winning ? `winning ${ch !== null ? `by ${px(Math.abs(ch))}` : ""}` : `behind ${ch !== null ? `by ${px(Math.abs(ch))}` : ""}`}</dd></div>
             </dl>
@@ -220,17 +225,21 @@ export function Terminal({ call, onTicker, onSettled, say, max, onMax, onClose }
       {/* ------------------------------------------------ positions */}
       <div className="tt-foot">
         <div className="tt-tabs" role="tablist">
-          {([["calls", `Your calls${v?.log.length ? ` (${v.log.length})` : ""}`], ["top", "Best traders"], ["rules", "Rules"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+          {([["calls", `Your calls${nCalls ? ` (${nCalls})` : ""}`], ["top", "Best traders"], ["rules", "Rules"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
           {err && <span className="tt-err">{err}</span>}
         </div>
         <div className="tt-table">
-          {tab === "calls" && (!v || v.log.length === 0 ? <p className="tt-empty">No settled calls yet. Call the next round on the right.</p> : (
-            <table className="mono"><thead><tr><th>Round</th><th>Call</th><th>Open</th><th>Close</th><th>Move</th><th>Result</th><th>Paid</th></tr></thead>
-              <tbody>{v.log.map((x) => { const mv = x.open !== null && x.close !== null ? x.close - x.open : null; return (
+          {tab === "calls" && (!v || nCalls === 0 ? <p className="tt-empty">No calls yet. Call the next round on the right: Up or Down.</p> : (
+            <table className="mono"><thead><tr><th>Round</th><th>Call</th><th>Open</th><th>Close / now</th><th>Move</th><th>Result</th><th>Paid</th></tr></thead>
+              <tbody>
+                {next?.call && <tr className="pending"><td>{hhmm(next.start)}</td><td className={next.call}>{next.call.toUpperCase()}</td><td>at {hhmm(next.start)}</td><td>–</td><td>–</td><td><span className="tt-pill pending">starts in {mmss(leftNext)}</span></td><td>–</td></tr>}
+                {live?.call && <tr className="live"><td>{hhmm(live.start)}</td><td className={live.call}>{live.call.toUpperCase()}</td><td>{px(live.open)}</td><td>{px(price)}</td><td className={ch === null ? "" : ch >= 0 ? "up" : "down"}>{ch === null ? "–" : sgn(ch)}</td><td><span className={`tt-pill ${winning === true ? "win" : winning === false ? "loss" : "push"}`}>{winning === null ? "level" : winning ? "winning" : "behind"} · {mmss(leftLive)} left</span></td><td>–</td></tr>}
+                {v.log.map((x) => { const mv = x.open !== null && x.close !== null ? x.close - x.open : null; return (
                 <tr key={x.r} className={x.result}><td>{hhmm(x.r * DESK.round)}</td><td className={x.call}>{x.call.toUpperCase()}</td><td>{px(x.open)}</td><td>{px(x.close)}</td>
                   <td className={mv === null ? "" : mv >= 0 ? "up" : "down"}>{mv === null ? "–" : sgn(mv)}</td>
                   <td><span className={`tt-pill ${x.result}`}>{x.result === "win" ? (x.crowd ? "won · crowd" : "won") : x.result === "loss" ? "lost" : x.result === "push" ? "level" : "no price"}</span></td>
-                  <td>{x.xp ? `+${x.xp} XP` : "–"}{x.coins ? ` · +${x.coins}` : ""}</td></tr>); })}</tbody></table>
+                  <td>{x.xp ? `+${x.xp} XP` : "–"}{x.coins ? ` · +${x.coins}` : ""}</td></tr>); })}
+              </tbody></table>
           ))}
           {tab === "top" && (!v || v.top.length === 0 ? <p className="tt-empty">Nobody has won a call yet.</p> : (
             <table className="mono"><thead><tr><th>#</th><th>Trader</th><th>Won</th><th>Calls</th><th>Hit rate</th><th>Best streak</th></tr></thead>
