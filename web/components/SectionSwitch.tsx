@@ -23,8 +23,8 @@ export function SectionSwitch({ on, wide = false, mintOn = false }: { on: Where;
           </a>
         ))}
       </nav>
-      {/* Trenchies, the game coming next: its logo is the button */}
-      <a href={ROUTES.trenchies} className="secsw-trenchies" aria-label="Trenchies: join the waitlist">
+      {/* Trenchies, the game: its logo is the button */}
+      <a href={ROUTES.trenchiesPlay} className="secsw-trenchies" aria-label="Trenchies: play now">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/trenchies/logo.webp" alt="" width={87} height={28} />
       </a>

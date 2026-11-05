@@ -7,7 +7,11 @@ export default {
   // PREVIEW_EXPORT=1 builds a static copy with relative paths, for a shareable preview link.
   ...(preview ? { output: "export", assetPrefix: ".", images: { unoptimized: true } } : {}),
   // trenchers.io without www lands on www.trenchers.io, with the full link kept (not in the static preview).
-  ...(preview ? {} : { async redirects() { return [{ source: "/:path*", has: [{ type: "host", value: "trenchers.io" }], destination: "https://www.trenchers.io/:path*", permanent: true }]; } }),
+  // trenchers.io/trenchies opens the game itself now that Trenchies is live (not permanent, so it can change again).
+  ...(preview ? {} : { async redirects() { return [
+    { source: "/:path*", has: [{ type: "host", value: "trenchers.io" }], destination: "https://www.trenchers.io/:path*", permanent: true },
+    { source: "/trenchies", destination: "/trenchies/play", permanent: false },
+  ]; } }),
   webpack: (config) => {
     // Optional dependencies of wallet connectors that this site never uses.
     config.externals.push("pino-pretty", "lokijs", "encoding");
