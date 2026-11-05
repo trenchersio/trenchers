@@ -8,6 +8,7 @@ import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 const a = privateKeyToAccount(generatePrivateKey()), b = privateKeyToAccount(generatePrivateKey());
 process.env.TRENCHIES_FILE = mkdtempSync(`${tmpdir()}/trr-`) + "/t.json";
 process.env.TRENCHIES_ALLOW = `${a.address},${b.address}`;
+process.env.TRENCHIES_OPEN = "0"; // invite-only mode (the launch date has passed)
 
 test("progression: daily calendar, quests, chests, butterflies, wardrobe", async () => {
   const R = await import("../src/trenchies-rewards");

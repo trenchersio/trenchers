@@ -9,7 +9,7 @@ import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 const holder = privateKeyToAccount(generatePrivateKey()), fan = privateKeyToAccount(generatePrivateKey());
 process.env.TRENCHIES_FILE = mkdtempSync(`${tmpdir()}/trl-`) + "/t.json";
 process.env.TRENCHIES_ALLOW = "0x0000000000000000000000000000000000000009";
-delete process.env.TRENCHIES_OPEN; delete process.env.TRENCHIES_OPEN_AT;
+process.env.TRENCHIES_OPEN = "0"; delete process.env.TRENCHIES_OPEN_AT;
 
 test("Trenchies launch: open switch, Recruits, upgrade to a Trencher, status", async (t) => {
   const { Trenchies, loginText, OPEN, recruitArt } = await import("../src/trenchies");
@@ -56,5 +56,8 @@ test("Trenchies launch: open switch, Recruits, upgrade to a Trencher, status", a
 
   // The public status shows the player count
   assert.equal((await fetch(base + "status").then((r) => r.json()) as any).players, 2);
+  // No switch set: open by itself once the launch date (5 Nov 2026, 13:00 UTC) has passed; TRENCHIES_OPEN=0 closes it
+  delete process.env.TRENCHIES_OPEN; assert.equal(OPEN(), Date.now() >= Date.parse("2026-11-05T13:00:00Z"));
+  process.env.TRENCHIES_OPEN = "0"; assert.equal(OPEN(), false);
   delete process.env.TRENCHIES_OPEN;
 });

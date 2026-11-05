@@ -37,7 +37,7 @@ export function PublicLand({ p }: { p: Showcase }) {
       </header>
       <div className="tg-pubcta">
         <div><b>{p.name}&apos;s land in Trenchies</b><span>{p.items.length} things built · {p.hits} top-3 picks · {p.species} butterflies</span></div>
-        <a className="tg-btn tg-btn-go" href={play}><Icon n="gift" size={14} />Build yours: +{REFERRAL.newBricks} bricks</a>
+        <a className="tg-btn tg-btn-go" href={play}><Icon n="gift" size={14} />Build yours: +{REFERRAL.newBricks} coins</a>
       </div>
     </div>
   );

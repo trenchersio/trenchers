@@ -464,7 +464,7 @@ export type Reward = { bricks?: number; xp?: number; chest?: ChestTier };
 export type ChestTier = "common" | "rare" | "epic";
 /** The daily reward calendar: come back every day; miss one and it starts again at day 1. */
 export const DAILY: Reward[] = [
-  { bricks: 25 }, { bricks: 40 }, { }, { bricks: 60 }, { chest: "common" }, { bricks: 100 }, { chest: "rare", bricks: 50 },
+  { bricks: 25 }, { bricks: 40 }, { bricks: 50 }, { bricks: 60 }, { chest: "common" }, { bricks: 100 }, { chest: "rare", bricks: 50 },
 ];
 /** Three quests a day: the first is always the picks; two more are drawn for you. Each pays XP and bricks; all three, a chest. */
 export type Quest = { id: string; text: string; goal: number; xp: number; bricks: number };

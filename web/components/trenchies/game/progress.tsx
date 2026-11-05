@@ -31,7 +31,7 @@ export function Calendar({ me, onClaim, busy }: { me: Me; onClaim?: () => void; 
           <div key={i} className={`tg-cal-d${done ? " done" : ""}${today ? " today" : ""}${i === 6 ? " big" : ""}`}>
             <small>Day {i + 1}</small>
             <span className="tg-cal-ic"><Icon n={r.chest ? "chest" : "disc"} size={i === 6 ? 22 : 18} /></span>
-            <b>{r.chest ? `${r.chest} chest` : `${r.bricks ?? 0}`}</b>
+            <b>{r.chest ? r.chest : `${r.bricks ?? 0}`}</b>
             {r.chest && r.bricks ? <em>+{r.bricks}</em> : !r.chest && r.xp ? <em>+{r.xp} XP</em> : null}
             {done && <i className="tg-cal-ok"><Icon n="check" size={11} /></i>}
           </div>

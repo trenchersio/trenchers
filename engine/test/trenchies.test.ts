@@ -8,6 +8,7 @@ import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 const me = privateKeyToAccount(generatePrivateKey()), friend = privateKeyToAccount(generatePrivateKey()), stranger = privateKeyToAccount(generatePrivateKey());
 process.env.TRENCHIES_FILE = mkdtempSync(`${tmpdir()}/tr-`) + "/t.json";
 process.env.TRENCHIES_ALLOW = `${me.address},${friend.address}`;
+process.env.TRENCHIES_OPEN = "0"; // invite-only mode (the launch date has passed)
 process.env.CHAT_ADMINS = me.address;
 
 test("Trenchies: invite-only, spawn, picks, settle, XP, shop, leaderboard, visit", async (t) => {

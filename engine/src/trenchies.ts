@@ -69,9 +69,11 @@ const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g
 const FILE = clean(process.env.TRENCHIES_FILE) || `${dirname(clean(process.env.CHAT_FILE) || "./chat.json")}/trenchies.json`;
 const SECRET = clean(process.env.TRENCHIES_SECRET) || clean(process.env.CHAT_SECRET) || (clean(process.env.ENGINE_KEY) ? createHash("sha256").update(`trenchies-sessions:${clean(process.env.ENGINE_KEY)}`).digest("hex") : randomBytes(32).toString("hex"));
 const ALLOW = new Set((clean(process.env.TRENCHIES_ALLOW) || clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
-const OPEN_AT = Date.parse(clean(process.env.TRENCHIES_OPEN_AT) || "");
-/** Open to everyone: TRENCHIES_OPEN=1, or the launch time in TRENCHIES_OPEN_AT has passed. */
-export const OPEN = () => clean(process.env.TRENCHIES_OPEN) === "1" || (Number.isFinite(OPEN_AT) && Date.now() >= OPEN_AT);
+/** Launch: 5 November 2026, 13:00 UTC. TRENCHIES_OPEN_AT overrides it. */
+const LAUNCH_AT = "2026-11-05T13:00:00Z";
+const OPEN_AT = Date.parse(clean(process.env.TRENCHIES_OPEN_AT) || LAUNCH_AT);
+/** Open to everyone once the launch time has passed, or with TRENCHIES_OPEN=1. TRENCHIES_OPEN=0 closes it again. */
+export const OPEN = () => clean(process.env.TRENCHIES_OPEN) !== "0" && (clean(process.env.TRENCHIES_OPEN) === "1" || (Number.isFinite(OPEN_AT) && Date.now() >= OPEN_AT));
 /** A Recruit (no Trencher in the wallet) still gets a look: one of the 2,000 artworks, picked from the wallet address. */
 export const recruitArt = (addr: string) => 1 + (parseInt(addr.slice(2, 10), 16) % 2000);
 const ADMINS = new Set((clean(process.env.CHAT_ADMINS) || "0x447D8F97c39df3d6FCAB8a02A54986283e818210").split(/[\s,]+/).filter((a) => isAddress(a)).map((a) => a.toLowerCase()));
@@ -188,7 +190,7 @@ export class Trenchies {
       // a friend you invited has now played a whole day: your referral reward
       if (p.referredBy && !p.refPaid) {
         const ref = this.players.get(p.referredBy);
-        if (ref) { p.refPaid = true; ref.bricks += REFERRAL.refBricks; ref.chests[REFERRAL.refChest]++; stat(ref, "referrals"); note(ref, "ref", `${p.name} played their first day: +${REFERRAL.refBricks} bricks and a ${REFERRAL.refChest} chest`); checkAchievements(ref); this.host.notify?.(ref.addr, { title: "Your friend is playing", body: `${p.name} played their first day of Trenchies. You got ${REFERRAL.refBricks} bricks and a ${REFERRAL.refChest} chest.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-ref" }); }
+        if (ref) { p.refPaid = true; ref.bricks += REFERRAL.refBricks; ref.chests[REFERRAL.refChest]++; stat(ref, "referrals"); note(ref, "ref", `${p.name} played their first day: +${REFERRAL.refBricks} coins and a ${REFERRAL.refChest} chest`); checkAchievements(ref); this.host.notify?.(ref.addr, { title: "Your friend is playing", body: `${p.name} played their first day of Trenchies. You got ${REFERRAL.refBricks} coins and a ${REFERRAL.refChest} chest.`, url: `${this.host.site ?? ""}/trenchies/play`, tag: "trenchies-ref" }); }
       }
     }
     rd.settled = { at: Date.now(), coins, players: n };
@@ -277,7 +279,7 @@ export class Trenchies {
           ...emptyProgress(), visited: { day: -1, lands: [] }, cheered: { day: -1, lands: [] }, notified: {}, lastSeen: Date.now() };
         // invited by a friend (their Trenchie name): you both get bricks now, they get a chest once you've played a day
         const ref = this.byName(b.ref);
-        if (ref && ref.addr !== addr) { np.referredBy = ref.addr; np.bricks += REFERRAL.newBricks; np.chests.common++; note(np, "ref", `Invited by ${ref.name}: +${REFERRAL.newBricks} bricks and a common chest`); }
+        if (ref && ref.addr !== addr) { np.referredBy = ref.addr; np.bricks += REFERRAL.newBricks; np.chests.common++; note(np, "ref", `Invited by ${ref.name}: +${REFERRAL.newBricks} coins and a common chest`); }
         this.players.set(addr, np);
       }
       this.save();
