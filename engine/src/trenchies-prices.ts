@@ -55,7 +55,7 @@ export class PicksPrices {
     try {
       let n = 0;
       for (const token of this.track.keys()) {
-        if (!this.graduated(token)) continue;
+        if (!this.needsPool(token, now)) continue;
         const p = await this.spot(token).catch(() => null);
         if (p !== null && p > 0 && Number.isFinite(p)) { this.add(token, now, p); n++; }
       }
@@ -67,6 +67,8 @@ export class PicksPrices {
     } catch (e) { this.status = `last sample failed: ${(e as Error).message.split("\n")[0].slice(0, 120)}`; }
     finally { this.busy = false; }
   }
+  /** Graduated, or quiet on its curve for an hour: the curve trades alone can't price it, so read it directly. */
+  private needsPool(token: Address, now: number) { if (this.graduated(token)) return true; const last = this.base.info?.(token)?.lastTrade ?? null; return last === null || now - last > 3600; }
   add(token: Address, t: number, p: number) { const s = this.samples.get(token) ?? []; s.push([t, p]); this.samples.set(token, s); }
 
   /** Pool sample at or before t (newest), or null. */
@@ -86,7 +88,7 @@ export class PicksPrices {
   priceAt(token: Address, t: number): number | null {
     token = lc(token);
     const curve = this.base.priceAt(token, t), last = this.base.info?.(token)?.lastTrade ?? null, s = this.sampleAt(token, t);
-    // samples only exist after graduation, so a sample newer than the last curve trade is the current price
+    // a pool/direct sample newer than the coin's last curve trade is its current price
     if (s && (curve === null || last === null || s[0] > last)) return s[1];
     return curve;
   }
@@ -99,24 +101,27 @@ export class PicksPrices {
     const list = this.base.active(since, limit);
     const now = Date.now() / 1000;
     for (const token of this.track.keys()) {
-      if (!this.graduated(token) || list.some((c) => c.token === token)) continue;
+      if (list.some((c) => c.token === token)) continue;
       const p = this.priceAt(token, now), p0 = this.priceAt(token, since); if (p === null) continue;
-      list.push({ token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: p0 ? (p / p0 - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: true });
+      list.push({ token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: p0 ? (p / p0 - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) });
     }
     // pinned coins ($TRENCHERS) first among the graduated ones
     return list.sort((a, b) => Number(b.graduated && this.pinned.includes(b.token)) - Number(a.graduated && this.pinned.includes(a.token)));
   }
 
-  /** A graduated coin someone pasted: price it now and follow it from here. */
+  /** Any Pons coin someone pasted (graduated, or quiet today): price it now and follow it from here. */
   async lookup(token: Address) {
     token = lc(token);
-    if (!this.base.known(token) || !this.graduated(token)) return null;
+    if (!this.base.known(token)) return null;
+    const now = Date.now() / 1000;
+    // spot() also settles whether the coin has graduated (the engine checks its curve), so ask it first
+    const p0 = await this.spot(token).catch(() => null);
     this.follow(token);
-    if (!this.samples.get(token)?.length) { const p = await this.spot(token).catch(() => null); if (p !== null && p > 0) { this.add(token, Date.now() / 1000, p); this.save(); } }
-    const now = Date.now() / 1000, p = this.priceAt(token, now);
+    if (p0 !== null && p0 > 0 && this.needsPool(token, now)) { this.add(token, now, p0); this.save(); }
+    const p = this.priceAt(token, now);
     if (p === null) return null;
-    const p0 = this.priceAt(token, now - 86_400);
-    return { token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: p0 ? (p / p0 - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: true };
+    const pd = this.priceAt(token, now - 86_400);
+    return { token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: pd ? (p / pd - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) };
   }
   view() { return { status: this.status, followed: this.track.size, sampledAt: this.sampledAt ? new Date(this.sampledAt * 1000).toISOString() : null }; }
 }

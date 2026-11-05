@@ -51,6 +51,7 @@ test("picks prices: curve coins unchanged, graduated coins follow the pool, $TRE
   assert.equal(list[0].token, TRENCH); assert.ok(list.some((c) => c.token === GRAD && c.graduated)); assert.ok(list.some((c) => c.token === CURVE));
   // a pasted graduated address is priced and followed
   const fresh = setup(); const c = await fresh.pp.lookup(GRAD as never); assert.equal(c?.price, 4); assert.equal(c?.graduated, true);
-  assert.equal(await fresh.pp.lookup(CURVE as never), null, "curve coins don't need a lookup");
+  const cc = await fresh.pp.lookup(CURVE as never); assert.equal(cc?.graduated, false, "a quiet curve coin can be looked up too"); assert.equal(cc?.price, 2, "priced from its curve trades");
+  assert.equal(await fresh.pp.lookup(("0x" + "1".repeat(40)) as never), null, "unknown coins: nothing");
   assert.ok(pp.known(GRAD as never) && pp.known(TRENCH as never));
 });

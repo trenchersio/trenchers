@@ -627,7 +627,7 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
               <li key={c.token}><button type="button" className={`tg-pk-coin${on ? " on" : ""}`} onClick={() => toggle(c)} disabled={!on && sel.length >= PICKS}>
                 <span className="tg-pk-rank mono">{i + 1}</span>
                 <Avatar s={c.symbol} />
-                <span className="tg-pk-name"><b>${c.symbol}</b><small className="mono">{n ? `picked ×${n} · ` : ""}{c.graduated ? "graduated · Uniswap price" : `${c.trades.toLocaleString("en-US")} trades`}</small></span>
+                <span className="tg-pk-name"><b>${c.symbol}</b><small className="mono">{n ? `picked ×${n} · ` : ""}{c.graduated ? "graduated · Uniswap price" : c.trades ? `${c.trades.toLocaleString("en-US")} trades` : "no trades today"}</small></span>
                 <span className="tg-pk-vol">{c.graduated ? <small className="mono">Uniswap</small> : <><small className="mono">{c.volEth.toFixed(2)} ETH</small><i><s style={{ width: `${Math.max(4, (c.volEth / maxVol) * 100)}%` }} /></i></>}</span>
                 <span className={`tg-pk-move ${up ? "up" : "down"}`}><em className="mono">{pct(c.changePct)}</em><i><s style={{ width: `${Math.max(4, Math.min(100, (Math.abs(c.changePct) / maxMove) * 100))}%` }} /></i></span>
                 <span className="tg-pk-add">{on ? <><Icon n="check" size={12} />{slot + 1}</> : <Icon n="plus" size={13} />}</span>

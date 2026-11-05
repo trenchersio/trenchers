@@ -291,10 +291,12 @@ export class Trenchies {
 
     if (op === "coins") {
       // an empty list (prices still loading after a restart) is retried on the next request instead of kept 5 minutes
+      // The list is built in memory (fast); missing tickers are looked up in the background, never while you wait.
       if (!this.coinCache || !this.coinCache.list.length || Date.now() - this.coinCache.at > 300_000) {
         const list = this.host.prices.active(now - DAY, 150);
-        await Promise.all(list.filter((c) => /^[0-9A-F]{6}$/.test(c.symbol)).slice(0, 60).map(async (c) => { c.symbol = await this.host.symbolOf(c.token).catch(() => c.symbol); }));
         this.coinCache = { at: Date.now(), list };
+        const unnamed = list.filter((c) => /^[0-9A-F]{6}$/.test(c.symbol)).slice(0, 40);
+        if (unnamed.length) void Promise.all(unnamed.map(async (c) => { c.symbol = await this.host.symbolOf(c.token).catch(() => c.symbol); })).catch(() => {});
       }
       const s = (q.get("q") ?? "").trim().toLowerCase();
       const list = (this.coinCache.list as { token: string; symbol: string }[]).filter((c) => !s || c.symbol.toLowerCase().includes(s) || c.token.includes(s));
@@ -305,7 +307,7 @@ export class Trenchies {
       if (!list.length && /^0x[0-9a-f]{40}$/.test(s) && lookup) { const c = await lookup.call(this.host.prices, s as Address).catch(() => null); if (c) list.push(c as never); }
       if (!list.length && /^0x[0-9a-f]{40}$/.test(s)) {
         const info = (this.host.prices as { info?: (t: Address) => { symbol: string; graduated: boolean; lastTrade: number | null } | null }).info?.(s as Address) ?? null;
-        note = !info ? "That isn't a Pons coin. Daily picks are Pons launchpad coins."
+        note = !info ? "That isn't a Pons coin we know. Daily picks are Pons coins paired with ETH."
           : info.graduated ? `$${info.symbol} has graduated to Uniswap. Daily picks are coins still trading on the Pons launchpad, where every trade is priced.`
           : `$${info.symbol} hasn't traded on Pons in the last 24 hours. Picks are coins that traded today.`;
       }
