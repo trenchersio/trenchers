@@ -305,6 +305,9 @@ export class Trenchies {
       // a graduated coin pasted by address: priced from its Uniswap pool from now on
       const lookup = (this.host.prices as { lookup?: (t: Address) => Promise<unknown> }).lookup;
       if (!list.length && /^0x[0-9a-f]{40}$/.test(s) && lookup) { const c = await lookup.call(this.host.prices, s as Address).catch(() => null); if (c) list.push(c as never); }
+      // a ticker that isn't in today's list: search every Pons coin we know by name
+      const search = (this.host.prices as { search?: (q: string) => Promise<unknown[]> }).search;
+      if (!list.length && s.length >= 2 && !s.startsWith("0x") && search) list.push(...((await search.call(this.host.prices, s).catch(() => [])) as never[]));
       if (!list.length && /^0x[0-9a-f]{40}$/.test(s)) {
         const info = (this.host.prices as { info?: (t: Address) => { symbol: string; graduated: boolean; lastTrade: number | null } | null }).info?.(s as Address) ?? null;
         note = !info ? "That isn't a Pons coin we know. Daily picks are Pons coins paired with ETH."

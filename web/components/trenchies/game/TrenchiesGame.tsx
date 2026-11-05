@@ -17,7 +17,7 @@ import type { Call, LandInfo, Me, Mini, Note, Pub, Result } from "./model";
 import type { Look, Palette } from "./types";
 
 // ------------------------------------------------------------------ types + api
-type Coin = { token: string; symbol: string; price: number; changePct: number; volEth: number; trades: number; graduated?: boolean };
+type Coin = { token: string; symbol: string; price: number; changePct: number | null; volEth: number; trades: number; graduated?: boolean };
 type Prizes = {
   pot: { wallet: string | null; bps: number; potEth: string; feesEth: string; end: number; updatedAt: number; error: string | null } | null; split: number[];
   week: { label: string; end: number }; standings: (Mini & { rank: number; xp: number; hits: number })[]; me: { rank: number | null; xp: number; players: number } | null; admin: boolean;
@@ -558,13 +558,17 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
   // A pasted contract address that isn't in the list: ask the server, which can add the coin or say why it can't be picked.
   const [found, setFound] = useState<{ q: string; coins: Coin[]; note: string | null } | null>(null);
   useEffect(() => {
-    const a = q.trim().toLowerCase(); if (!/^0x[0-9a-f]{40}$/.test(a) || (coins ?? []).some((c) => c.token === a)) { setFound(null); return; }
-    let alive = true; call("coins", undefined, { q: a }).then((j) => { if (alive) setFound({ q: a, coins: j.coins ?? [], note: (j as { note?: string | null }).note ?? null }); }).catch(() => {});
-    return () => { alive = false; };
+    // a contract address, or a ticker that isn't in today's list: ask the server (by name it searches every Pons coin)
+    const a = q.trim().toLowerCase().replace(/^\$/, ""), isAddr = /^0x[0-9a-f]{40}$/.test(a);
+    const local = (coins ?? []).some((c) => isAddr ? c.token === a : c.symbol.toLowerCase().includes(a));
+    if ((!isAddr && a.length < 2) || local || (a.startsWith("0x") && !isAddr)) { setFound(null); return; }
+    let alive = true;
+    const t = setTimeout(() => { call("coins", undefined, { q: a }).then((j) => { if (alive) setFound({ q: a, coins: j.coins ?? [], note: (j as { note?: string | null }).note ?? null }); }).catch(() => {}); }, isAddr ? 0 : 400);
+    return () => { alive = false; clearTimeout(t); };
   }, [q, coins, call]);
   const list = [...(coins ?? []), ...(found?.coins ?? []).filter((c) => !(coins ?? []).some((x) => x.token === c.token))].filter((c) => !q || c.symbol.toLowerCase().includes(q.trim().toLowerCase().replace(/^\$/, "")) || c.token.includes(q.trim().toLowerCase()))
-    .sort((a, b) => sort === "up" ? b.changePct - a.changePct : sort === "trades" ? b.trades - a.trades : b.volEth - a.volEth);
-  const maxVol = Math.max(1e-9, ...(coins ?? []).map((c) => c.volEth)), maxMove = Math.max(1, ...(coins ?? []).map((c) => Math.abs(c.changePct)));
+    .sort((a, b) => sort === "up" ? (b.changePct ?? -1e9) - (a.changePct ?? -1e9) : sort === "trades" ? b.trades - a.trades : b.volEth - a.volEth);
+  const maxVol = Math.max(1e-9, ...(coins ?? []).map((c) => c.volEth)), maxMove = Math.max(1, ...(coins ?? []).map((c) => Math.abs(c.changePct ?? 0)));
   const picked = new Map(popular.map((p) => [p.token, p.count]));
   const toggle = (c: { token: string; symbol: string }) => setSel((s) => (s.some((x) => x.token === c.token) ? s.filter((x) => x.token !== c.token) : s.length >= PICKS ? s : [...s, c]));
   const changed = sel.map((x) => x.token).sort().join() !== me.open.picks.map((x) => x.token).sort().join();
@@ -623,13 +627,13 @@ function PicksPanel({ me, now, call, onSaved, onTrade }: { onTrade?: () => void;
         </div>
         {coins === null ? <p className="tg-sub">Loading Pons coins…</p> : list.length === 0 ? <p className="tg-sub">{found?.note ?? "No coins match. Pons coins that traded in the last 24 hours show up here; paste the address of a graduated coin to add it."}</p> : (
           <ol className="tg-pk-coins">
-            {list.map((c, i) => { const on = sel.some((x) => x.token === c.token), slot = sel.findIndex((x) => x.token === c.token), up = c.changePct >= 0, n = picked.get(c.token); return (
+            {list.map((c, i) => { const on = sel.some((x) => x.token === c.token), slot = sel.findIndex((x) => x.token === c.token), up = (c.changePct ?? 0) >= 0, n = picked.get(c.token); return (
               <li key={c.token}><button type="button" className={`tg-pk-coin${on ? " on" : ""}`} onClick={() => toggle(c)} disabled={!on && sel.length >= PICKS}>
                 <span className="tg-pk-rank mono">{i + 1}</span>
                 <Avatar s={c.symbol} />
                 <span className="tg-pk-name"><b>${c.symbol}</b><small className="mono">{n ? `picked ×${n} · ` : ""}{c.graduated ? "graduated · Uniswap price" : c.trades ? `${c.trades.toLocaleString("en-US")} trades` : "no trades today"}</small></span>
                 <span className="tg-pk-vol">{c.graduated ? <small className="mono">Uniswap</small> : <><small className="mono">{c.volEth.toFixed(2)} ETH</small><i><s style={{ width: `${Math.max(4, (c.volEth / maxVol) * 100)}%` }} /></i></>}</span>
-                <span className={`tg-pk-move ${up ? "up" : "down"}`}><em className="mono">{pct(c.changePct)}</em><i><s style={{ width: `${Math.max(4, Math.min(100, (Math.abs(c.changePct) / maxMove) * 100))}%` }} /></i></span>
+                <span className={`tg-pk-move ${up ? "up" : "down"}`}><em className="mono">{pct(c.changePct)}</em><i><s style={{ width: `${Math.max(4, Math.min(100, (Math.abs(c.changePct ?? 0) / maxMove) * 100))}%` }} /></i></span>
                 <span className="tg-pk-add">{on ? <><Icon n="check" size={12} />{slot + 1}</> : <Icon n="plus" size={13} />}</span>
               </button></li>); })}
           </ol>

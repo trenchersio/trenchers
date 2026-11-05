@@ -111,7 +111,7 @@ export class Backtest {
   }
   /** Coins that traded since `since`: price now, change and volume since then. For the Trenchies daily picks. */
   active(since: number, limit = 80) {
-    const out: { token: Address; symbol: string; price: number; changePct: number; volEth: number; trades: number; launchedAt: number; graduated: boolean }[] = [];
+    const out: { token: Address; symbol: string; price: number; changePct: number | null; volEth: number; trades: number; launchedAt: number; graduated: boolean }[] = [];
     for (const [token, sr] of this.series) {
       const P = sr.pts; if (!P.length || P[P.length - 4] < since) continue;
       const tk = this.host.tokens.get(token); if (!tk || tk.graduated) continue;
@@ -124,6 +124,13 @@ export class Backtest {
   }
   symbolOf(token: Address) { const tk = this.host.tokens.get(token); return tk ? tk.symbol ?? token.slice(2, 8).toUpperCase() : null; }
   known(token: Address) { return this.host.tokens.has(token); }
+  /** Coins whose ticker starts with `q` (exact matches first), for the picks search. */
+  bySymbol(q: string, limit = 6) {
+    q = q.trim().replace(/^\$/, "").toLowerCase(); if (q.length < 2) return [] as Address[];
+    const hits: { token: Address; exact: boolean; vol: number }[] = [];
+    for (const [token, tk] of this.host.tokens) { const s = tk.symbol?.toLowerCase(); if (s && s.startsWith(q)) hits.push({ token, exact: s === q, vol: this.series.get(token)?.vol ?? 0 }); }
+    return hits.sort((a, b) => Number(b.exact) - Number(a.exact) || b.vol - a.vol).slice(0, limit).map((h) => h.token);
+  }
   /** What we know about one coin (for "why can't I pick this?"). */
   info(token: Address) { const tk = this.host.tokens.get(token); if (!tk) return null; const P = this.series.get(token)?.pts; return { symbol: tk.symbol ?? token.slice(2, 8).toUpperCase(), graduated: tk.graduated, lastTrade: P?.length ? P[P.length - 4] : null }; }
 

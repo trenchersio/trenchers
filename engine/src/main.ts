@@ -152,7 +152,7 @@ if (giveaway) { setTimeout(() => void giveaway.update(), 20_000); setInterval(()
 const btc = new BtcFeed(log);
 // Picks prices: Pons curve trades, plus the Uniswap pool price of graduated coins that were picked ($TRENCHERS always).
 const picksPrices = engine && backtest ? new PicksPrices(backtest, (t) => engine.spotPrice(t), (t) => !!engine.tokens.get(t.toLowerCase() as `0x${string}`)?.graduated, [ENV.TRENCHERS_TOKEN],
-  `${dirname((process.env.TRENCHIES_FILE ?? "").trim() || `${dirname((process.env.CHAT_FILE ?? "").trim() || "./chat.json")}/trenchies.json`)}/trenchies-prices.json`, log) : null;
+  `${dirname((process.env.TRENCHIES_FILE ?? "").trim() || `${dirname((process.env.CHAT_FILE ?? "").trim() || "./chat.json")}/trenchies.json`)}/trenchies-prices.json`, log, (t) => engine.symbolOf(t)) : null;
 if (picksPrices) setInterval(() => { if (lastTick) void picksPrices.tick(); }, 30_000);
 const trenchies = engine && backtest ? new Trenchies({
   pub: engine.pub as never, nft: ENV.NFT as `0x${string}`, prices: picksPrices ?? backtest, symbolOf: (t) => engine.symbolOf(t), log,

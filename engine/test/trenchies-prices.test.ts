@@ -55,3 +55,13 @@ test("picks prices: curve coins unchanged, graduated coins follow the pool, $TRE
   assert.equal(await fresh.pp.lookup(("0x" + "1".repeat(40)) as never), null, "unknown coins: nothing");
   assert.ok(pp.known(GRAD as never) && pp.known(TRENCH as never));
 });
+
+test("picks prices: real tickers for coins we only knew by address, and search by ticker", async () => {
+  const base = { updatedAt: 0, priceAt: () => null, info: (t: string) => ({ symbol: t.slice(2, 8).toUpperCase(), graduated: true, lastTrade: null }), active: () => [],
+    symbolOf: (t: string) => t.slice(2, 8).toUpperCase(), known: () => true, bySymbol: (q: string) => (q === "borro" ? [GRAD] : []) };
+  const pp = new PicksPrices(base as never, async () => 2, () => true, [], mkdtempSync(`${tmpdir()}/pp2-`) + "/p.json", () => {}, async () => "BORRO");
+  const c = await pp.lookup(GRAD as never); assert.equal(c?.symbol, "BORRO", "ticker read from the coin");
+  assert.equal(c?.changePct, null, "no 24 h history yet: unknown, not +0%");
+  const hits = await pp.search("borro"); assert.equal(hits.length, 1); assert.equal(hits[0].symbol, "BORRO");
+  assert.deepEqual(await pp.search("zzz"), []);
+});

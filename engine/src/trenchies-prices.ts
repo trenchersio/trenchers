@@ -19,14 +19,16 @@ const lc = (a: string) => a.toLowerCase() as Address;
 export class PicksPrices {
   private samples = new Map<Address, Sample[]>();
   private track = new Map<Address, number>(); // token -> last time it mattered (picked or looked up)
+  private names = new Map<Address, string>();
   private sampledAt = 0;
   private busy = false;
   status = "starting";
 
-  constructor(private base: Backtest, private spot: (t: Address) => Promise<number | null>, private graduated: (t: Address) => boolean, private pinned: Address[], private file: string, private log: (m: string) => void = () => {}) {
+  constructor(private base: Backtest, private spot: (t: Address) => Promise<number | null>, private graduated: (t: Address) => boolean, private pinned: Address[], private file: string, private log: (m: string) => void = () => {}, private named?: (t: Address) => Promise<string>) {
     try {
       if (existsSync(file)) {
-        const j = JSON.parse(readFileSync(file, "utf8")) as { samples?: [Address, Sample[]][]; track?: [Address, number][]; sampledAt?: number };
+        const j = JSON.parse(readFileSync(file, "utf8")) as { samples?: [Address, Sample[]][]; track?: [Address, number][]; sampledAt?: number; names?: [Address, string][] };
+        for (const [k, v] of j.names ?? []) this.names.set(k, v);
         for (const [k, v] of j.samples ?? []) this.samples.set(k, v);
         for (const [k, v] of j.track ?? []) this.track.set(k, v);
         this.sampledAt = j.sampledAt ?? 0;
@@ -35,7 +37,7 @@ export class PicksPrices {
     for (const t of pinned) this.track.set(lc(t), Number.MAX_SAFE_INTEGER);
   }
   private save() {
-    try { mkdirSync(dirname(this.file), { recursive: true }); writeFileSync(`${this.file}.tmp`, JSON.stringify({ samples: [...this.samples], track: [...this.track], sampledAt: this.sampledAt })); renameSync(`${this.file}.tmp`, this.file); } catch { /* memory only */ }
+    try { mkdirSync(dirname(this.file), { recursive: true }); writeFileSync(`${this.file}.tmp`, JSON.stringify({ samples: [...this.samples], track: [...this.track], sampledAt: this.sampledAt, names: [...this.names] })); renameSync(`${this.file}.tmp`, this.file); } catch { /* memory only */ }
   }
 
   /** Remember a coin (picked, or looked up) so its pool price is followed. */
@@ -55,6 +57,7 @@ export class PicksPrices {
     try {
       let n = 0;
       for (const token of this.track.keys()) {
+        await this.name(token); // once per coin: its real ticker instead of its address
         if (!this.needsPool(token, now)) continue;
         const p = await this.spot(token).catch(() => null);
         if (p !== null && p > 0 && Number.isFinite(p)) { this.add(token, now, p); n++; }
@@ -92,7 +95,20 @@ export class PicksPrices {
     if (s && (curve === null || last === null || s[0] > last)) return s[1];
     return curve;
   }
-  symbolOf(token: Address) { return this.base.symbolOf(token); }
+  symbolOf(token: Address) { token = lc(token); return this.names.get(token) ?? this.base.symbolOf(token); }
+  private sym(token: Address) { return this.symbolOf(token) ?? token.slice(2, 8).toUpperCase(); }
+  /** The real ticker, read once from the coin if we only had its address. */
+  private async name(token: Address) {
+    const cur = this.symbolOf(token);
+    if (cur && !/^[0-9A-F]{6}$/.test(cur)) return;
+    const n = await this.named?.(token).catch(() => null); if (n && !/^[0-9A-F]{6}$/.test(n)) this.names.set(token, n);
+  }
+  /** Coins whose ticker starts with q, priced and followed (the picks search by name). */
+  async search(q: string, limit = 5) {
+    const out = [];
+    for (const t of (this.base as unknown as { bySymbol?: (q: string, n: number) => Address[] }).bySymbol?.(q, limit) ?? []) { const c = await this.lookup(t); if (c) out.push(c); }
+    return out;
+  }
   known(token: Address) { return this.base.known(token) && this.priceAt(token, Date.now() / 1000) !== null; }
   info(token: Address) { return this.base.info?.(token) ?? null; }
 
@@ -103,7 +119,7 @@ export class PicksPrices {
     for (const token of this.track.keys()) {
       if (list.some((c) => c.token === token)) continue;
       const p = this.priceAt(token, now), p0 = this.priceAt(token, since); if (p === null) continue;
-      list.push({ token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: p0 ? (p / p0 - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) });
+      list.push({ token, symbol: this.sym(token), price: p, changePct: p0 ? (p / p0 - 1) * 100 : null, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) });
     }
     // pinned coins ($TRENCHERS) first among the graduated ones
     return list.sort((a, b) => Number(b.graduated && this.pinned.includes(b.token)) - Number(a.graduated && this.pinned.includes(a.token)));
@@ -115,13 +131,13 @@ export class PicksPrices {
     if (!this.base.known(token)) return null;
     const now = Date.now() / 1000;
     // spot() also settles whether the coin has graduated (the engine checks its curve), so ask it first
-    const p0 = await this.spot(token).catch(() => null);
+    const [p0] = await Promise.all([this.spot(token).catch(() => null), this.name(token)]);
     this.follow(token);
     if (p0 !== null && p0 > 0 && this.needsPool(token, now)) { this.add(token, now, p0); this.save(); }
     const p = this.priceAt(token, now);
     if (p === null) return null;
     const pd = this.priceAt(token, now - 86_400);
-    return { token, symbol: this.base.symbolOf(token) ?? token.slice(2, 8).toUpperCase(), price: p, changePct: pd ? (p / pd - 1) * 100 : 0, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) };
+    return { token, symbol: this.sym(token), price: p, changePct: pd ? (p / pd - 1) * 100 : null, volEth: 0, trades: 0, launchedAt: 0, graduated: this.graduated(token) };
   }
   view() { return { status: this.status, followed: this.track.size, sampledAt: this.sampledAt ? new Date(this.sampledAt * 1000).toISOString() : null }; }
 }
